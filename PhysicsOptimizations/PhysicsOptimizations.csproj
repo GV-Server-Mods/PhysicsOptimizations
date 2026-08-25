@@ -1,0 +1,93 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>GVK.PhysicsOptimizations</AssemblyName>
+    <RootNamespace>GVK.PhysicsOptimizations</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWPF>true</UseWPF>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <!-- Change this path to your local Torch Server directory -->
+    <TorchDir>C:\SE_GVK_S10</TorchDir>
+  </PropertyGroup>
+
+  <!-- Torch & Server Assemblies -->
+  <ItemGroup>
+    <!-- Core Torch References -->
+    <Reference Include="Torch">
+      <HintPath>$(TorchDir)\Torch.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Torch.API">
+      <HintPath>$(TorchDir)\Torch.API.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <PackageReference Include="Lib.Harmony" Version="2.2.2">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <Reference Include="NLog">
+      <HintPath>$(TorchDir)\NLog.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+
+    <!-- Space Engineers Game Assemblies -->
+    <Reference Include="Sandbox.Game">
+      <HintPath>$(TorchDir)\DedicatedServer64\Sandbox.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Sandbox.Common">
+      <HintPath>$(TorchDir)\DedicatedServer64\Sandbox.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage">
+      <HintPath>$(TorchDir)\DedicatedServer64\VRage.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Game">
+      <HintPath>$(TorchDir)\DedicatedServer64\VRage.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Library">
+      <HintPath>$(TorchDir)\DedicatedServer64\VRage.Library.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Math">
+      <HintPath>$(TorchDir)\DedicatedServer64\VRage.Math.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Network">
+      <HintPath>$(TorchDir)\DedicatedServer64\VRage.Network.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="HavokWrapper">
+      <HintPath>$(TorchDir)\DedicatedServer64\HavokWrapper.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Auto-copy manifest.xml on build -->
+  <ItemGroup>
+    <None Update="manifest.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Auto-deploy to Torch Plugins folder as a .zip on build -->
+  <Target Name="DeployToTorch" AfterTargets="Build" Condition="Exists('$(TorchDir)\Plugins')">
+    <PropertyGroup>
+      <StagingDir>$(IntermediateOutputPath)deploy_staging</StagingDir>
+      <ZipPath>$(TorchDir)\Plugins\GVK_PhysicsOptimizations.zip</ZipPath>
+    </PropertyGroup>
+    <RemoveDir Directories="$(StagingDir)" />
+    <MakeDir Directories="$(StagingDir)" />
+    <Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="$(StagingDir)" />
+    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(StagingDir)" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    <Copy SourceFiles="$(ProjectDir)manifest.xml" DestinationFolder="$(StagingDir)" />
+    <Delete Files="$(ZipPath)" Condition="Exists('$(ZipPath)')" />
+    <ZipDirectory SourceDirectory="$(StagingDir)" DestinationFile="$(ZipPath)" Overwrite="true" />
+    <RemoveDir Directories="$(StagingDir)" />
+    <Message Text="Successfully packaged and deployed plugin to $(ZipPath)" Importance="high" />
+  </Target>
+
+</Project>

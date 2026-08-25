@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PluginManifest xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <Name>GVK Physics Optimizer</Name>
+    <Guid>afcdfffa-3ecf-4985-9f6e-95c59683dc19</Guid>
+    <Version>1.0.0.0</Version>
+    <Author>GVK</Author>
+    <Description>Advanced Havok physics optimizations, parked suspension sleeping, idle grid deactivation, ore stack merging, and subgrid stabilization for Space Engineers Torch servers.</Description>
+</PluginManifest>
+
