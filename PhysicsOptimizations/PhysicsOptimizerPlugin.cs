@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Windows.Controls;
 using NLog;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Multiplayer;
 using Torch;
 using Torch.API;
 using Torch.API.Plugins;
@@ -58,7 +60,7 @@ namespace GVK.PhysicsOptimizations
             MyEntities.OnEntityAdd += OnEntityAdded;
             MyEntities.OnEntityRemove += OnEntityRemoved;
 
-            Log.Info("[PhysicsOptimizer] Plugin initialized successfully. Havok optimization engine is ACTIVE.");
+            Log.Info("[PhysicsOptimizer] Plugin v1.0.0 initialized successfully. Havok optimization engine is ACTIVE.");
         }
 
         private void InitializeModules()
@@ -116,6 +118,40 @@ namespace GVK.PhysicsOptimizations
             for (int i = 0; i < _modules.Count; i++)
             {
                 _modules[i].Update(_frameCounter);
+            }
+
+            // Update Server Sim Speed in telemetry every second
+            if (_frameCounter % 60 == 0 && Telemetry != null)
+            {
+                Telemetry.UpdateServerSimulationSpeed(Sync.ServerSimulationRatio);
+            }
+
+            // Periodic 1-line telemetry heartbeat on Torch console
+            if (Config.EnablePeriodicConsoleTelemetry && Telemetry != null)
+            {
+                ulong intervalFrames = (ulong)(Math.Max(5, Config.ConsoleTelemetryIntervalSeconds) * 60);
+                if (_frameCounter % intervalFrames == 0)
+                {
+                    Log.Info(string.Format(
+                        CultureInfo.InvariantCulture,
+                        "[PhysicsOptimizer Telemetry] Sim: {0:F2} | Bodies: {1} Active, {2} Asleep | Rovers: {3}/{4} Asleep ({5}/{6} wheels) | Sleeping Grids: {7}/{8} | Subgrids: {9}/{10} Stabilized | Discrete TOI: {11}/{12} | Floating: {13} (Merged: {14} stacks, {15} removed)",
+                        Telemetry.ServerSimulationSpeed,
+                        Telemetry.ActiveRigidBodies,
+                        Telemetry.SleepingRigidBodies,
+                        Telemetry.ParkedRoversAsleep,
+                        Telemetry.TrackedRoversCount,
+                        Telemetry.SleepingWheelsCount,
+                        Telemetry.TotalRoverWheelsCount,
+                        Telemetry.GridsCurrentlyForcedSleep,
+                        Telemetry.TrackedGridsCount,
+                        Telemetry.StabilizedSubgridConstraints,
+                        Telemetry.TrackedSubgridConstraints,
+                        Telemetry.DiscreteTOIGridsCount,
+                        Telemetry.TrackedTOIGridsCount,
+                        Telemetry.ActiveFloatingObjectsCount,
+                        Telemetry.OreStacksMergedTotal,
+                        Telemetry.OreEntitiesEliminatedTotal));
+                }
             }
         }
 

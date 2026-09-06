@@ -5,7 +5,7 @@
 * **Plugin Type**: Torch Dedicated Server Plugin (.NET Framework 4.8)  
 * **Target Server**: GV - Deserts of Kharak (GVK)  
 * **Package**: `GVK_PhysicsOptimizations.zip`  
-* **Version**: 1.1.0  
+* **Version**: 1.0.0  
 
 ---
 
@@ -260,7 +260,58 @@ C:\SE_GVK_S10\Plugins\GVK_PhysicsOptimizations.zip
 
 ---
 
-## 10. License & Credits
+## 10. Engineering Graveyard: Rejected Concepts & Hard Lessons Learned
+
+To prevent the team from re-exploring failed ideas in future development cycles, this section permanently documents concepts that were thoroughly analyzed and **deliberately rejected**, along with the exact engine and gameplay reasons why:
+
+### 🪦 1. Throttling / Batching Havok Compound Shape Rebuilds (`GridPhysicsShapePatch`)
+* **The Pitch**: Intercept `MyGridPhysics.UpdateShape` / `AddDirtyBlock` during continuous damage, grinding, or welding, and rate-limit compound shape updates to 5 Hz instead of 60 Hz.
+* **Why Rejected**:
+  1. **Periodic Stutter Spikes**: Accumulating 15 frames of dirty block bounds and dumping them into a single tick creates periodic 5–8ms frame hitches. In Space Engineers, periodic micro-hitches cause player rubberbanding, which feels ten times worse than a steady simulation load.
+  2. **PvP Ghost Hitboxes**: In Keen's engine, block data and Havok physics shapes are separate. When an armor block is destroyed, the block is removed immediately, but delaying `UpdateShape` leaves an **invisible Havok collision box lingering in mid-air for 200ms**. In PvP, incoming railgun shells and player-made missiles would detonate on empty air against phantom armor hitboxes.
+  3. **Redundant**: The **Instant Thruster Vaporization Patch** already eliminates the continuous shape invalidation loop at the source by deleting obstructions on Tick 1.
+
+### 🪦 2. Blanket Subgrid Collision Disabling
+* **The Pitch**: Turn off all Havok collision pairs between parent chassis and connected mechanical subgrids (rotors, hinges, pistons) to stop subgrids from scraping and vibrating.
+* **Why Rejected**:
+  1. **The "Phantom Hull" Exploit**: A player could place a rotor inside their ship, mount a duplicate 2,000-block heavy armor shell on the rotor head, and rotate it so both grids occupy the exact same physical coordinates. Result: double HP pool with zero added exterior volume.
+  2. **The "Invulnerable Retracting Weapon" Exploit**: Players could mount railguns or rocket turrets on pistons, retract them completely *inside* solid, airtight heavy armor during reload or incoming fire, and extend them only to shoot—without needing hatches or physical clearance.
+* **The Approved Solution**: Strictly restrict collision filtering to **tiny utility/aesthetic subgrids** ($\le 10$ blocks, $\le 5\text{m}$ AABB) with an absolute blacklist on weapons, turrets, tools, drills, and warheads.
+
+### 🪦 3. 1D "Toothpick" Single-Ray Clearance on Large Thrusters
+* **The Pitch**: Test thruster flame clearance using a single 1-dimensional ray down the dead center of all thrusters.
+* **Why Rejected**:
+  * **The "Needle-Hole / Aperture" Exploit**: Large Grid Large Thrusters have a 3x3 (7.5-meter-wide) exhaust bell. A single 0-width center ray allows players to armor over 95% of the nozzle face with heavy armor, doors, or passages, leaving a tiny 0.5m hole in the dead center. The ray passes through the hole, granting 100% thrust from a fully protected armor bunker.
+* **The Approved Solution**: 1 ray for 1x1 small thrusters; a **5-ray crosshair** (center + 4 cardinal rays at $0.65 \times R_{\text{vanilla}}$) for 3x3 large thrusters.
+
+### 🪦 4. Local-Grid Only Thruster Clearance (Ignoring Subgrids)
+* **The Pitch**: Only check if an obstructed block is on `this.CubeGrid`, treating all connected subgrids as immune external grids.
+* **Why Rejected**:
+  * **The "Buried Rotor Thruster" Exploit**: A player places a rotor inside their hull and mounts 10 thrusters on the rotor head pointing at the ship's interior armor walls. Because the outer hull belongs to the main grid (an "external grid" relative to the rotor), the thrusters deal 0 damage to the hull, allowing completely buried, invulnerable internal thrusters.
+* **The Approved Solution**: Fast-path check: `if (targetGrid == this.CubeGrid)` followed by `HasSameGroup(targetGrid, this.CubeGrid)`.
+
+### 🪦 5. Blanket Discrete Collision on Low-Altitude / Ground Grids
+* **The Pitch**: Force discrete collision (`HkCollidableQualityType.Debris`) on all cruising grids regardless of altitude to cut continuous TOI pairs.
+* **Why Rejected**:
+  1. **Rover Combat Phasing & Clang Launches**: Two 2,000-block rovers ramming at 40 m/s with grinders can penetrate 1m deep in a single frame before discrete collision detects them. Havok's depenetration impulse can launch rovers into orbit or trap them inside Pertam's dunes.
+  2. **Interference with `GridDefender`**: Deep discrete penetrations corrupt contact point velocities and impulse calculations used by GridDefender to suppress low-speed collision damage.
+* **The Approved Solution**: Strictly altitude-gate discrete collision to $> 300\text{m}$ with a $500\text{m}$ grid-proximity safety bubble.
+
+### 🪦 6. Keen's Native "Selective Physics Updates" (`EnableSelectivePhysicsUpdates`)
+* **The Pitch**: Enable Keen's native Dedicated Server setting (`<EnableSelectivePhysicsUpdates>true</EnableSelectivePhysicsUpdates>`) to freeze physics simulation in unobserved world regions.
+* **Why It Must Remain OFF (The NPC & Torpedo Freeze Trap)**:
+  1. **NPC / Drone Cluster Freezing**: In `MyWorldObserver.cs`, Keen divides the universe into spatial clusters (`MyClusterTree`). If a cluster contains no human players or player-replicated entities, Havok completely stops stepping physics for that entire zone. When automated NPC convoys, Gaalsien raiders, or cargo ships fly across cluster boundaries, their physics freezes mid-air. When a player eventually approaches, the cluster abruptly wakes up, causing the NPC to violently rubberband, plummet into terrain, or get permanently stuck in place.
+  2. **Frozen Player-Made Torpedoes (PMWs)**: If a player fires a long-range cruise missile or kinetic torpedo toward an outpost in an unobserved cluster, the missile freezes in mid-flight the moment it crosses the cluster boundary, hanging stationary in space until a player enters the area.
+  3. **Kills Native Havok Optimizers**: In `MyPhysics.cs` (line 2511), Keen explicitly hardcoded:
+     ```csharp
+     if (Game.IsDedicated && MySession.Static.Settings.EnableSelectivePhysicsUpdates) return;
+     ```
+     Enabling this setting permanently disables Keen's own Havok step optimizers on dedicated servers.
+* **The Approved Solution**: Keep `EnableSelectivePhysicsUpdates` **FALSE** in `Sandbox.sbc` / Dedicated Server settings. Rely on **Module 2 (Rigid Body Sleep Manager)** instead, which puts motionless, parked grids to sleep on an individual entity level (`rigidBody.Deactivate()`) with instant microsecond wakeups on cockpit entry, thrusters, or damage—saving massive CPU time without breaking world clusters or freezing moving drones.
+
+---
+
+## 11. License & Credits
 
 * **Author**: GVK Modding Team
 * **Target Server**: GV - Deserts of Kharak (GVK)

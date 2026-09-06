@@ -120,7 +120,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
                                 if (config.EnableDebugLogging)
                                 {
-                                    Log.Debug($"[SleepManager] Put idle grid '{grid.DisplayName}' ({grid.BlocksCount} blocks) into Havok SLEEP.");
+                                    Log.Info($"[SleepManager] Put idle grid '{grid.DisplayName}' ({grid.BlocksCount} blocks) into Havok SLEEP.");
                                 }
                             }
                         }
@@ -150,7 +150,17 @@ namespace GVK.PhysicsOptimizations.Modules
                     _cleanupBuffer.Clear();
                 }
 
+                int currentlyForcedSleep = 0;
+                foreach (var kvp in _trackers)
+                {
+                    if (kvp.Value.IsForcedSleep)
+                    {
+                        currentlyForcedSleep++;
+                    }
+                }
+
                 _plugin?.Telemetry?.UpdateActiveAndSleepingRigidBodies(activeBodies, sleepingBodies);
+                _plugin?.Telemetry?.UpdateGridSleepTelemetry(_trackers.Count, currentlyForcedSleep);
             }
             catch (Exception ex)
             {
@@ -235,7 +245,7 @@ namespace GVK.PhysicsOptimizations.Modules
                 grid.Physics.RigidBody.Activate();
                 if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
                 {
-                    Log.Debug($"[SleepManager] Woke grid '{grid.DisplayName}' (Reason: {reason}).");
+                    Log.Info($"[SleepManager] Woke grid '{grid.DisplayName}' (Reason: {reason}).");
                 }
             }
 

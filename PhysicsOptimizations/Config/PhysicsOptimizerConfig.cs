@@ -9,6 +9,8 @@ namespace GVK.PhysicsOptimizations.Config
         // --- General Settings ---
         private bool _enabled = true;
         private bool _enableDebugLogging = false;
+        private bool _enablePeriodicConsoleTelemetry = true;
+        private int _consoleTelemetryIntervalSeconds = 30;
 
         // --- Module 1: Wheel & Suspension ---
         private bool _enableWheelOptimization = true;
@@ -54,6 +56,20 @@ namespace GVK.PhysicsOptimizations.Config
         {
             get => _enableDebugLogging;
             set => SetValue(ref _enableDebugLogging, value);
+        }
+
+        [Display(Order = 3, Name = "Periodic Console Telemetry", GroupName = "General", Description = "Periodically log a 1-line telemetry heartbeat summary to the Torch console.")]
+        public bool EnablePeriodicConsoleTelemetry
+        {
+            get => _enablePeriodicConsoleTelemetry;
+            set => SetValue(ref _enablePeriodicConsoleTelemetry, value);
+        }
+
+        [Display(Order = 4, Name = "Console Telemetry Interval (s)", GroupName = "General", Description = "Interval in seconds between periodic console telemetry summaries. Default: 30s.")]
+        public int ConsoleTelemetryIntervalSeconds
+        {
+            get => _consoleTelemetryIntervalSeconds;
+            set => SetValue(ref _consoleTelemetryIntervalSeconds, Math.Max(5, Math.Min(600, value)));
         }
 
         // ==========================================

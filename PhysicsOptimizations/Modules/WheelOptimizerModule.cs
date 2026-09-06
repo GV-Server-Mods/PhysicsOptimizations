@@ -115,6 +115,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
             int parkedRoversSleeping = 0;
             int sleepingWheels = 0;
+            int totalWheels = 0;
             int requiredStationaryTicks = (int)(_plugin.Config.RoverSleepDelaySeconds * 60f);
 
             _removalBuffer.Clear();
@@ -136,6 +137,7 @@ namespace GVK.PhysicsOptimizations.Modules
                 }
 
                 state.WheelCount = wheelSystem.WheelCount;
+                totalWheels += state.WheelCount;
                 bool isHandbrakeOn = wheelSystem.HandBrake;
                 state.IsParked = isHandbrakeOn;
 
@@ -158,7 +160,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
                                 if (_plugin.Config.EnableDebugLogging)
                                 {
-                                    Log.Debug($"[WheelOptimizer] Put suspension updates to SLEEP on parked rover '{grid.DisplayName}' ({wheelSystem.WheelCount} wheels).");
+                                    Log.Info($"[WheelOptimizer] Put suspension updates to SLEEP on parked rover '{grid.DisplayName}' ({wheelSystem.WheelCount} wheels).");
                                 }
                             }
                         }
@@ -200,8 +202,7 @@ namespace GVK.PhysicsOptimizations.Modules
                 _removalBuffer.Clear();
             }
 
-            _plugin?.Telemetry?.UpdateParkedRoversAsleep(parkedRoversSleeping);
-            _plugin?.Telemetry?.UpdateSleepingWheelsCount(sleepingWheels);
+            _plugin?.Telemetry?.UpdateRoverTelemetry(_trackedRovers.Count, parkedRoversSleeping, totalWheels, sleepingWheels);
         }
 
         public bool IsGridSuspensionAsleep(long gridEntityId)
@@ -241,7 +242,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
                 if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
                 {
-                    Log.Debug($"[WheelOptimizer] Woke suspension updates on rover '{grid.DisplayName}' (Reason: {reason}).");
+                    Log.Info($"[WheelOptimizer] Woke suspension updates on rover '{grid.DisplayName}' (Reason: {reason}).");
                 }
             }
         }
@@ -311,7 +312,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
                 if (_plugin.Config.EnableDebugLogging)
                 {
-                    Log.Debug($"[WheelOptimizer] Applied wheel broadphase mask on '{cubeGrid.DisplayName}' / wheel '{topGrid.DisplayName}'.");
+                    Log.Info($"[WheelOptimizer] Applied wheel broadphase mask on '{cubeGrid.DisplayName}' / wheel '{topGrid.DisplayName}'.");
                 }
             }
             catch (Exception ex)

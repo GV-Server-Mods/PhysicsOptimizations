@@ -102,7 +102,7 @@ namespace GVK.PhysicsOptimizations.Modules
                                         state.IsStabilized = true;
                                         if (config.EnableDebugLogging)
                                         {
-                                            Log.Debug($"[SubgridStabilizer] Stabilized joint on '{grid.DisplayName}' / '{mechBlock.CustomName}'.");
+                                            Log.Info($"[SubgridStabilizer] Stabilized joint on '{grid.DisplayName}' / '{mechBlock.CustomName}'.");
                                         }
                                     }
                                 }
@@ -157,7 +157,7 @@ namespace GVK.PhysicsOptimizations.Modules
                     _cleanupBuffer.Clear();
                 }
 
-                _plugin?.Telemetry?.UpdateStabilizedSubgridConstraints(stabilizedCount);
+                _plugin?.Telemetry?.UpdateSubgridTelemetry(_trackedJoints.Count, stabilizedCount);
             }
             catch (Exception ex)
             {

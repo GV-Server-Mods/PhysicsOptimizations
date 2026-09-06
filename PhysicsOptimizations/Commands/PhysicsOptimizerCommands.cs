@@ -24,9 +24,10 @@ namespace GVK.PhysicsOptimizations.Commands
 
             var cfg = Plugin.Config;
             var sb = new StringBuilder();
-            sb.AppendLine("=== [GVK Physics Optimizer Status] ===");
+            sb.AppendLine("=== [GVK Physics Optimizer Status v1.0.0] ===");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Master Enabled: {0}", cfg.Enabled));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Debug Logging: {0}", cfg.EnableDebugLogging));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Periodic Console Telemetry: {0} (Interval: {1}s)", cfg.EnablePeriodicConsoleTelemetry, cfg.ConsoleTelemetryIntervalSeconds));
             sb.AppendLine();
             sb.AppendLine("[1] Wheels & Suspension:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Wheel Optimizer: {0}", cfg.EnableWheelOptimization));
@@ -64,14 +65,15 @@ namespace GVK.PhysicsOptimizations.Commands
 
             var t = Plugin.Telemetry;
             var sb = new StringBuilder();
-            sb.AppendLine("=== [Physics Optimizer Live Telemetry] ===");
+            sb.AppendLine("=== [Physics Optimizer Live Telemetry v1.0.0] ===");
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Server Sim Speed: {0:F2}", t.ServerSimulationSpeed));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Active Rigid Bodies: {0:N0}", t.ActiveRigidBodies));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Sleeping Rigid Bodies: {0:N0}", t.SleepingRigidBodies));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Parked Rovers Asleep: {0:N0} ({1:N0} wheels)", t.ParkedRoversAsleep, t.SleepingWheelsCount));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Ore Stacks Merged: {0:N0} ({1:N0} entities removed)", t.OreStacksMergedTotal, t.OreEntitiesEliminatedTotal));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Forced Sleep Events: {0:N0}", t.ForcedSleepEventsTotal));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Stabilized Subgrid Joints: {0:N0}", t.StabilizedSubgridConstraints));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Discrete TOI Grids: {0:N0}", t.DiscreteTOIGridsCount));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Parked Rovers Asleep: {0:N0} / {1:N0} ({2:N0} / {3:N0} wheels)", t.ParkedRoversAsleep, t.TrackedRoversCount, t.SleepingWheelsCount, t.TotalRoverWheelsCount));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Dynamic Grids Asleep: {0:N0} / {1:N0} (Total Sleep Events: {2:N0})", t.GridsCurrentlyForcedSleep, t.TrackedGridsCount, t.ForcedSleepEventsTotal));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Subgrid Joints Stabilized: {0:N0} / {1:N0}", t.StabilizedSubgridConstraints, t.TrackedSubgridConstraints));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Discrete TOI Grids: {0:N0} / {1:N0} (Continuous: {2:N0})", t.DiscreteTOIGridsCount, t.TrackedTOIGridsCount, t.ContinuousTOIGridsCount));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Floating Objects: {0:N0} (Merged: {1:N0} stacks, {2:N0} eliminated)", t.ActiveFloatingObjectsCount, t.OreStacksMergedTotal, t.OreEntitiesEliminatedTotal));
 
             Context.Respond(sb.ToString());
         }
@@ -155,13 +157,46 @@ namespace GVK.PhysicsOptimizations.Commands
                     cfg.EnableDebugLogging = !cfg.EnableDebugLogging;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Debug Logging is now {0}.", cfg.EnableDebugLogging ? "ENABLED" : "DISABLED");
                     break;
+                case "telemetry":
+                case "telem":
+                    cfg.EnablePeriodicConsoleTelemetry = !cfg.EnablePeriodicConsoleTelemetry;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Periodic Console Telemetry is now {0}.", cfg.EnablePeriodicConsoleTelemetry ? "ENABLED" : "DISABLED");
+                    break;
                 default:
-                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown module '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgrids, toi, debug.", moduleName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown module '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgrids, toi, debug, telemetry.", moduleName));
                     return;
             }
 
             Plugin.SaveConfig(async: true);
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] {0}", stateMsg));
+        }
+
+        [Command("wakeall", "Wakes all dynamic grids and rovers currently sleeping.")]
+        [Permission(MyPromoteLevel.Admin)]
+        public void WakeAll()
+        {
+            int count = 0;
+            try
+            {
+                var entities = Sandbox.Game.Entities.MyEntities.GetEntities();
+                foreach (var entity in entities)
+                {
+                    if (entity is Sandbox.Game.Entities.MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && grid.Physics?.RigidBody != null)
+                    {
+                        if (!grid.Physics.RigidBody.IsActive)
+                        {
+                            Plugin?.SleepManager?.WakeGrid(grid, "Admin wakeall command");
+                            Plugin?.WheelOptimizer?.WakeRover(grid.EntityId, "Admin wakeall command");
+                            count++;
+                        }
+                    }
+                }
+                Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Woke {0} sleeping dynamic grids/rovers.", count));
+            }
+            catch (Exception ex)
+            {
+                Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Error waking grids: {0}", ex.Message));
+            }
         }
 
         [Command("reload", "Reloads the PhysicsOptimizer configuration from disk.")]

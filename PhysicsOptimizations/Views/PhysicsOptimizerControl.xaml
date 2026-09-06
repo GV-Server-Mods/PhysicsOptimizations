@@ -45,7 +45,7 @@
             <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <!-- Title & Subtitle -->
                 <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,20,4">
-                    <TextBlock Text="⚡ GVK Physics Optimizer" FontSize="18" FontWeight="Bold" Foreground="#4CAF50" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="⚡ GVK Physics Optimizer v1.0.0" FontSize="18" FontWeight="Bold" Foreground="#4CAF50" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBlock Text="(Wheels, Sleep, Ore, Subgrids &amp; Adaptive TOI)" FontSize="12" Foreground="#888888" VerticalAlignment="Center" TextWrapping="Wrap"/>
                 </WrapPanel>
 
@@ -85,10 +85,16 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <CheckBox Grid.Row="0" Grid.ColumnSpan="2" Content="Enable Physics Optimizer" IsChecked="{Binding Config.Enabled}" FontWeight="Bold"/>
-                                <CheckBox Grid.Row="1" Grid.ColumnSpan="2" Content="Enable Debug Logging (Log sleep transitions, ore merges, and subgrid events)" IsChecked="{Binding Config.EnableDebugLogging}"/>
+                                <CheckBox Grid.Row="0" Grid.ColumnSpan="2" Content="Enable Physics Optimizer" IsChecked="{Binding Config.Enabled}" FontWeight="Bold" ToolTip="Master switch for the entire Physics Optimizer plugin. Unchecking pauses all optimization loops and patches."/>
+                                <CheckBox Grid.Row="1" Grid.ColumnSpan="2" Content="Enable Debug Logging (Log sleep transitions, ore merges, and subgrid events to console)" IsChecked="{Binding Config.EnableDebugLogging}" ToolTip="Outputs real-time event logs (sleep/wake transitions, ore merges, subgrid dampening, TOI changes) to the Torch console and torch.log at INFO level."/>
+                                <CheckBox Grid.Row="2" Grid.ColumnSpan="2" Content="Enable Periodic Console Telemetry (Regular 1-line heartbeat summary on Torch console)" IsChecked="{Binding Config.EnablePeriodicConsoleTelemetry}" ToolTip="Periodically logs a concise 1-line telemetry summary (sim speed, rigid body states, rovers, subgrids, floating items) to the Torch console."/>
+                                
+                                <Label Grid.Row="3" Grid.Column="0" Content="Console Telemetry Interval (Seconds):" ToolTip="How often (in seconds) the automated 1-line telemetry summary is emitted to the Torch console. Default: 30s."/>
+                                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Config.ConsoleTelemetryIntervalSeconds}" ToolTip="How often (in seconds) the automated 1-line telemetry summary is emitted to the Torch console. Default: 30s."/>
                             </Grid>
                         </GroupBox>
 
@@ -96,9 +102,9 @@
                         <GroupBox Header="🏎️ Module 1: Wheel &amp; Suspension Optimizer">
                             <StackPanel>
                                 <TextBlock Text="Consolidates all rover suspension performance optimizations and wheel broadphase collision masking." Foreground="#9CA3AF" FontSize="11" Margin="5,0,0,8"/>
-                                <CheckBox Content="Enable Wheel &amp; Suspension Optimizer" IsChecked="{Binding Config.EnableWheelOptimization}" FontWeight="SemiBold"/>
-                                <CheckBox Content="Enable Symmetrical Wheel Well Collision Masking" IsChecked="{Binding Config.EnableWheelCollisionFilter}"/>
-                                <CheckBox Content="Sleep Parked Rover Suspensions (Pause 60Hz raycasts &amp; air-shocks when parked)" IsChecked="{Binding Config.SleepParkedRovers}"/>
+                                <CheckBox Content="Enable Wheel &amp; Suspension Optimizer" IsChecked="{Binding Config.EnableWheelOptimization}" FontWeight="SemiBold" ToolTip="Master toggle for Module 1. Controls parked rover suspension sleep and symmetrical wheel well collision filtering."/>
+                                <CheckBox Content="Enable Symmetrical Wheel Well Collision Masking" IsChecked="{Binding Config.EnableWheelCollisionFilter}" ToolTip="Applies Havok collision bitmasks to prevent wheels from performing compound shape collision checks against their own chassis wheel well armor blocks."/>
+                                <CheckBox Content="Sleep Parked Rover Suspensions (Pause 60Hz raycasts &amp; air-shocks when parked)" IsChecked="{Binding Config.SleepParkedRovers}" ToolTip="Suspends 60Hz suspension raycasts, air-shock updates, and brake checks on rovers that are stationary with handbrake engaged. Wakes on input, damage, or movement."/>
                                 <Grid Margin="0,5,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="260"/>
@@ -107,8 +113,8 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
-                                    <Label Grid.Row="0" Grid.Column="0" Content="Parked Rover Sleep Delay (Seconds):"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.RoverSleepDelaySeconds, StringFormat={}{0:F1}}"/>
+                                    <Label Grid.Row="0" Grid.Column="0" Content="Parked Rover Sleep Delay (Seconds):" ToolTip="Seconds a parked rover must remain motionless before its suspension raycasts are put to sleep. Default: 2.0s."/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.RoverSleepDelaySeconds, StringFormat={}{0:F1}}" ToolTip="Seconds a parked rover must remain motionless before its suspension raycasts are put to sleep. Default: 2.0s."/>
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
@@ -117,7 +123,7 @@
                         <GroupBox Header="💤 Module 2: Rigid Body Sleep Manager">
                             <StackPanel>
                                 <TextBlock Text="Forces motionless dynamic grids to enter Havok sleep mode, freeing up CPU solver cycles." Foreground="#9CA3AF" FontSize="11" Margin="5,0,0,8"/>
-                                <CheckBox Content="Enable Aggressive Rigid Body Sleeping" IsChecked="{Binding Config.EnableAggressiveSleeping}" FontWeight="SemiBold"/>
+                                <CheckBox Content="Enable Aggressive Rigid Body Sleeping" IsChecked="{Binding Config.EnableAggressiveSleeping}" FontWeight="SemiBold" ToolTip="Actively deactivates Havok rigid bodies on idle, unpiloted, and supported dynamic grids into Havok sleep mode to eliminate solver CPU overhead."/>
                                 <Grid Margin="0,5,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="260"/>
@@ -129,14 +135,14 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <Label Grid.Row="0" Grid.Column="0" Content="Sleep Linear Velocity (m/s):"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.SleepLinearVelocityThreshold, StringFormat={}{0:F2}}"/>
+                                    <Label Grid.Row="0" Grid.Column="0" Content="Sleep Linear Velocity (m/s):" ToolTip="Maximum linear speed below which an unpiloted grid is considered at rest and eligible for Havok sleep. Default: 0.05 m/s."/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.SleepLinearVelocityThreshold, StringFormat={}{0:F2}}" ToolTip="Maximum linear speed below which an unpiloted grid is considered at rest and eligible for Havok sleep. Default: 0.05 m/s."/>
 
-                                    <Label Grid.Row="1" Grid.Column="0" Content="Sleep Angular Velocity (rad/s):"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.SleepAngularVelocityThreshold, StringFormat={}{0:F3}}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="Sleep Angular Velocity (rad/s):" ToolTip="Maximum rotational speed below which an unpiloted grid is considered at rest and eligible for Havok sleep. Default: 0.01 rad/s."/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.SleepAngularVelocityThreshold, StringFormat={}{0:F3}}" ToolTip="Maximum rotational speed below which an unpiloted grid is considered at rest and eligible for Havok sleep. Default: 0.01 rad/s."/>
 
-                                    <Label Grid.Row="2" Grid.Column="0" Content="Idle Seconds Before Sleep:"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Config.IdleSecondsBeforeSleep}"/>
+                                    <Label Grid.Row="2" Grid.Column="0" Content="Idle Seconds Before Sleep:" ToolTip="Consecutive seconds an unpiloted grid must remain under velocity thresholds before entering Havok sleep. Default: 3s."/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Config.IdleSecondsBeforeSleep}" ToolTip="Consecutive seconds an unpiloted grid must remain under velocity thresholds before entering Havok sleep. Default: 3s."/>
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
@@ -145,8 +151,8 @@
                         <GroupBox Header="⛏️ Module 3: Floating Object &amp; Ore Optimizer">
                             <StackPanel>
                                 <TextBlock Text="Merges scattered floating ore rocks and items into single larger stacks to slash rigid body counts." Foreground="#9CA3AF" FontSize="11" Margin="5,0,0,8"/>
-                                <CheckBox Content="Enable Floating Object Optimizer" IsChecked="{Binding Config.EnableFloatingObjectOptimizer}" FontWeight="SemiBold"/>
-                                <CheckBox Content="Auto-Merge Nearby Floating Ore &amp; Items" IsChecked="{Binding Config.AutoMergeNearbyOre}"/>
+                                <CheckBox Content="Enable Floating Object Optimizer" IsChecked="{Binding Config.EnableFloatingObjectOptimizer}" FontWeight="SemiBold" ToolTip="Master toggle for Module 3. Optimizes floating ores and dropped item entities in the world."/>
+                                <CheckBox Content="Auto-Merge Nearby Floating Ore &amp; Items" IsChecked="{Binding Config.AutoMergeNearbyOre}" ToolTip="Performs spatial proximity sweeps to merge adjacent matching ore rocks and items into single larger stacks, drastically reducing floating rigid bodies."/>
                                 <Grid Margin="0,5,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="260"/>
@@ -158,14 +164,14 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <Label Grid.Row="0" Grid.Column="0" Content="Proximity Merge Radius (Meters):"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.OreMergeRadiusMeters, StringFormat={}{0:F1}}"/>
+                                    <Label Grid.Row="0" Grid.Column="0" Content="Proximity Merge Radius (Meters):" ToolTip="Spatial radius within which matching floating items and ores will merge into a single item stack. Default: 3.0m."/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.OreMergeRadiusMeters, StringFormat={}{0:F1}}" ToolTip="Spatial radius within which matching floating items and ores will merge into a single item stack. Default: 3.0m."/>
 
-                                    <Label Grid.Row="1" Grid.Column="0" Content="Merge Interval (Ticks):"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.OreMergeIntervalTicks}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="Merge Interval (Ticks):" ToolTip="Simulation frames between proximity merge sweeps (60 = 1 sec, 120 = 2 sec). Default: 120 ticks."/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.OreMergeIntervalTicks}" ToolTip="Simulation frames between proximity merge sweeps (60 = 1 sec, 120 = 2 sec). Default: 120 ticks."/>
 
-                                    <Label Grid.Row="2" Grid.Column="0" Content="Max Sector Floating Objects:"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Config.MaxSectorFloatingObjects}"/>
+                                    <Label Grid.Row="2" Grid.Column="0" Content="Max Sector Floating Objects:" ToolTip="Maximum threshold of floating objects permitted in a sector before accelerated cleanup and merging are triggered. Default: 64."/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Config.MaxSectorFloatingObjects}" ToolTip="Maximum threshold of floating objects permitted in a sector before accelerated cleanup and merging are triggered. Default: 64."/>
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
@@ -174,7 +180,7 @@
                         <GroupBox Header="🦾 Module 4: Subgrid Constraint Stabilizer">
                             <StackPanel>
                                 <TextBlock Text="Dampens constraint oscillations on resting mechanical joints (rotors, hinges, pistons)." Foreground="#9CA3AF" FontSize="11" Margin="5,0,0,8"/>
-                                <CheckBox Content="Enable Subgrid Stabilization at Rest" IsChecked="{Binding Config.EnableSubgridStabilization}" FontWeight="SemiBold"/>
+                                <CheckBox Content="Enable Subgrid Stabilization at Rest" IsChecked="{Binding Config.EnableSubgridStabilization}" FontWeight="SemiBold" ToolTip="Micro-dampens velocity drift between resting subgrids and parent grids on uncommanded rotors, hinges, and pistons to eliminate Clang oscillation loops."/>
                                 <Grid Margin="0,5,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="260"/>
@@ -185,11 +191,11 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <Label Grid.Row="0" Grid.Column="0" Content="Subgrid Rest Velocity (rad/s):"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.SubgridRestVelocityThreshold, StringFormat={}{0:F3}}"/>
+                                    <Label Grid.Row="0" Grid.Column="0" Content="Subgrid Rest Velocity (rad/s):" ToolTip="Relative angular velocity threshold below which a mechanical joint is considered resting and eligible for stabilization. Default: 0.005 rad/s."/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.SubgridRestVelocityThreshold, StringFormat={}{0:F3}}" ToolTip="Relative angular velocity threshold below which a mechanical joint is considered resting and eligible for stabilization. Default: 0.005 rad/s."/>
 
-                                    <Label Grid.Row="1" Grid.Column="0" Content="Subgrid Rest Frames:"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.SubgridRestFramesThreshold}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="Subgrid Rest Frames:" ToolTip="Consecutive frames of rest before stabilizing the constraint solver (60 = ~1s). Default: 60 frames."/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.SubgridRestFramesThreshold}" ToolTip="Consecutive frames of rest before stabilizing the constraint solver (60 = ~1s). Default: 60 frames."/>
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
@@ -198,7 +204,7 @@
                         <GroupBox Header="🚀 Module 5: Adaptive TOI / Collision Pruning">
                             <StackPanel>
                                 <TextBlock Text="Prunes continuous collision detection on slow grids while keeping high-speed grids &amp; missiles safe." Foreground="#9CA3AF" FontSize="11" Margin="5,0,0,8"/>
-                                <CheckBox Content="Enable Adaptive TOI Collision Pruning" IsChecked="{Binding Config.EnableAdaptiveTOI}" FontWeight="SemiBold"/>
+                                <CheckBox Content="Enable Adaptive TOI Collision Pruning" IsChecked="{Binding Config.EnableAdaptiveTOI}" FontWeight="SemiBold" ToolTip="Dynamically demotes slow-moving dynamic grids to Discrete (Debris) collision quality to eliminate heavy continuous broadphase queries."/>
                                 <Grid Margin="0,5,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="260"/>
@@ -209,11 +215,11 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <Label Grid.Row="0" Grid.Column="0" Content="Continuous TOI Speed (m/s):"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.ContinuousCollisionSpeedThreshold, StringFormat={}{0:F1}}"/>
+                                    <Label Grid.Row="0" Grid.Column="0" Content="Continuous TOI Speed (m/s):" ToolTip="Speed above which grids are restored to Continuous (Moving/Critical) collision quality to guarantee high-speed missiles and ships do not tunnel through grids. Default: 40 m/s."/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Config.ContinuousCollisionSpeedThreshold, StringFormat={}{0:F1}}" ToolTip="Speed above which grids are restored to Continuous (Moving/Critical) collision quality to guarantee high-speed missiles and ships do not tunnel through grids. Default: 40 m/s."/>
 
-                                    <Label Grid.Row="1" Grid.Column="0" Content="Discrete Collision Speed (m/s):"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.DiscreteCollisionSpeedThreshold, StringFormat={}{0:F1}}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="Discrete Collision Speed (m/s):" ToolTip="Speed below which grids are switched to Discrete collision quality to save CPU time during low-speed maneuvering and parking. Default: 15 m/s."/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Config.DiscreteCollisionSpeedThreshold, StringFormat={}{0:F1}}" ToolTip="Speed below which grids are switched to Discrete collision quality to save CPU time during low-speed maneuvering and parking. Default: 15 m/s."/>
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
@@ -241,26 +247,40 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                    <TextBlock Text="Sim Speed" Foreground="#888888" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Telemetry.ServerSimulationSpeed, StringFormat={}{0:F2}}" FontSize="20" FontWeight="Bold" Foreground="#FFD54F" HorizontalAlignment="Center"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
                                     <TextBlock Text="Active Bodies" Foreground="#888888" HorizontalAlignment="Center"/>
                                     <TextBlock Text="{Binding Telemetry.ActiveRigidBodies, StringFormat={}{0:N0}}" FontSize="20" FontWeight="Bold" Foreground="#F44336" HorizontalAlignment="Center"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
                                     <TextBlock Text="Sleeping Bodies" Foreground="#888888" HorizontalAlignment="Center"/>
                                     <TextBlock Text="{Binding Telemetry.SleepingRigidBodies, StringFormat={}{0:N0}}" FontSize="20" FontWeight="Bold" Foreground="#4CAF50" HorizontalAlignment="Center"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
                                     <TextBlock Text="Rovers Asleep" Foreground="#888888" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Telemetry.ParkedRoversAsleep, StringFormat={}{0:N0}}" FontSize="20" FontWeight="Bold" Foreground="#2196F3" HorizontalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding Telemetry.ParkedRoversAsleep, StringFormat={}{0:N0}}" FontSize="20" FontWeight="Bold" Foreground="#2196F3"/>
+                                        <TextBlock Text=" / " FontSize="16" Foreground="#888888" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Telemetry.TrackedRoversCount, StringFormat={}{0:N0}}" FontSize="16" Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                <StackPanel Grid.Column="4" HorizontalAlignment="Center">
                                     <TextBlock Text="Sleeping Wheels" Foreground="#888888" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Telemetry.SleepingWheelsCount, StringFormat={}{0:N0}}" FontSize="20" FontWeight="Bold" Foreground="#00E676" HorizontalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding Telemetry.SleepingWheelsCount, StringFormat={}{0:N0}}" FontSize="20" FontWeight="Bold" Foreground="#00E676"/>
+                                        <TextBlock Text=" / " FontSize="16" Foreground="#888888" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Telemetry.TotalRoverWheelsCount, StringFormat={}{0:N0}}" FontSize="16" Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -277,31 +297,74 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <Label Grid.Row="0" Grid.Column="0" Content="⛏️ Ore / Item Stacks Merged:"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Telemetry.OreStacksMergedTotal, StringFormat={}{0:N0}}" VerticalAlignment="Center" FontWeight="Bold" Foreground="#FF9800"/>
+                                <Label Grid.Row="0" Grid.Column="0" Content="💤 Dynamic Grids Asleep:"/>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Telemetry.GridsCurrentlyForcedSleep, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#64B5F6"/>
+                                    <TextBlock Text=" / " Foreground="#888888"/>
+                                    <TextBlock Text="{Binding Telemetry.TrackedGridsCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#CCCCCC"/>
+                                    <TextBlock Text=" unpiloted grids (" Foreground="#888888" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Telemetry.ForcedSleepEventsTotal, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#90CAF9"/>
+                                    <TextBlock Text=" total sleep events)" Foreground="#888888"/>
+                                </StackPanel>
 
-                                <Label Grid.Row="1" Grid.Column="0" Content="🗑️ Floating Objects Eliminated:"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Telemetry.OreEntitiesEliminatedTotal, StringFormat={}{0:N0}}" VerticalAlignment="Center" FontWeight="Bold" Foreground="#FFC107"/>
+                                <Label Grid.Row="1" Grid.Column="0" Content="🏎️ Parked Rovers Asleep:"/>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Telemetry.ParkedRoversAsleep, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#2196F3"/>
+                                    <TextBlock Text=" / " Foreground="#888888"/>
+                                    <TextBlock Text="{Binding Telemetry.TrackedRoversCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#CCCCCC"/>
+                                    <TextBlock Text=" rovers (" Foreground="#888888" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Telemetry.SleepingWheelsCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#00E676"/>
+                                    <TextBlock Text=" / " Foreground="#888888"/>
+                                    <TextBlock Text="{Binding Telemetry.TotalRoverWheelsCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#B9F6CA"/>
+                                    <TextBlock Text=" wheels asleep)" Foreground="#888888"/>
+                                </StackPanel>
 
-                                <Label Grid.Row="2" Grid.Column="0" Content="💤 Forced Sleep Events Total:"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Telemetry.ForcedSleepEventsTotal, StringFormat={}{0:N0}}" VerticalAlignment="Center" FontWeight="Bold" Foreground="#64B5F6"/>
+                                <Label Grid.Row="2" Grid.Column="0" Content="🦾 Stabilized Subgrid Joints:"/>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Telemetry.StabilizedSubgridConstraints, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#BA68C8"/>
+                                    <TextBlock Text=" / " Foreground="#888888"/>
+                                    <TextBlock Text="{Binding Telemetry.TrackedSubgridConstraints, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#CCCCCC"/>
+                                    <TextBlock Text=" tracked mechanical joints at rest" Foreground="#888888" Margin="8,0,0,0"/>
+                                </StackPanel>
 
-                                <Label Grid.Row="3" Grid.Column="0" Content="🦾 Stabilized Subgrid Joints:"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Telemetry.StabilizedSubgridConstraints, StringFormat={}{0:N0}}" VerticalAlignment="Center" FontWeight="Bold" Foreground="#BA68C8"/>
+                                <Label Grid.Row="3" Grid.Column="0" Content="🚀 Discrete TOI Collision Grids:"/>
+                                <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Telemetry.DiscreteTOIGridsCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#81C784"/>
+                                    <TextBlock Text=" / " Foreground="#888888"/>
+                                    <TextBlock Text="{Binding Telemetry.TrackedTOIGridsCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#CCCCCC"/>
+                                    <TextBlock Text=" dynamic grids (Continuous: " Foreground="#888888" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Telemetry.ContinuousTOIGridsCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#A5D6A7"/>
+                                    <TextBlock Text=")" Foreground="#888888"/>
+                                </StackPanel>
 
-                                <Label Grid.Row="4" Grid.Column="0" Content="🚀 Grids with Discrete TOI:"/>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Telemetry.DiscreteTOIGridsCount, StringFormat={}{0:N0}}" VerticalAlignment="Center" FontWeight="Bold" Foreground="#81C784"/>
+                                <Label Grid.Row="4" Grid.Column="0" Content="📦 Active Floating Objects:"/>
+                                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Telemetry.ActiveFloatingObjectsCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#FFD54F"/>
+                                    <TextBlock Text=" floating entities in world (" Foreground="#888888" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Telemetry.LastMergeEliminatedCount, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#FFE082"/>
+                                    <TextBlock Text=" eliminated in last sweep)" Foreground="#888888"/>
+                                </StackPanel>
+
+                                <Label Grid.Row="5" Grid.Column="0" Content="⛏️ Ore / Item Stacks Merged:"/>
+                                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Telemetry.OreStacksMergedTotal, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#FF9800"/>
+                                    <TextBlock Text=" stacks merged (" Foreground="#888888" Margin="8,0,0,0"/>
+                                    <TextBlock Text="{Binding Telemetry.OreEntitiesEliminatedTotal, StringFormat={}{0:N0}}" FontWeight="Bold" Foreground="#FFC107"/>
+                                    <TextBlock Text=" total entities eliminated)" Foreground="#888888"/>
+                                </StackPanel>
                             </Grid>
                         </GroupBox>
                     </StackPanel>
 
                     <!-- Bottom Action Controls -->
                     <WrapPanel Grid.Row="2" Margin="0,10,0,0">
-                        <Button Content="💤 Force Sleep All Idle Grids" Click="SleepAllButton_OnClick" Background="#1565C0" Foreground="White" BorderThickness="0"/>
-                        <Button Content="⛏️ Run Ore Proximity Merge Now" Click="MergeOreButton_OnClick" Background="#E65100" Foreground="White" BorderThickness="0"/>
-                        <Button Content="🔄 Reset Counters" Click="ResetCountersButton_OnClick" Background="#C62828" Foreground="White" BorderThickness="0"/>
+                        <Button Content="💤 Force Sleep All Idle Grids" Click="SleepAllButton_OnClick" Background="#1565C0" Foreground="White" BorderThickness="0" ToolTip="Manually forces all eligible motionless unpiloted dynamic grids into Havok sleep mode immediately."/>
+                        <Button Content="⚡ Wake All Grids" Click="WakeAllButton_OnClick" Background="#00897B" Foreground="White" BorderThickness="0" ToolTip="Immediately wakes all sleeping dynamic grids and rovers in the world."/>
+                        <Button Content="⛏️ Run Ore Proximity Merge Now" Click="MergeOreButton_OnClick" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Triggers an immediate proximity merge pass across all floating ore rocks and items."/>
+                        <Button Content="🔄 Reset Counters" Click="ResetCountersButton_OnClick" Background="#C62828" Foreground="White" BorderThickness="0" ToolTip="Resets all cumulative telemetry counters (merged stacks, eliminated entities, forced sleep events) back to zero."/>
                     </WrapPanel>
                 </Grid>
             </TabItem>

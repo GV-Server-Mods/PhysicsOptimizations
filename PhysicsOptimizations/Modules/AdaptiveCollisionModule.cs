@@ -95,7 +95,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
                                 if (config.EnableDebugLogging)
                                 {
-                                    Log.Debug($"[AdaptiveTOI] Set grid '{grid.DisplayName}' to DISCRETE collision quality (Speed: {Math.Sqrt(speedSq):F1} m/s).");
+                                    Log.Info($"[AdaptiveTOI] Set grid '{grid.DisplayName}' to DISCRETE collision quality (Speed: {Math.Sqrt(speedSq):F1} m/s).");
                                 }
                             }
                         }
@@ -109,7 +109,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
                                 if (config.EnableDebugLogging)
                                 {
-                                    Log.Debug($"[AdaptiveTOI] Restored grid '{grid.DisplayName}' to CONTINUOUS TOI collision quality (Speed: {Math.Sqrt(speedSq):F1} m/s).");
+                                    Log.Info($"[AdaptiveTOI] Restored grid '{grid.DisplayName}' to CONTINUOUS TOI collision quality (Speed: {Math.Sqrt(speedSq):F1} m/s).");
                                 }
                             }
                         }
@@ -139,7 +139,8 @@ namespace GVK.PhysicsOptimizations.Modules
                     _cleanupBuffer.Clear();
                 }
 
-                _plugin?.Telemetry?.UpdateDiscreteTOIGridsCount(discreteCount);
+                int totalTracked = _trackedQualities.Count;
+                _plugin?.Telemetry?.UpdateTOITelemetry(totalTracked, discreteCount, Math.Max(0, totalTracked - discreteCount));
             }
             catch (Exception ex)
             {

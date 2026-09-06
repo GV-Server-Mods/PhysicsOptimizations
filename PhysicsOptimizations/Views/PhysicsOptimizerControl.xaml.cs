@@ -59,6 +59,32 @@ namespace GVK.PhysicsOptimizations.Views
             }
         }
 
+        private void WakeAllButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                int count = 0;
+                var entities = Sandbox.Game.Entities.MyEntities.GetEntities();
+                foreach (var entity in entities)
+                {
+                    if (entity is Sandbox.Game.Entities.MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && grid.Physics?.RigidBody != null)
+                    {
+                        if (!grid.Physics.RigidBody.IsActive)
+                        {
+                            Plugin?.SleepManager?.WakeGrid(grid, "UI Wake All button");
+                            Plugin?.WheelOptimizer?.WakeRover(grid.EntityId, "UI Wake All button");
+                            count++;
+                        }
+                    }
+                }
+                MessageBox.Show($"Successfully woke {count} sleeping dynamic grids/rovers.", "Wake All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error waking grids: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void MergeOreButton_OnClick(object sender, RoutedEventArgs e)
         {
             try

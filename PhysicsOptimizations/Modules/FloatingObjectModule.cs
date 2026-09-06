@@ -111,6 +111,7 @@ namespace GVK.PhysicsOptimizations.Modules
                 }
 
                 int totalCount = _floatingObjectsBuffer.Count;
+                _plugin?.Telemetry?.UpdateFloatingObjectTelemetry(totalCount, eliminatedCount);
                 if (totalCount < 2)
                 {
                     return 0;
@@ -179,6 +180,8 @@ namespace GVK.PhysicsOptimizations.Modules
                     }
                 }
 
+                _plugin?.Telemetry?.UpdateFloatingObjectTelemetry(totalCount - eliminatedCount, eliminatedCount);
+
                 if (mergedCount > 0)
                 {
                     _plugin.Telemetry?.IncrementOreMerged(mergedCount);
@@ -186,7 +189,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
                     if (config.EnableDebugLogging)
                     {
-                        Log.Debug($"[OreOptimizer] Spatial merge complete: merged {mergedCount} stacks, eliminated {eliminatedCount} floating objects.");
+                        Log.Info($"[OreOptimizer] Spatial merge complete: merged {mergedCount} stacks, eliminated {eliminatedCount} floating objects.");
                     }
                 }
             }
