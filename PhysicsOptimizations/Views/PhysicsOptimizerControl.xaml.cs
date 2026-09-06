@@ -20,7 +20,7 @@ namespace GVK.PhysicsOptimizations.Views
             };
             _telemetryTimer.Tick += (s, e) =>
             {
-                // Force UI binding refresh if necessary
+                Plugin?.Telemetry?.NotifyAllPropertiesChanged();
             };
 
             Loaded += (s, e) => _telemetryTimer.Start();

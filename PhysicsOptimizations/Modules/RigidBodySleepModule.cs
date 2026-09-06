@@ -27,8 +27,8 @@ namespace GVK.PhysicsOptimizations.Modules
             public bool IsForcedSleep;
         }
 
-        private readonly ConcurrentDictionary<long, GridIdleTracker> _trackers = new ConcurrentDictionary<long, GridIdleTracker>();
-        private readonly List<long> _cleanupBuffer = new List<long>();
+        private readonly ConcurrentDictionary<long, GridIdleTracker> _trackers = new();
+        private readonly List<long> _cleanupBuffer = [];
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
@@ -50,10 +50,10 @@ namespace GVK.PhysicsOptimizations.Modules
                 return;
             }
 
-            EvaluateGrids();
+            EvaluateGrids(frameCounter);
         }
 
-        private void EvaluateGrids()
+        private void EvaluateGrids(ulong frameCounter)
         {
             try
             {
@@ -92,18 +92,23 @@ namespace GVK.PhysicsOptimizations.Modules
 
                         // Check if grid is unpiloted and at rest
                         bool isPiloted = IsGridPiloted(grid);
+                        bool isSupported = IsGridSafelySupportedOrNotInGravity(grid);
                         float linSq = (float)grid.Physics.LinearVelocity.LengthSquared();
                         float angSq = (float)grid.Physics.AngularVelocity.LengthSquared();
 
-                        var tracker = _trackers.GetOrAdd(grid.EntityId, id => new GridIdleTracker
+                        if (!_trackers.TryGetValue(grid.EntityId, out var tracker))
                         {
-                            GridEntityId = id,
-                            GridRef = new WeakReference<MyCubeGrid>(grid),
-                            IdleSeconds = 0,
-                            IsForcedSleep = false
-                        });
+                            tracker = new()
+                            {
+                                GridEntityId = grid.EntityId,
+                                GridRef = new(grid),
+                                IdleSeconds = 0,
+                                IsForcedSleep = false
+                            };
+                            _trackers[grid.EntityId] = tracker;
+                        }
 
-                        if (!isPiloted && linSq <= linThreshSq && angSq <= angThreshSq)
+                        if (!isPiloted && isSupported && linSq <= linThreshSq && angSq <= angThreshSq)
                         {
                             tracker.IdleSeconds++;
                             if (tracker.IdleSeconds >= requiredSeconds && isActive)
@@ -127,25 +132,25 @@ namespace GVK.PhysicsOptimizations.Modules
                     }
                 }
 
-                // Periodic cleanup of stale trackers
-                foreach (var kvp in _trackers)
+                // Cold-path cleanup of stale trackers (entity eviction handles immediate removals)
+                if (frameCounter % 300 == 0)
                 {
-                    if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose)
+                    foreach (var kvp in _trackers)
                     {
-                        _cleanupBuffer.Add(kvp.Key);
+                        if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed)
+                        {
+                            _cleanupBuffer.Add(kvp.Key);
+                        }
                     }
+
+                    for (int i = 0; i < _cleanupBuffer.Count; i++)
+                    {
+                        _trackers.TryRemove(_cleanupBuffer[i], out _);
+                    }
+                    _cleanupBuffer.Clear();
                 }
 
-                for (int i = 0; i < _cleanupBuffer.Count; i++)
-                {
-                    _trackers.TryRemove(_cleanupBuffer[i], out _);
-                }
-
-                if (_plugin.Telemetry != null)
-                {
-                    _plugin.Telemetry.ActiveRigidBodies = activeBodies;
-                    _plugin.Telemetry.SleepingRigidBodies = sleepingBodies;
-                }
+                _plugin?.Telemetry?.UpdateActiveAndSleepingRigidBodies(activeBodies, sleepingBodies);
             }
             catch (Exception ex)
             {
@@ -155,44 +160,89 @@ namespace GVK.PhysicsOptimizations.Modules
 
         public bool IsGridPiloted(MyCubeGrid grid)
         {
-            try
-            {
-                var controllers = grid.GridSystems?.ControlSystem;
-                if (controllers == null) return false;
+            if (grid == null || grid.MarkedForClose || grid.Closed) return false;
+            var controlSystem = grid.GridSystems?.ControlSystem;
+            if (controlSystem == null) return false;
 
-                var controller = controllers.GetShipController();
-                return controller != null && controller.Pilot != null;
-            }
-            catch
+            if (controlSystem.IsControlled) return true;
+
+            var controller = controlSystem.GetShipController();
+            if (controller != null)
             {
-                return false;
+                if (controller.Pilot != null) return true;
+                if (controller.ControllerInfo?.Controller != null) return true;
+                if (controller is MyShipController sc && sc.IsAutopilotControlled) return true;
             }
+
+            return false;
+        }
+
+        private bool IsGridSafelySupportedOrNotInGravity(MyCubeGrid grid)
+        {
+            if (grid?.Physics == null) return false;
+
+            // If not in significant gravity, safe to sleep
+            if (grid.Physics.Gravity.LengthSquared() < 0.1f) return true;
+
+            // In gravity: Check if grid is parked/supported
+            var wheelSystem = grid.GridSystems?.WheelSystem;
+            if (wheelSystem != null && wheelSystem.WheelCount > 0 && wheelSystem.HandBrake)
+            {
+                return true; // Parked rover on ground
+            }
+
+            var landingSystem = grid.GridSystems?.LandingSystem;
+            if (landingSystem != null && (landingSystem.IsParked || landingSystem.Locked == VRage.MyMultipleEnabledEnum.AllEnabled || landingSystem.Locked == VRage.MyMultipleEnabledEnum.Mixed))
+            {
+                return true; // Locked landing gears/feet
+            }
+
+            // Check if thrusters are actively firing against gravity (holding mid-air hover)
+            foreach (var thruster in grid.GetFatBlocks<MyThrust>())
+            {
+                if (thruster.IsWorking && (thruster.ThrustForceLength > 0.01f || thruster.ThrustOverride > 0f))
+                {
+                    // Active thrust in gravity: do not freeze mid-air
+                    return false;
+                }
+            }
+
+            // If no thrusters fighting gravity and stationary, it's a wreck, debris, or landed grid at rest on voxels
+            return true;
+        }
+
+        public bool IsGridSleeping(long gridEntityId)
+        {
+            return _trackers.TryGetValue(gridEntityId, out var tracker) && tracker.IsForcedSleep;
+        }
+
+        public void OnEntityAdded(MyEntity entity)
+        {
+        }
+
+        public void OnEntityRemoved(MyEntity entity)
+        {
+            if (entity == null) return;
+            _trackers.TryRemove(entity.EntityId, out _);
         }
 
         public void WakeGrid(MyCubeGrid grid, string reason = "External event")
         {
-            if (grid?.Physics?.RigidBody == null || grid.MarkedForClose) return;
+            if (grid?.Physics?.RigidBody == null || grid.MarkedForClose || grid.Closed) return;
 
-            try
+            if (!grid.Physics.RigidBody.IsActive)
             {
-                if (!grid.Physics.RigidBody.IsActive)
+                grid.Physics.RigidBody.Activate();
+                if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
                 {
-                    grid.Physics.RigidBody.Activate();
-                    if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
-                    {
-                        Log.Debug($"[SleepManager] Woke grid '{grid.DisplayName}' (Reason: {reason}).");
-                    }
-                }
-
-                if (_trackers.TryGetValue(grid.EntityId, out var tracker))
-                {
-                    tracker.IdleSeconds = 0;
-                    tracker.IsForcedSleep = false;
+                    Log.Debug($"[SleepManager] Woke grid '{grid.DisplayName}' (Reason: {reason}).");
                 }
             }
-            catch (Exception ex)
+
+            if (_trackers.TryGetValue(grid.EntityId, out var tracker))
             {
-                Log.Error(ex, $"[RigidBodySleepModule] Error waking grid {grid.DisplayName}!");
+                tracker.IdleSeconds = 0;
+                tracker.IsForcedSleep = false;
             }
         }
 

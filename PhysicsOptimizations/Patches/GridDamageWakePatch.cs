@@ -1,50 +1,80 @@
 using System;
 using System.Reflection;
-using HarmonyLib;
 using NLog;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.GameSystems;
 using Torch.Managers.PatchManager;
 using VRage.Game.ModAPI;
-using VRageMath;
 
 namespace GVK.PhysicsOptimizations.Patches
 {
-    [HarmonyPatch]
+    /// <summary>
+    /// Torch PatchManager patch for <see cref="MyDamageSystem.RaiseAfterDamageApplied(object, MyDamageInformation)"/>
+    /// to awaken sleeping physics rigid bodies and rover suspensions when grids or blocks sustain damage
+    /// from weapons (vanilla &amp; WeaponCore), grinders, projectiles, explosions, or collisions.
+    /// </summary>
     public static class GridDamageWakePatch
     {
         private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.DamageWake");
 
+        /// <summary>
+        /// Registers the RaiseAfterDamageApplied postfix patch via Torch's <see cref="PatchContext"/>.
+        /// </summary>
+        /// <param name="ctx">Torch patch context.</param>
         public static void Patch(PatchContext ctx)
         {
             try
             {
-                var damageMethod = typeof(MyCubeGrid).GetMethod("DoDamage", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, null, new Type[] { typeof(float), typeof(MyHitInfo), typeof(Vector3?), typeof(long) }, null);
+                var damageMethod = typeof(MyDamageSystem).GetMethod(
+                    "RaiseAfterDamageApplied",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
+                    null,
+                    [typeof(object), typeof(MyDamageInformation)],
+                    null);
+
                 if (damageMethod != null)
                 {
-                    var postfixMethod = typeof(GridDamageWakePatch).GetMethod(nameof(DoDamagePostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    var postfixMethod = typeof(GridDamageWakePatch).GetMethod(
+                        nameof(RaiseAfterDamageAppliedPostfix),
+                        BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
                     ctx.GetPattern(damageMethod).Suffixes.Add(postfixMethod);
-                    Log.Info("[GridDamageWakePatch] Registered MyCubeGrid.DoDamage patch.");
+                    Log.Info("[GridDamageWakePatch] Registered MyDamageSystem.RaiseAfterDamageApplied patch.");
+                }
+                else
+                {
+                    Log.Error("[GridDamageWakePatch] Could not find MyDamageSystem.RaiseAfterDamageApplied method!");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[GridDamageWakePatch] Failed to patch MyCubeGrid.DoDamage!");
+                Log.Error(ex, "[GridDamageWakePatch] Failed to patch MyDamageSystem.RaiseAfterDamageApplied!");
             }
         }
 
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(MyCubeGrid), "DoDamage", new Type[] { typeof(float), typeof(MyHitInfo), typeof(Vector3?), typeof(long) })]
-        public static void DoDamagePostfix(MyCubeGrid __instance, float damage)
+        /// <summary>
+        /// Postfix invoked after <see cref="MyDamageSystem.RaiseAfterDamageApplied(object, MyDamageInformation)"/>
+        /// to awaken sleeping grids and suspensions when damage is applied.
+        /// </summary>
+        /// <param name="target">The target entity or block receiving damage (almost exclusively MySlimBlock in SE).</param>
+        /// <param name="info">Damage context payload.</param>
+        public static void RaiseAfterDamageAppliedPostfix(object target, MyDamageInformation info)
         {
-            if (__instance == null || damage <= 0f) return;
+            if (info.Amount <= 0f || target == null) return;
+
+            var slim = target as MySlimBlock;
+            var grid = slim?.CubeGrid ?? target as MyCubeGrid;
+            if (grid == null || grid.MarkedForClose || grid.Closed) return;
 
             var plugin = PhysicsOptimizerPlugin.Instance;
             if (plugin != null)
             {
-                plugin.WheelOptimizer?.WakeRover(__instance.EntityId, "Grid took damage");
-                plugin.SleepManager?.WakeGrid(__instance, "Grid took damage");
+                plugin.WheelOptimizer?.WakeRover(grid.EntityId, "Grid took damage");
+                plugin.SleepManager?.WakeGrid(grid, "Grid took damage");
             }
         }
     }
 }
+
 

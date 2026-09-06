@@ -5,6 +5,8 @@ using NLog;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.ModAPI;
+using VRage.Game.Entity;
 using GVK.PhysicsOptimizations.Config;
 
 namespace GVK.PhysicsOptimizations.Modules
@@ -26,8 +28,8 @@ namespace GVK.PhysicsOptimizations.Modules
             public bool IsStabilized;
         }
 
-        private readonly ConcurrentDictionary<long, SubgridJointState> _trackedJoints = new ConcurrentDictionary<long, SubgridJointState>();
-        private readonly List<long> _cleanupBuffer = new List<long>();
+        private readonly ConcurrentDictionary<long, SubgridJointState> _trackedJoints = new();
+        private readonly List<long> _cleanupBuffer = [];
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
@@ -49,10 +51,10 @@ namespace GVK.PhysicsOptimizations.Modules
                 return;
             }
 
-            EvaluateMechanicalSubgrids();
+            EvaluateMechanicalSubgrids(frameCounter);
         }
 
-        private void EvaluateMechanicalSubgrids()
+        private void EvaluateMechanicalSubgrids(ulong frameCounter)
         {
             try
             {
@@ -66,80 +68,96 @@ namespace GVK.PhysicsOptimizations.Modules
                 var entities = MyEntities.GetEntities();
                 foreach (var entity in entities)
                 {
-                    if (entity is MyCubeGrid grid && !grid.MarkedForClose && grid.Physics != null)
+                    if (entity is MyCubeGrid grid && !grid.MarkedForClose && !grid.Closed && grid.Physics != null)
                     {
-                        var blocks = grid.GetBlocks();
-                        foreach (var slim in blocks)
+                        foreach (var mechBlock in grid.GetFatBlocks<MyMechanicalConnectionBlockBase>())
                         {
-                            if (slim.FatBlock is MyMechanicalConnectionBlockBase mechBlock)
+                            if (mechBlock is MyMotorSuspension || mechBlock.MarkedForClose || mechBlock.Closed || mechBlock.TopGrid == null)
                             {
-                                if (mechBlock.MarkedForClose || mechBlock.Closed || mechBlock.TopGrid == null)
-                                {
-                                    continue;
-                                }
+                                continue;
+                            }
 
-                                var state = _trackedJoints.GetOrAdd(mechBlock.EntityId, id => new SubgridJointState
+                            if (!_trackedJoints.TryGetValue(mechBlock.EntityId, out var state))
+                            {
+                                state = new()
                                 {
-                                    BlockEntityId = id,
-                                    BlockRef = new WeakReference<MyMechanicalConnectionBlockBase>(mechBlock),
+                                    BlockEntityId = mechBlock.EntityId,
+                                    BlockRef = new(mechBlock),
                                     RestFrames = 0,
                                     IsStabilized = false
-                                });
+                                };
+                                _trackedJoints[mechBlock.EntityId] = state;
+                            }
 
-                                bool isCommanded = IsJointCommanded(mechBlock);
-                                bool isStationary = IsJointStationary(mechBlock, velThreshSq);
+                            bool isCommanded = IsJointCommanded(mechBlock);
+                            bool isStationary = IsJointStationary(mechBlock, velThreshSq);
 
-                                if (!isCommanded && isStationary)
+                            if (!isCommanded && isStationary)
+                            {
+                                state.RestFrames += 30;
+                                if (state.RestFrames >= requiredRestFrames)
                                 {
-                                    state.RestFrames += 30;
-                                    if (state.RestFrames >= requiredRestFrames)
+                                    if (!state.IsStabilized)
                                     {
-                                        if (!state.IsStabilized)
+                                        state.IsStabilized = true;
+                                        if (config.EnableDebugLogging)
                                         {
-                                            state.IsStabilized = true;
-                                            if (config.EnableDebugLogging)
-                                            {
-                                                Log.Debug($"[SubgridStabilizer] Stabilized joint on '{grid.DisplayName}' / '{mechBlock.CustomName}'.");
-                                            }
+                                            Log.Debug($"[SubgridStabilizer] Stabilized joint on '{grid.DisplayName}' / '{mechBlock.CustomName}'.");
                                         }
                                     }
                                 }
-                                else
-                                {
-                                    if (state.IsStabilized)
-                                    {
-                                        state.IsStabilized = false;
-                                    }
-                                    state.RestFrames = 0;
-                                }
-
+                            }
+                            else
+                            {
                                 if (state.IsStabilized)
                                 {
-                                    stabilizedCount++;
+                                    state.IsStabilized = false;
+                                }
+                                state.RestFrames = 0;
+                            }
+
+                            if (state.IsStabilized)
+                            {
+                                stabilizedCount++;
+
+                                // Active Havok Constraint Micro-Dampening:
+                                // Synchronize the subgrid velocities to the base grid to eliminate
+                                // constraint solver micro-oscillations and Clang vibration loops.
+                                var topGrid = mechBlock.TopGrid;
+                                if (topGrid?.Physics?.RigidBody != null && grid.Physics?.RigidBody != null)
+                                {
+                                    var angDiff = topGrid.Physics.AngularVelocity - grid.Physics.AngularVelocity;
+                                    var linDiff = topGrid.Physics.LinearVelocity - grid.Physics.LinearVelocity;
+                                    if (angDiff.LengthSquared() > 0.000001f || linDiff.LengthSquared() > 0.000001f)
+                                    {
+                                        topGrid.Physics.AngularVelocity = grid.Physics.AngularVelocity;
+                                        topGrid.Physics.LinearVelocity = grid.Physics.LinearVelocity;
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // Cleanup dead references
-                foreach (var kvp in _trackedJoints)
+                // Cold-path cleanup of stale trackers (entity eviction handles immediate removals)
+                if (frameCounter % 300 == 0)
                 {
-                    if (!kvp.Value.BlockRef.TryGetTarget(out var b) || b.MarkedForClose || b.Closed)
+                    foreach (var kvp in _trackedJoints)
                     {
-                        _cleanupBuffer.Add(kvp.Key);
+                        if (!kvp.Value.BlockRef.TryGetTarget(out var b) || b.MarkedForClose || b.Closed)
+                        {
+                            _cleanupBuffer.Add(kvp.Key);
+                        }
                     }
+
+                    for (int i = 0; i < _cleanupBuffer.Count; i++)
+                    {
+                        _trackedJoints.TryRemove(_cleanupBuffer[i], out _);
+                    }
+                    _cleanupBuffer.Clear();
                 }
 
-                for (int i = 0; i < _cleanupBuffer.Count; i++)
-                {
-                    _trackedJoints.TryRemove(_cleanupBuffer[i], out _);
-                }
-
-                if (_plugin.Telemetry != null)
-                {
-                    _plugin.Telemetry.StabilizedSubgridConstraints = stabilizedCount;
-                }
+                _plugin?.Telemetry?.UpdateStabilizedSubgridConstraints(stabilizedCount);
             }
             catch (Exception ex)
             {
@@ -147,15 +165,28 @@ namespace GVK.PhysicsOptimizations.Modules
             }
         }
 
+        public void OnEntityAdded(MyEntity entity)
+        {
+        }
+
+        public void OnEntityRemoved(MyEntity entity)
+        {
+            if (entity == null) return;
+            _trackedJoints.TryRemove(entity.EntityId, out _);
+        }
+
         private bool IsJointCommanded(MyMechanicalConnectionBlockBase mechBlock)
         {
-            if (mechBlock is MyMotorStator rotor)
+            if (mechBlock is IMyMotorStator rotor)
             {
+                if (rotor.RotorLock) return false;
                 return Math.Abs(rotor.TargetVelocityRPM) > 0.001f;
             }
-            if (mechBlock is MyExtendedPistonBase piston)
+            if (mechBlock is IMyPistonBase piston)
             {
-                return Math.Abs(piston.Velocity) > 0.001f;
+                return Math.Abs(piston.Velocity) > 0.001f ||
+                       piston.Status == Sandbox.ModAPI.Ingame.PistonStatus.Extending ||
+                       piston.Status == Sandbox.ModAPI.Ingame.PistonStatus.Retracting;
             }
             return false;
         }

@@ -32,14 +32,72 @@ namespace GVK.PhysicsOptimizations.Modules
             public int WheelCount;
         }
 
-        private readonly ConcurrentDictionary<long, RoverState> _trackedRovers = new ConcurrentDictionary<long, RoverState>();
-        private readonly List<long> _removalBuffer = new List<long>();
+        public static volatile bool HasAnySleepingRovers;
+        private static readonly ConcurrentDictionary<long, byte> _sleepingGridIds = new();
+
+        public static bool IsSuspensionSleepingFast(long gridEntityId)
+        {
+            return HasAnySleepingRovers && _sleepingGridIds.ContainsKey(gridEntityId);
+        }
+
+        private readonly ConcurrentDictionary<long, RoverState> _trackedRovers = new();
+        private readonly List<long> _removalBuffer = [];
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
             _plugin = plugin;
             _trackedRovers.Clear();
+            _sleepingGridIds.Clear();
+            HasAnySleepingRovers = false;
+
+            DiscoverExistingRovers();
             Log.Info("[WheelOptimizerModule] Initialized successfully.");
+        }
+
+        public void DiscoverExistingRovers()
+        {
+            try
+            {
+                var entities = MyEntities.GetEntities();
+                if (entities == null) return;
+
+                foreach (var entity in entities)
+                {
+                    if (entity is MyCubeGrid grid && !grid.MarkedForClose && !grid.Closed)
+                    {
+                        TryRegisterRoverAndFilterWheels(grid);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[WheelOptimizerModule] Error discovering existing rovers!");
+            }
+        }
+
+        public void OnEntityAdded(MyEntity entity)
+        {
+            if (entity is MyCubeGrid grid && !grid.MarkedForClose && !grid.Closed)
+            {
+                TryRegisterRoverAndFilterWheels(grid);
+            }
+        }
+
+        private void TryRegisterRoverAndFilterWheels(MyCubeGrid grid)
+        {
+            if (grid == null || grid.MarkedForClose || grid.Closed) return;
+            var wheelSystem = grid.GridSystems?.WheelSystem;
+            if (wheelSystem != null && wheelSystem.WheelCount > 0)
+            {
+                RegisterRover(grid);
+                if (IsEnabled && _plugin?.Config != null && _plugin.Config.EnableWheelCollisionFilter)
+                {
+                    foreach (var block in grid.GetFatBlocks<MyMotorSuspension>())
+                    {
+                        OptimizeWheelCollisionFilter(block);
+                    }
+                }
+            }
         }
 
         public void Update(ulong frameCounter)
@@ -95,6 +153,9 @@ namespace GVK.PhysicsOptimizations.Modules
                             if (!state.IsSuspensionAsleep)
                             {
                                 state.IsSuspensionAsleep = true;
+                                _sleepingGridIds[grid.EntityId] = 1;
+                                HasAnySleepingRovers = true;
+
                                 if (_plugin.Config.EnableDebugLogging)
                                 {
                                     Log.Debug($"[WheelOptimizer] Put suspension updates to SLEEP on parked rover '{grid.DisplayName}' ({wheelSystem.WheelCount} wheels).");
@@ -129,17 +190,18 @@ namespace GVK.PhysicsOptimizations.Modules
                 }
             }
 
-            // Clean up closed grids
-            for (int i = 0; i < _removalBuffer.Count; i++)
+            // Cleanup dead or non-rover grids immediately
+            if (_removalBuffer.Count > 0)
             {
-                _trackedRovers.TryRemove(_removalBuffer[i], out _);
+                for (int i = 0; i < _removalBuffer.Count; i++)
+                {
+                    UnregisterRover(_removalBuffer[i]);
+                }
+                _removalBuffer.Clear();
             }
 
-            if (_plugin.Telemetry != null)
-            {
-                _plugin.Telemetry.ParkedRoversAsleep = parkedRoversSleeping;
-                _plugin.Telemetry.SleepingWheelsCount = sleepingWheels;
-            }
+            _plugin?.Telemetry?.UpdateParkedRoversAsleep(parkedRoversSleeping);
+            _plugin?.Telemetry?.UpdateSleepingWheelsCount(sleepingWheels);
         }
 
         public bool IsGridSuspensionAsleep(long gridEntityId)
@@ -174,6 +236,8 @@ namespace GVK.PhysicsOptimizations.Modules
             {
                 state.IsSuspensionAsleep = false;
                 state.StationaryTicks = 0;
+                _sleepingGridIds.TryRemove(grid.EntityId, out _);
+                HasAnySleepingRovers = !_sleepingGridIds.IsEmpty;
 
                 if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
                 {
@@ -184,22 +248,34 @@ namespace GVK.PhysicsOptimizations.Modules
 
         public void RegisterRover(MyCubeGrid grid)
         {
-            if (grid == null || grid.MarkedForClose) return;
+            if (grid == null || grid.MarkedForClose || grid.Closed) return;
 
-            _trackedRovers.GetOrAdd(grid.EntityId, id => new RoverState
+            if (!_trackedRovers.ContainsKey(grid.EntityId))
             {
-                GridEntityId = id,
-                GridRef = new WeakReference<MyCubeGrid>(grid),
-                IsParked = grid.GridSystems?.WheelSystem?.HandBrake ?? false,
-                StationaryTicks = 0,
-                IsSuspensionAsleep = false,
-                WheelCount = grid.GridSystems?.WheelSystem?.WheelCount ?? 0
-            });
+                RoverState state = new()
+                {
+                    GridEntityId = grid.EntityId,
+                    GridRef = new(grid),
+                    IsParked = grid.GridSystems?.WheelSystem?.HandBrake ?? false,
+                    StationaryTicks = 0,
+                    IsSuspensionAsleep = false,
+                    WheelCount = grid.GridSystems?.WheelSystem?.WheelCount ?? 0
+                };
+                _trackedRovers.TryAdd(grid.EntityId, state);
+            }
+        }
+
+        public void OnEntityRemoved(MyEntity entity)
+        {
+            if (entity == null) return;
+            UnregisterRover(entity.EntityId);
         }
 
         public void UnregisterRover(long gridEntityId)
         {
             _trackedRovers.TryRemove(gridEntityId, out _);
+            _sleepingGridIds.TryRemove(gridEntityId, out _);
+            HasAnySleepingRovers = !_sleepingGridIds.IsEmpty;
         }
 
         public void OptimizeWheelCollisionFilter(MyMotorSuspension suspension)
@@ -248,6 +324,8 @@ namespace GVK.PhysicsOptimizations.Modules
         {
             _trackedRovers.Clear();
             _removalBuffer.Clear();
+            _sleepingGridIds.Clear();
+            HasAnySleepingRovers = false;
             _plugin = null;
         }
 

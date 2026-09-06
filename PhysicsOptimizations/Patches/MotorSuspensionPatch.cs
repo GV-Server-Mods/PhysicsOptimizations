@@ -1,17 +1,24 @@
 using System;
 using System.Reflection;
-using HarmonyLib;
 using NLog;
 using Sandbox.Game.Entities.Cube;
 using Torch.Managers.PatchManager;
+using GVK.PhysicsOptimizations.Modules;
 
 namespace GVK.PhysicsOptimizations.Patches
 {
-    [HarmonyPatch]
+    /// <summary>
+    /// Torch PatchManager patches for <see cref="MyMotorSuspension"/> to filter internal subgrid wheel collisions
+    /// and throttle per-frame suspension updates when rovers are parked.
+    /// </summary>
     public static class MotorSuspensionPatch
     {
         private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.WheelPatch");
 
+        /// <summary>
+        /// Registers the CreateConstraint, CubeGrid_OnPhysicsChanged, and Update patches via Torch's <see cref="PatchContext"/>.
+        /// </summary>
+        /// <param name="ctx">Torch patch context.</param>
         public static void Patch(PatchContext ctx)
         {
             try
@@ -46,8 +53,11 @@ namespace GVK.PhysicsOptimizations.Patches
             }
         }
 
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(MyMotorSuspension), "CreateConstraint")]
+        /// <summary>
+        /// Postfix invoked after <see cref="MyMotorSuspension"/> creates its Havok constraint to configure collision filtering.
+        /// </summary>
+        /// <param name="__instance">The motor suspension block instance.</param>
+        /// <param name="__result">True if the constraint was successfully created.</param>
         public static void CreateConstraintPostfix(MyMotorSuspension __instance, bool __result)
         {
             if (!__result || __instance == null) return;
@@ -56,8 +66,10 @@ namespace GVK.PhysicsOptimizations.Patches
             plugin?.WheelOptimizer?.OptimizeWheelCollisionFilter(__instance);
         }
 
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(MyMotorSuspension), "CubeGrid_OnPhysicsChanged")]
+        /// <summary>
+        /// Postfix invoked when the parent grid physics changes to re-apply optimized wheel collision filtering.
+        /// </summary>
+        /// <param name="__instance">The motor suspension block instance.</param>
         public static void PhysicsChangedPostfix(MyMotorSuspension __instance)
         {
             if (__instance == null) return;
@@ -66,14 +78,20 @@ namespace GVK.PhysicsOptimizations.Patches
             plugin?.WheelOptimizer?.OptimizeWheelCollisionFilter(__instance);
         }
 
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(MyMotorSuspension), "Update")]
+        /// <summary>
+        /// Prefix on <see cref="MyMotorSuspension.Update"/> that skips expensive per-frame suspension updates
+        /// when a rover is detected as stationary and parked.
+        /// </summary>
+        /// <param name="__instance">The motor suspension block instance.</param>
+        /// <returns>False to skip Keen's internal suspension update; true to proceed normally.</returns>
         public static bool UpdatePrefix(MyMotorSuspension __instance)
         {
-            if (__instance?.CubeGrid == null) return true;
+            if (!WheelOptimizerModule.HasAnySleepingRovers) return true;
+            if (__instance == null) return true;
+            var cubeGrid = __instance.CubeGrid;
+            if (cubeGrid == null) return true;
 
-            var plugin = PhysicsOptimizerPlugin.Instance;
-            if (plugin?.WheelOptimizer != null && plugin.WheelOptimizer.IsGridSuspensionAsleep(__instance.CubeGrid.EntityId))
+            if (WheelOptimizerModule.IsSuspensionSleepingFast(cubeGrid.EntityId))
             {
                 // Skip expensive 60Hz per-frame suspension updates when rover is parked and motionless
                 return false;

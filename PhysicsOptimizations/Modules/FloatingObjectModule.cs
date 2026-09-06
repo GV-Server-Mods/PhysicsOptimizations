@@ -19,14 +19,18 @@ namespace GVK.PhysicsOptimizations.Modules
 
         private PhysicsOptimizerPlugin _plugin;
 
-        private readonly List<MyFloatingObject> _floatingObjectsBuffer = new List<MyFloatingObject>();
-        private readonly HashSet<long> _processedEntities = new HashSet<long>();
+        private readonly List<MyFloatingObject> _floatingObjectsBuffer = [];
+        private readonly HashSet<long> _processedEntities = [];
+        private readonly Dictionary<Vector3I, List<MyFloatingObject>> _cellBuckets = [];
+        private readonly List<List<MyFloatingObject>> _listPool = [];
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
             _plugin = plugin;
             _floatingObjectsBuffer.Clear();
             _processedEntities.Clear();
+            _cellBuckets.Clear();
+            _listPool.Clear();
             Log.Info("[FloatingObjectModule] Initialized successfully.");
         }
 
@@ -47,6 +51,37 @@ namespace GVK.PhysicsOptimizations.Modules
             MergeProximityFloatingObjects();
         }
 
+        public void OnEntityAdded(MyEntity entity)
+        {
+        }
+
+        public void OnEntityRemoved(MyEntity entity)
+        {
+            // Transient entities cleaned up in merge passes
+        }
+
+        private List<MyFloatingObject> GetPooledList()
+        {
+            if (_listPool.Count > 0)
+            {
+                int lastIdx = _listPool.Count - 1;
+                var list = _listPool[lastIdx];
+                _listPool.RemoveAt(lastIdx);
+                return list;
+            }
+            return new(8);
+        }
+
+        private void RecycleBuckets()
+        {
+            foreach (var kvp in _cellBuckets)
+            {
+                kvp.Value.Clear();
+                _listPool.Add(kvp.Value);
+            }
+            _cellBuckets.Clear();
+        }
+
         public int MergeProximityFloatingObjects()
         {
             if (!Sync.IsServer) return 0;
@@ -57,12 +92,15 @@ namespace GVK.PhysicsOptimizations.Modules
             try
             {
                 var config = _plugin.Config;
-                double mergeRadiusSq = config.OreMergeRadiusMeters * config.OreMergeRadiusMeters;
+                double mergeRadius = Math.Max(0.5, (double)config.OreMergeRadiusMeters);
+                double mergeRadiusSq = mergeRadius * mergeRadius;
+                double cellSize = mergeRadius; // Grid cell size matches merge radius
 
                 _floatingObjectsBuffer.Clear();
                 _processedEntities.Clear();
+                RecycleBuckets();
 
-                // Gather active floating objects
+                // 1. Gather active floating objects
                 var entities = MyEntities.GetEntities();
                 foreach (var entity in entities)
                 {
@@ -78,50 +116,65 @@ namespace GVK.PhysicsOptimizations.Modules
                     return 0;
                 }
 
-                // Spatial proximity clustering
+                // 2. Spatial Grid Hashing (O(N) bucketing)
                 for (int i = 0; i < totalCount; i++)
                 {
-                    var primary = _floatingObjectsBuffer[i];
-                    if (primary.MarkedForClose || primary.Closed || _processedEntities.Contains(primary.EntityId))
+                    var item = _floatingObjectsBuffer[i];
+                    Vector3D pos = item.PositionComp.GetPosition();
+                    var cell = new Vector3I(
+                        (int)Math.Floor(pos.X / cellSize),
+                        (int)Math.Floor(pos.Y / cellSize),
+                        (int)Math.Floor(pos.Z / cellSize)
+                    );
+
+                    if (!_cellBuckets.TryGetValue(cell, out var list))
                     {
-                        continue;
+                        list = GetPooledList();
+                        _cellBuckets[cell] = list;
                     }
+                    list.Add(item);
+                }
 
-                    var primaryContent = primary.Item.Content;
-                    Vector3D primaryPos = primary.PositionComp.GetPosition();
+                // 3. Local proximity clustering within adjacent cells
+                foreach (var cellKvp in _cellBuckets)
+                {
+                    var currentCell = cellKvp.Key;
+                    var currentList = cellKvp.Value;
 
-                    for (int j = i + 1; j < totalCount; j++)
+                    for (int i = 0; i < currentList.Count; i++)
                     {
-                        var secondary = _floatingObjectsBuffer[j];
-                        if (secondary.MarkedForClose || secondary.Closed || _processedEntities.Contains(secondary.EntityId))
+                        var primary = currentList[i];
+                        if (primary.MarkedForClose || primary.Closed || _processedEntities.Contains(primary.EntityId))
                         {
                             continue;
                         }
 
-                        var secondaryContent = secondary.Item.Content;
+                        var primaryContent = primary.Item.Content;
+                        Vector3D primaryPos = primary.PositionComp.GetPosition();
 
-                        // Verify same item type definition and subtype
-                        if (primaryContent.TypeId != secondaryContent.TypeId ||
-                            primaryContent.SubtypeName != secondaryContent.SubtypeName)
+                        for (int dx = -1; dx <= 1; dx++)
                         {
-                            continue;
-                        }
+                            for (int dy = -1; dy <= 1; dy++)
+                            {
+                                for (int dz = -1; dz <= 1; dz++)
+                                {
+                                    var neighborCell = new Vector3I(currentCell.X + dx, currentCell.Y + dy, currentCell.Z + dz);
 
-                        // Check spatial distance
-                        Vector3D secondaryPos = secondary.PositionComp.GetPosition();
-                        if (Vector3D.DistanceSquared(primaryPos, secondaryPos) <= mergeRadiusSq)
-                        {
-                            // Merge amounts into primary stack
-                            MyFixedPoint addedAmount = secondary.Amount.Value;
-                            primary.Amount.Value += addedAmount;
-                            primary.Item.Amount = primary.Amount.Value;
-                            primary.RefreshDisplayName();
+                                    // Check ordered coordinate pairs to avoid duplicate evaluation
+                                    if (neighborCell.X < currentCell.X) continue;
+                                    if (neighborCell.X == currentCell.X && neighborCell.Y < currentCell.Y) continue;
+                                    if (neighborCell.X == currentCell.X && neighborCell.Y == currentCell.Y && neighborCell.Z < currentCell.Z) continue;
 
-                            _processedEntities.Add(secondary.EntityId);
-                            secondary.Close();
-
-                            mergedCount++;
-                            eliminatedCount++;
+                                    if (_cellBuckets.TryGetValue(neighborCell, out var neighborList))
+                                    {
+                                        int startIdx = (neighborCell == currentCell) ? i + 1 : 0;
+                                        for (int j = startIdx; j < neighborList.Count; j++)
+                                        {
+                                            TryMerge(primary, neighborList[j], primaryPos, primaryContent, mergeRadiusSq, ref mergedCount, ref eliminatedCount);
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -133,27 +186,68 @@ namespace GVK.PhysicsOptimizations.Modules
 
                     if (config.EnableDebugLogging)
                     {
-                        Log.Debug($"[OreOptimizer] Proximity merge complete: merged {mergedCount} stacks, eliminated {eliminatedCount} floating objects.");
+                        Log.Debug($"[OreOptimizer] Spatial merge complete: merged {mergedCount} stacks, eliminated {eliminatedCount} floating objects.");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[FloatingObjectModule] Error during floating object proximity merge!");
+                Log.Error(ex, "[FloatingObjectModule] Error during floating object spatial merge!");
             }
             finally
             {
                 _floatingObjectsBuffer.Clear();
                 _processedEntities.Clear();
+                RecycleBuckets();
             }
 
             return eliminatedCount;
+        }
+
+        private void TryMerge(
+            MyFloatingObject primary,
+            MyFloatingObject secondary,
+            Vector3D primaryPos,
+            VRage.Game.MyObjectBuilder_PhysicalObject primaryContent,
+            double mergeRadiusSq,
+            ref int mergedCount,
+            ref int eliminatedCount)
+        {
+            if (secondary.MarkedForClose || secondary.Closed || _processedEntities.Contains(secondary.EntityId))
+            {
+                return;
+            }
+
+            var secondaryContent = secondary.Item.Content;
+            if (secondaryContent == null ||
+                primaryContent.TypeId != secondaryContent.TypeId ||
+                primaryContent.SubtypeName != secondaryContent.SubtypeName)
+            {
+                return;
+            }
+
+            Vector3D secondaryPos = secondary.PositionComp.GetPosition();
+            if (Vector3D.DistanceSquared(primaryPos, secondaryPos) <= mergeRadiusSq)
+            {
+                MyFixedPoint addedAmount = secondary.Amount.Value;
+                primary.Amount.Value += addedAmount;
+                primary.Item.Amount = primary.Amount.Value;
+                primary.RefreshDisplayName();
+
+                _processedEntities.Add(secondary.EntityId);
+                secondary.Close();
+
+                mergedCount++;
+                eliminatedCount++;
+            }
         }
 
         public void Dispose()
         {
             _floatingObjectsBuffer.Clear();
             _processedEntities.Clear();
+            RecycleBuckets();
+            _listPool.Clear();
             _plugin = null;
         }
 
@@ -162,4 +256,5 @@ namespace GVK.PhysicsOptimizations.Modules
         }
     }
 }
+
 

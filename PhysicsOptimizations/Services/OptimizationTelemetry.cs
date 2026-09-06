@@ -1,9 +1,17 @@
+using System.ComponentModel;
 using System.Threading;
 
 namespace GVK.PhysicsOptimizations.Services
 {
-    public class OptimizationTelemetry
+    public class OptimizationTelemetry : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void NotifyAllPropertiesChanged()
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+        }
+
         // Live gauges
         private int _activeRigidBodies;
         private int _sleepingRigidBodies;
@@ -29,10 +37,21 @@ namespace GVK.PhysicsOptimizations.Services
             set => _sleepingRigidBodies = value;
         }
 
+        public void UpdateActiveAndSleepingRigidBodies(int active, int sleeping)
+        {
+            _activeRigidBodies = active;
+            _sleepingRigidBodies = sleeping;
+        }
+
         public int ParkedRoversAsleep
         {
             get => _parkedRoversAsleep;
             set => _parkedRoversAsleep = value;
+        }
+
+        public void UpdateParkedRoversAsleep(int count)
+        {
+            _parkedRoversAsleep = count;
         }
 
         public int SleepingWheelsCount
@@ -41,16 +60,31 @@ namespace GVK.PhysicsOptimizations.Services
             set => _sleepingWheelsCount = value;
         }
 
+        public void UpdateSleepingWheelsCount(int count)
+        {
+            _sleepingWheelsCount = count;
+        }
+
         public int StabilizedSubgridConstraints
         {
             get => _stabilizedSubgridConstraints;
             set => _stabilizedSubgridConstraints = value;
         }
 
+        public void UpdateStabilizedSubgridConstraints(int count)
+        {
+            _stabilizedSubgridConstraints = count;
+        }
+
         public int DiscreteTOIGridsCount
         {
             get => _discreteTOIGridsCount;
             set => _discreteTOIGridsCount = value;
+        }
+
+        public void UpdateDiscreteTOIGridsCount(int count)
+        {
+            _discreteTOIGridsCount = count;
         }
 
         public long OreStacksMergedTotal => Interlocked.Read(ref _oreStacksMergedTotal);

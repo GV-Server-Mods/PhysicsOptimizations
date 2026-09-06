@@ -1,4 +1,5 @@
 using GVK.PhysicsOptimizations.Config;
+using VRage.Game.Entity;
 
 namespace GVK.PhysicsOptimizations.Modules
 {
@@ -11,6 +12,9 @@ namespace GVK.PhysicsOptimizations.Modules
         void Update(ulong frameCounter);
         void Dispose();
         void UpdateConfig(PhysicsOptimizerConfig config);
+        void OnEntityAdded(MyEntity entity);
+        void OnEntityRemoved(MyEntity entity);
     }
 }
+
 

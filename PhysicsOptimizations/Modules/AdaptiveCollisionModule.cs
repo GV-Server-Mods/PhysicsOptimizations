@@ -5,6 +5,7 @@ using Havok;
 using NLog;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
+using VRage.Game.Entity;
 using GVK.PhysicsOptimizations.Config;
 
 namespace GVK.PhysicsOptimizations.Modules
@@ -26,8 +27,8 @@ namespace GVK.PhysicsOptimizations.Modules
             public bool IsDiscrete;
         }
 
-        private readonly ConcurrentDictionary<long, GridQualityState> _trackedQualities = new ConcurrentDictionary<long, GridQualityState>();
-        private readonly List<long> _cleanupBuffer = new List<long>();
+        private readonly ConcurrentDictionary<long, GridQualityState> _trackedQualities = new();
+        private readonly List<long> _cleanupBuffer = [];
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
@@ -49,10 +50,10 @@ namespace GVK.PhysicsOptimizations.Modules
                 return;
             }
 
-            EvaluateGridCollisions();
+            EvaluateGridCollisions(frameCounter);
         }
 
-        private void EvaluateGridCollisions()
+        private void EvaluateGridCollisions(ulong frameCounter)
         {
             try
             {
@@ -66,18 +67,22 @@ namespace GVK.PhysicsOptimizations.Modules
                 var entities = MyEntities.GetEntities();
                 foreach (var entity in entities)
                 {
-                    if (entity is MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && grid.Physics?.RigidBody != null)
+                    if (entity is MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && !grid.Closed && grid.Physics?.RigidBody != null)
                     {
                         var rb = grid.Physics.RigidBody;
                         float speedSq = (float)grid.Physics.LinearVelocity.LengthSquared();
 
-                        var state = _trackedQualities.GetOrAdd(grid.EntityId, id => new GridQualityState
+                        if (!_trackedQualities.TryGetValue(grid.EntityId, out var state))
                         {
-                            GridEntityId = id,
-                            GridRef = new WeakReference<MyCubeGrid>(grid),
-                            OriginalQuality = rb.Quality,
-                            IsDiscrete = false
-                        });
+                            state = new()
+                            {
+                                GridEntityId = grid.EntityId,
+                                GridRef = new(grid),
+                                OriginalQuality = rb.Quality,
+                                IsDiscrete = false
+                            };
+                            _trackedQualities[grid.EntityId] = state;
+                        }
 
                         // Slow grid: switch to Debris (discrete) quality
                         if (speedSq <= discreteThreshSq)
@@ -116,28 +121,45 @@ namespace GVK.PhysicsOptimizations.Modules
                     }
                 }
 
-                // Cleanup dead references
-                foreach (var kvp in _trackedQualities)
+                // Cold-path cleanup of stale trackers (entity eviction handles immediate removals)
+                if (frameCounter % 300 == 0)
                 {
-                    if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose)
+                    foreach (var kvp in _trackedQualities)
                     {
-                        _cleanupBuffer.Add(kvp.Key);
+                        if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed)
+                        {
+                            _cleanupBuffer.Add(kvp.Key);
+                        }
                     }
+
+                    for (int i = 0; i < _cleanupBuffer.Count; i++)
+                    {
+                        _trackedQualities.TryRemove(_cleanupBuffer[i], out _);
+                    }
+                    _cleanupBuffer.Clear();
                 }
 
-                for (int i = 0; i < _cleanupBuffer.Count; i++)
-                {
-                    _trackedQualities.TryRemove(_cleanupBuffer[i], out _);
-                }
-
-                if (_plugin.Telemetry != null)
-                {
-                    _plugin.Telemetry.DiscreteTOIGridsCount = discreteCount;
-                }
+                _plugin?.Telemetry?.UpdateDiscreteTOIGridsCount(discreteCount);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "[AdaptiveCollisionModule] Error during adaptive TOI evaluation!");
+            }
+        }
+
+        public void OnEntityAdded(MyEntity entity)
+        {
+        }
+
+        public void OnEntityRemoved(MyEntity entity)
+        {
+            if (entity == null) return;
+            if (_trackedQualities.TryRemove(entity.EntityId, out var state))
+            {
+                if (state.IsDiscrete && state.GridRef.TryGetTarget(out var grid) && grid.Physics?.RigidBody != null)
+                {
+                    grid.Physics.RigidBody.Quality = state.OriginalQuality != HkCollidableQualityType.Invalid ? state.OriginalQuality : HkCollidableQualityType.Moving;
+                }
             }
         }
 

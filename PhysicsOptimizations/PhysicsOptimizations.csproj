@@ -23,9 +23,6 @@
       <HintPath>$(TorchDir)\Torch.API.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <PackageReference Include="Lib.Harmony" Version="2.2.2">
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </PackageReference>
     <Reference Include="NLog">
       <HintPath>$(TorchDir)\NLog.dll</HintPath>
       <Private>False</Private>
