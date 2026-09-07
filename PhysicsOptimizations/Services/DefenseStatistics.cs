@@ -1,7 +1,7 @@
 using System.Threading;
 using Torch;
 
-namespace PhysicsOptimizations.Services
+namespace PhysicsOptimizer.Services
 {
     /// <summary>
     /// Thread-safe telemetry tracker for real-time collision evaluations, blocked crashes, allowed missile hits, and anti-clang interventions.

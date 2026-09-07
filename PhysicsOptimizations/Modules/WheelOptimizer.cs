@@ -1,21 +1,27 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Reflection;
 using Havok;
-using NLog;
 using Sandbox.Engine.Physics;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
+using Torch.Managers.PatchManager;
 using VRage.Game.Entity;
 using VRageMath;
-using PhysicsOptimizations.Config;
+using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Utils;
 
-namespace PhysicsOptimizations.Modules
+namespace PhysicsOptimizer.Modules
 {
-    public class WheelOptimizerModule : IPhysicsModule
+    /// <summary>
+    /// Wheel &amp; suspension optimizer: trims redundant wheel/chassis collision queries and parks
+    /// suspension updates (skipped via the Update prefix) on stationary rovers.
+    /// </summary>
+    public class WheelOptimizer : IPhysicsModule
     {
-        private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Wheels");
+        private const string LogSource = "WheelOptimizer";
 
         public string Name => "Wheel & Suspension Optimizer";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableWheelOptimization;
@@ -51,7 +57,7 @@ namespace PhysicsOptimizations.Modules
             HasAnySleepingRovers = false;
 
             DiscoverExistingRovers();
-            Log.Info("[WheelOptimizerModule] Initialized successfully.");
+            Log.Info(LogSource, "Initialized successfully.");
         }
 
         public void DiscoverExistingRovers()
@@ -71,7 +77,7 @@ namespace PhysicsOptimizations.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[WheelOptimizerModule] Error discovering existing rovers!");
+                Log.Error(ex, LogSource, "Error discovering existing rovers!");
             }
         }
 
@@ -160,7 +166,7 @@ namespace PhysicsOptimizations.Modules
 
                                 if (_plugin.Config.EnableDebugLogging)
                                 {
-                                    Log.Info($"[WheelOptimizer] Put suspension updates to SLEEP on parked rover '{grid.DisplayName}' ({wheelSystem.WheelCount} wheels).");
+                                    Log.Info(LogSource, $"Put suspension updates to SLEEP on parked rover '{grid.DisplayName}' ({wheelSystem.WheelCount} wheels).");
                                 }
                             }
                         }
@@ -242,7 +248,7 @@ namespace PhysicsOptimizations.Modules
 
                 if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
                 {
-                    Log.Info($"[WheelOptimizer] Woke suspension updates on rover '{grid.DisplayName}' (Reason: {reason}).");
+                    Log.Info(LogSource, $"Woke suspension updates on rover '{grid.DisplayName}' (Reason: {reason}).");
                 }
             }
         }
@@ -312,12 +318,12 @@ namespace PhysicsOptimizations.Modules
 
                 if (_plugin.Config.EnableDebugLogging)
                 {
-                    Log.Info($"[WheelOptimizer] Applied wheel broadphase mask on '{cubeGrid.DisplayName}' / wheel '{topGrid.DisplayName}'.");
+                    Log.Info(LogSource, $"Applied wheel broadphase mask on '{cubeGrid.DisplayName}' / wheel '{topGrid.DisplayName}'.");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[WheelOptimizer] Error optimizing wheel collision filter!");
+                Log.Error(ex, LogSource, "Error optimizing wheel collision filter!");
             }
         }
 
@@ -334,6 +340,84 @@ namespace PhysicsOptimizations.Modules
         {
             // Config updated dynamically
         }
+
+        /// <summary>
+        /// Registers the MyMotorSuspension detours via Torch's <see cref="PatchContext"/>.
+        /// </summary>
+        /// <param name="ctx">Torch patch context.</param>
+        public static void RegisterPatches(PatchContext ctx)
+        {
+            try
+            {
+                var createConstraintMethod = typeof(MyMotorSuspension).GetMethod("CreateConstraint", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (createConstraintMethod != null)
+                {
+                    var postfixMethod = typeof(WheelOptimizer).GetMethod(nameof(CreateConstraintPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(createConstraintMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(createConstraintMethod);
+                    Log.Info(LogSource, "Registered MyMotorSuspension.CreateConstraint hook.");
+                }
+
+                var physicsChangedMethod = typeof(MyMotorSuspension).GetMethod("CubeGrid_OnPhysicsChanged", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (physicsChangedMethod != null)
+                {
+                    var postfixMethod = typeof(WheelOptimizer).GetMethod(nameof(PhysicsChangedPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(physicsChangedMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(physicsChangedMethod);
+                    Log.Info(LogSource, "Registered MyMotorSuspension.CubeGrid_OnPhysicsChanged hook.");
+                }
+
+                var updateMethod = typeof(MyMotorSuspension).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (updateMethod != null)
+                {
+                    var prefixMethod = typeof(WheelOptimizer).GetMethod(nameof(UpdatePrefix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(updateMethod).Prefixes.Add(prefixMethod);
+                    PatchConflictAudit.RegisterTarget(updateMethod);
+                    Log.Info(LogSource, "Registered MyMotorSuspension.Update prefix hook (Parked Suspension Sleeping).");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, LogSource, "Failed to register MyMotorSuspension hooks!");
+            }
+        }
+
+        /// <summary>Postfix after <see cref="MyMotorSuspension"/> creates its Havok constraint to apply collision filtering.</summary>
+        public static void CreateConstraintPostfix(MyMotorSuspension __instance, bool __result)
+        {
+            if (!__result || __instance == null) return;
+
+            var plugin = PhysicsOptimizerPlugin.Instance;
+            plugin?.WheelOptimizer?.OptimizeWheelCollisionFilter(__instance);
+        }
+
+        /// <summary>Postfix on parent grid physics changes to re-apply optimized wheel collision filtering.</summary>
+        public static void PhysicsChangedPostfix(MyMotorSuspension __instance)
+        {
+            if (__instance == null) return;
+
+            var plugin = PhysicsOptimizerPlugin.Instance;
+            plugin?.WheelOptimizer?.OptimizeWheelCollisionFilter(__instance);
+        }
+
+        /// <summary>
+        /// Prefix on <see cref="MyMotorSuspension.Update"/> that skips per-frame suspension updates when parked.
+        /// </summary>
+        /// <returns>False to skip Keen's internal suspension update; true to proceed normally.</returns>
+        public static bool UpdatePrefix(MyMotorSuspension __instance)
+        {
+            if (!HasAnySleepingRovers) return true;
+            if (__instance == null) return true;
+            var cubeGrid = __instance.CubeGrid;
+            if (cubeGrid == null) return true;
+
+            if (IsSuspensionSleepingFast(cubeGrid.EntityId))
+            {
+                // Skip expensive 60Hz per-frame suspension updates when rover is parked and motionless
+                return false;
+            }
+
+            return true;
+        }
     }
 }
-

@@ -3,7 +3,7 @@ using Sandbox.Game.Multiplayer;
 using Sandbox.Game.World;
 using VRage.Game.ModAPI;
 
-namespace PhysicsOptimizations.Utils
+namespace PhysicsOptimizer.Utils
 {
     /// <summary>
     /// Utility methods for player identity and admin status checks.

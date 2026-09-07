@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NLog;
 using Torch.Managers.PatchManager;
 
-namespace PhysicsOptimizations.Utils
+namespace PhysicsOptimizer.Utils
 {
     /// <summary>
     /// One-shot startup audit of every game method this plugin patches.
@@ -14,7 +14,7 @@ namespace PhysicsOptimizations.Utils
     /// </summary>
     public static class PatchConflictAudit
     {
-        private static readonly ILogger Log = LogManager.GetLogger("PhysicsOptimizer.PatchAudit");
+        private const string LogSource = "PatchAudit";
 
         private static readonly List<MethodBase> Targets = new();
         private static PatchManager _patchManager;
@@ -48,7 +48,7 @@ namespace PhysicsOptimizations.Utils
             }
             catch (Exception ex)
             {
-                Log.Warn(ex, "[PatchAudit] Audit failed; patch ownership unverified this boot.");
+                Log.Warn(ex, LogSource, "Audit failed; patch ownership unverified this boot.");
             }
         }
 
@@ -56,7 +56,7 @@ namespace PhysicsOptimizations.Utils
         {
             if (_patchManager == null)
             {
-                Log.Warn("[PatchAudit] PatchManager unavailable; Torch detour conflict check skipped.");
+                Log.Warn(LogSource, "PatchManager unavailable; Torch detour conflict check skipped.");
                 return;
             }
 
@@ -72,7 +72,7 @@ namespace PhysicsOptimizations.Utils
 
                 if (detours.Count == 0)
                 {
-                    Log.Info($"[PatchAudit] {Describe(target)}: no Torch detours registered (our patch registration may have failed).");
+                    Log.Info(LogSource, $"{Describe(target)}: no Torch detours registered (our patch registration may have failed).");
                     continue;
                 }
 
@@ -80,13 +80,13 @@ namespace PhysicsOptimizations.Utils
                 {
                     var owner = detour.DeclaringType?.Assembly.GetName().Name ?? "<unknown>";
                     foreignDetours.Add(Describe(target));
-                    Log.Warn($"[PatchAudit] {Describe(target)}: FOREIGN TORCH DETOUR {Describe(detour)} from '{owner}'.");
+                    Log.Warn(LogSource, $"{Describe(target)}: FOREIGN TORCH DETOUR {Describe(detour)} from '{owner}'.");
                 }
             }
 
-            Log.Info(foreignDetours.Count == 0
-                ? $"[PatchAudit] Torch detour check clean: {Targets.Count} targets, all detours from our assembly only."
-                : $"[PatchAudit] {foreignDetours.Count} foreign Torch detours detected on our patch targets.");
+            Log.Info(LogSource, foreignDetours.Count == 0
+                ? $"Torch detour check clean: {Targets.Count} targets, all detours from our assembly only."
+                : $"{foreignDetours.Count} foreign Torch detours detected on our patch targets.");
         }
 
         private static void AuditRawHarmony()
@@ -94,7 +94,7 @@ namespace PhysicsOptimizations.Utils
             var harmonyType = FindHarmonyType();
             if (harmonyType == null)
             {
-                Log.Info("[PatchAudit] No raw-Harmony runtime loaded; external Harmony conflict check not applicable.");
+                Log.Info(LogSource, "No raw-Harmony runtime loaded; external Harmony conflict check not applicable.");
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace PhysicsOptimizations.Utils
                 .FirstOrDefault(m => m.Name == "GetAllPatchedMethods" && m.GetParameters().Length == 0);
             if (getPatchInfo == null || getAllPatched == null)
             {
-                Log.Info("[PatchAudit] Harmony API surface not recognized; skipping external Harmony audit.");
+                Log.Info(LogSource, "Harmony API surface not recognized; skipping external Harmony audit.");
                 return;
             }
 
@@ -121,7 +121,7 @@ namespace PhysicsOptimizations.Utils
 
                 var detail = $"owners=[{string.Join(", ", ownerList)}] prefixes={GetCount(info, "Prefixes")} postfixes={GetCount(info, "Postfixes")} transpilers={GetCount(info, "Transpilers")}";
                 conflictingTargets.Add(Describe(target));
-                Log.Warn($"[PatchAudit] {Describe(target)}: EXTERNAL HARMONY PATCHER DETECTED ({detail}).");
+                Log.Warn(LogSource, $"{Describe(target)}: EXTERNAL HARMONY PATCHER DETECTED ({detail}).");
             }
 
             foreach (var patched in (IEnumerable<MethodBase>)getAllPatched.Invoke(null, null))
@@ -139,11 +139,11 @@ namespace PhysicsOptimizations.Utils
             var inventory = ownersByAssembly.Count == 0
                 ? "none"
                 : string.Join(", ", ownersByAssembly.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value} methods"));
-            Log.Info($"[PatchAudit] Raw-Harmony patchers loaded: {inventory}.");
+            Log.Info(LogSource, $"Raw-Harmony patchers loaded: {inventory}.");
 
             if (conflictingTargets.Count > 0)
             {
-                Log.Warn($"[PatchAudit] {conflictingTargets.Count}/{Targets.Count} of our targets also carry raw-Harmony patches. Two independent IL rewriters on one method is undefined territory - review before trusting combined behavior.");
+                Log.Warn(LogSource, $"{conflictingTargets.Count}/{Targets.Count} of our targets also carry raw-Harmony patches. Two independent IL rewriters on one method is undefined territory - review before trusting combined behavior.");
             }
         }
 
@@ -158,7 +158,7 @@ namespace PhysicsOptimizations.Utils
 
                 if (string.Equals(assembly.GetName().Name, "Concealment", StringComparison.OrdinalIgnoreCase))
                 {
-                    Log.Info("[PatchAudit] Concealment detected - interop audited compatible (patch surfaces disjoint; concealment operates on the update-registration layer only). Re-audit if either plugin updates.");
+                    Log.Info(LogSource, "Concealment detected - interop audited compatible (patch surfaces disjoint; concealment operates on the update-registration layer only). Re-audit if either plugin updates.");
                     return;
                 }
             }

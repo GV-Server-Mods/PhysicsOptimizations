@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 
-namespace PhysicsOptimizations.Views
+namespace PhysicsOptimizer.Views
 {
     public partial class PhysicsOptimizerControl : UserControl
     {
@@ -57,7 +57,7 @@ namespace PhysicsOptimizations.Views
         {
             try
             {
-                int slept = Plugin?.SleepManager?.ForceSleepAllIdleGrids() ?? 0;
+                int slept = Plugin?.Sleep?.ForceSleepAllIdleGrids() ?? 0;
                 MessageBox.Show($"Successfully forced {slept} idle dynamic grids into Havok SLEEP mode.", "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -78,7 +78,7 @@ namespace PhysicsOptimizations.Views
                     {
                         if (!grid.Physics.RigidBody.IsActive)
                         {
-                            Plugin?.SleepManager?.WakeGrid(grid, "UI Wake All button");
+                            Plugin?.Sleep?.WakeGrid(grid, "UI Wake All button");
                             Plugin?.WheelOptimizer?.WakeRover(grid.EntityId, "UI Wake All button");
                             count++;
                         }
@@ -96,7 +96,7 @@ namespace PhysicsOptimizations.Views
         {
             try
             {
-                int eliminated = Plugin?.OreOptimizer?.MergeProximityFloatingObjects() ?? 0;
+                int eliminated = Plugin?.OreMerge?.MergeProximityFloatingObjects() ?? 0;
                 MessageBox.Show($"Proximity merge completed. Eliminated {eliminated} redundant floating entities.", "Ore Merge", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)

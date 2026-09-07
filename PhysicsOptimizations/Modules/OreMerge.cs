@@ -1,21 +1,25 @@
 using System;
 using System.Collections.Generic;
-using NLog;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Multiplayer;
 using VRage;
 using VRage.Game.Entity;
 using VRageMath;
-using PhysicsOptimizations.Config;
+using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Utils;
 
-namespace PhysicsOptimizations.Modules
+namespace PhysicsOptimizer.Modules
 {
-    public class FloatingObjectModule : IPhysicsModule
+    /// <summary>
+    /// Ore merge: spatial-hash proximity merging of floating ore/item stacks to shrink the
+    /// floating-entity count on the server.
+    /// </summary>
+    public class OreMerge : IPhysicsModule
     {
-        private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Ore");
+        private const string LogSource = "OreMerge";
 
         public string Name => "Floating Object & Ore Optimizer";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableFloatingObjectOptimizer;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableOreMerge;
 
         private PhysicsOptimizerPlugin _plugin;
 
@@ -31,7 +35,7 @@ namespace PhysicsOptimizations.Modules
             _processedEntities.Clear();
             _cellBuckets.Clear();
             _listPool.Clear();
-            Log.Info("[FloatingObjectModule] Initialized successfully.");
+            Log.Info(LogSource, "Initialized successfully.");
         }
 
         public void Update(ulong frameCounter)
@@ -189,13 +193,13 @@ namespace PhysicsOptimizations.Modules
 
                     if (config.EnableDebugLogging)
                     {
-                        Log.Info($"[OreOptimizer] Spatial merge complete: merged {mergedCount} stacks, eliminated {eliminatedCount} floating objects.");
+                        Log.Info(LogSource, $"Spatial merge complete: merged {mergedCount} stacks, eliminated {eliminatedCount} floating objects.");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[FloatingObjectModule] Error during floating object spatial merge!");
+                Log.Error(ex, LogSource, "Error during floating object spatial merge!");
             }
             finally
             {
@@ -259,5 +263,3 @@ namespace PhysicsOptimizations.Modules
         }
     }
 }
-
-

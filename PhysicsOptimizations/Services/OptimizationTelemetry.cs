@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Threading;
 
-namespace PhysicsOptimizations.Services
+namespace PhysicsOptimizer.Services
 {
     public class OptimizationTelemetry : INotifyPropertyChanged
     {

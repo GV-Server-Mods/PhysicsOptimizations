@@ -1,21 +1,29 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using NLog;
+using System.Reflection;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.GameSystems;
+using Torch.Managers.PatchManager;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
-using PhysicsOptimizations.Config;
+using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Utils;
 
-namespace PhysicsOptimizations.Modules
+namespace PhysicsOptimizer.Modules
 {
-    public class RigidBodySleepModule : IPhysicsModule
+    /// <summary>
+    /// Rigid body sleep manager: deactivates Havok rigid bodies on unpiloted, at-rest dynamic grids.
+    /// Also owns the cross-feature wake hooks (cockpit input, grid damage) that wake both this
+    /// feature and WheelOptimizer suspension sleep.
+    /// </summary>
+    public class RigidBodySleep : IPhysicsModule
     {
-        private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Sleep");
+        private const string LogSource = "RigidBodySleep";
 
         public string Name => "Rigid Body Sleep Manager";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAggressiveSleeping;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableRigidBodySleep;
 
         private PhysicsOptimizerPlugin _plugin;
 
@@ -34,7 +42,7 @@ namespace PhysicsOptimizations.Modules
         {
             _plugin = plugin;
             _trackers.Clear();
-            Log.Info("[RigidBodySleepModule] Initialized successfully.");
+            Log.Info(LogSource, "Initialized successfully.");
         }
 
         public void Update(ulong frameCounter)
@@ -120,7 +128,7 @@ namespace PhysicsOptimizations.Modules
 
                                 if (config.EnableDebugLogging)
                                 {
-                                    Log.Info($"[SleepManager] Put idle grid '{grid.DisplayName}' ({grid.BlocksCount} blocks) into Havok SLEEP.");
+                                    Log.Info(LogSource, $"Put idle grid '{grid.DisplayName}' ({grid.BlocksCount} blocks) into Havok SLEEP.");
                                 }
                             }
                         }
@@ -164,7 +172,7 @@ namespace PhysicsOptimizations.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[RigidBodySleepModule] Error during grid sleep evaluation!");
+                Log.Error(ex, LogSource, "Error during grid sleep evaluation!");
             }
         }
 
@@ -245,7 +253,7 @@ namespace PhysicsOptimizations.Modules
                 grid.Physics.RigidBody.Activate();
                 if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
                 {
-                    Log.Info($"[SleepManager] Woke grid '{grid.DisplayName}' (Reason: {reason}).");
+                    Log.Info(LogSource, $"Woke grid '{grid.DisplayName}' (Reason: {reason}).");
                 }
             }
 
@@ -274,11 +282,11 @@ namespace PhysicsOptimizations.Modules
                         }
                     }
                 }
-                Log.Info($"[RigidBodySleepModule] Force-slept {sleptCount} idle dynamic grids.");
+                Log.Info(LogSource, $"Force-slept {sleptCount} idle dynamic grids.");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[RigidBodySleepModule] Error in ForceSleepAllIdleGrids!");
+                Log.Error(ex, LogSource, "Error in ForceSleepAllIdleGrids!");
             }
             return sleptCount;
         }
@@ -293,6 +301,105 @@ namespace PhysicsOptimizations.Modules
         public void UpdateConfig(PhysicsOptimizerConfig config)
         {
         }
+
+        /// <summary>
+        /// Registers the cockpit-input and grid-damage wake hooks. These wake BOTH this feature and
+        /// WheelOptimizer suspension sleep (cross-feature wake by design - do not remove the
+        /// WheelOptimizer.WakeRover calls).
+        /// </summary>
+        /// <param name="ctx">Torch patch context.</param>
+        public static void RegisterPatches(PatchContext ctx)
+        {
+            try
+            {
+                var moveMethod = typeof(Sandbox.Game.Entities.MyShipController).GetMethod("MoveAndRotate", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, null, [typeof(VRageMath.Vector3), typeof(VRageMath.Vector2), typeof(float)], null);
+                if (moveMethod != null)
+                {
+                    var postfixMethod = typeof(RigidBodySleep).GetMethod(nameof(MoveAndRotatePostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(moveMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(moveMethod);
+                    Log.Info(LogSource, "Registered MyShipController.MoveAndRotate wake hook.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, LogSource, "Failed to register MyShipController wake hook!");
+            }
+
+            try
+            {
+                var damageMethod = typeof(MyDamageSystem).GetMethod(
+                    "RaiseAfterDamageApplied",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
+                    null,
+                    [typeof(object), typeof(MyDamageInformation)],
+                    null);
+
+                if (damageMethod != null)
+                {
+                    var postfixMethod = typeof(RigidBodySleep).GetMethod(nameof(RaiseAfterDamageAppliedPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(damageMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(damageMethod);
+                    Log.Info(LogSource, "Registered MyDamageSystem.RaiseAfterDamageApplied wake hook.");
+                }
+                else
+                {
+                    Log.Error(LogSource, "Could not find MyDamageSystem.RaiseAfterDamageApplied method!");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, LogSource, "Failed to register MyDamageSystem wake hook!");
+            }
+        }
+
+        /// <summary>
+        /// Postfix after <see cref="Sandbox.Game.Entities.MyShipController.MoveAndRotate(VRageMath.Vector3, VRageMath.Vector2, float)"/>
+        /// to wake sleeping suspensions and rigid bodies on pilot input.
+        /// </summary>
+        public static void MoveAndRotatePostfix(Sandbox.Game.Entities.MyShipController __instance, VRageMath.Vector3 moveIndicator, VRageMath.Vector2 rotationIndicator, float rollIndicator)
+        {
+            if (__instance == null || __instance.CubeGrid == null || __instance.CubeGrid.MarkedForClose || __instance.CubeGrid.Closed) return;
+
+            // Check if player provided non-zero directional or rotational input
+            if (moveIndicator == VRageMath.Vector3.Zero && rotationIndicator == VRageMath.Vector2.Zero && Math.Abs(rollIndicator) <= 0.001f) return;
+
+            var plugin = PhysicsOptimizerPlugin.Instance;
+            if (plugin == null || plugin.Config == null || !plugin.Config.Enabled || !plugin.Config.EnablePhysicsOptimizations) return;
+
+            long gridId = __instance.CubeGrid.EntityId;
+
+            // Cross-feature wake: rover suspension sleep lives in WheelOptimizer
+            if (plugin.WheelOptimizer != null && plugin.WheelOptimizer.IsGridSuspensionAsleep(gridId))
+            {
+                plugin.WheelOptimizer.WakeRover(gridId, "Cockpit movement input");
+            }
+
+            if (plugin.Sleep != null && plugin.Sleep.IsGridSleeping(gridId))
+            {
+                plugin.Sleep.WakeGrid(__instance.CubeGrid, "Cockpit movement input");
+            }
+        }
+
+        /// <summary>
+        /// Postfix after <see cref="MyDamageSystem.RaiseAfterDamageApplied(object, MyDamageInformation)"/>
+        /// to wake sleeping suspensions and rigid bodies when damage is applied.
+        /// </summary>
+        public static void RaiseAfterDamageAppliedPostfix(object target, MyDamageInformation info)
+        {
+            if (info.Amount <= 0f || target == null) return;
+
+            var slim = target as MySlimBlock;
+            var grid = slim?.CubeGrid ?? target as MyCubeGrid;
+            if (grid == null || grid.MarkedForClose || grid.Closed) return;
+
+            var plugin = PhysicsOptimizerPlugin.Instance;
+            if (plugin?.Config != null && plugin.Config.Enabled && plugin.Config.EnablePhysicsOptimizations)
+            {
+                // Cross-feature wake: rover suspension sleep lives in WheelOptimizer
+                plugin.WheelOptimizer?.WakeRover(grid.EntityId, "Grid took damage");
+                plugin.Sleep?.WakeGrid(grid, "Grid took damage");
+            }
+        }
     }
 }
-

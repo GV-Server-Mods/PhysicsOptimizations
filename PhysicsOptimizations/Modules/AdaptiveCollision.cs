@@ -2,22 +2,25 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Havok;
-using NLog;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
 using VRage.Game.Entity;
-using PhysicsOptimizations.Config;
 using VRageMath;
-using Sandbox.Game.Entities.Planet;
+using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Utils;
 
-namespace PhysicsOptimizations.Modules
+namespace PhysicsOptimizer.Modules
 {
-    public class AdaptiveCollisionModule : IPhysicsModule
+    /// <summary>
+    /// Adaptive collision pruner: flips dynamic grids between Continuous and Discrete (Debris)
+    /// Havok quality based on speed, grid size, terrain altitude, and nearby-grid safety overrides.
+    /// </summary>
+    public class AdaptiveCollision : IPhysicsModule
     {
-        private static readonly ILogger Log = LogManager.GetLogger("PhysicsOptimizer.AdaptiveTOI");
+        private const string LogSource = "AdaptiveCollision";
 
         public string Name => "Adaptive TOI & Collision Pruner";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAdaptiveTOI;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAdaptiveCollision;
 
         private PhysicsOptimizerPlugin _plugin;
 
@@ -37,7 +40,7 @@ namespace PhysicsOptimizations.Modules
         {
             _plugin = plugin;
             _trackedQualities.Clear();
-            Log.Info("[AdaptiveCollisionModule] Initialized successfully.");
+            Log.Info(LogSource, "Initialized successfully.");
         }
 
         public void Update(ulong frameCounter)
@@ -72,7 +75,7 @@ namespace PhysicsOptimizations.Modules
                 if (entity is MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && !grid.Closed && grid.Physics?.RigidBody != null)
                 {
                     var rb = grid.Physics.RigidBody;
-                    
+
                     if (!rb.IsActive)
                     {
                         continue; // Zero-Touch Sleep Guard
@@ -93,7 +96,7 @@ namespace PhysicsOptimizations.Modules
                     }
 
                     float speed = (float)Math.Sqrt(speedSq);
-                    bool isMissile = _plugin.Engine != null && _plugin.Config.AllowMissileDamage && _plugin.Engine.IsMissile(grid, speed);
+                    bool isMissile = _plugin.GridDefender != null && _plugin.Config.AllowMissileDamage && _plugin.GridDefender.IsMissile(grid, speed);
 
                     // Grid-Size Discrete Architecture Override (PMW missiles always bypass this to retain Continuous TOI)
                     bool forceDiscrete = false;
@@ -121,7 +124,7 @@ namespace PhysicsOptimizations.Modules
                     else
                     {
                         bool forceContinuous = isMissile;
-                        
+
                         if (!forceContinuous && config.EnableSpeedThresholds)
                         {
                             // 1. High-Speed Threshold:

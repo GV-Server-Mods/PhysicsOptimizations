@@ -1,24 +1,30 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Reflection;
 using Havok;
-using NLog;
 using Sandbox.Engine.Physics;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.ModAPI;
+using Torch.Managers.PatchManager;
 using VRage.Game.Entity;
-using PhysicsOptimizations.Config;
+using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Utils;
 
-namespace PhysicsOptimizations.Modules
+namespace PhysicsOptimizer.Modules
 {
-    public class SubgridStabilizerModule : IPhysicsModule
+    /// <summary>
+    /// Subgrid stabilizer: micro-dampens constraint solver oscillations on resting mechanical joints
+    /// and masks small utility subgrids. Owns the mechanical detach/split broadphase-reset detours.
+    /// </summary>
+    public class SubgridStabilizer : IPhysicsModule
     {
-        private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Subgrids");
+        private const string LogSource = "SubgridStabilizer";
 
         public string Name => "Subgrid Constraint Stabilizer";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableSubgridConstraintOptimizer;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableSubgridStabilizer;
 
         private PhysicsOptimizerPlugin _plugin;
 
@@ -37,7 +43,7 @@ namespace PhysicsOptimizations.Modules
         {
             _plugin = plugin;
             _trackedJoints.Clear();
-            Log.Info("[SubgridStabilizerModule] Initialized successfully.");
+            Log.Info(LogSource, "Initialized successfully.");
         }
 
         public void Update(ulong frameCounter)
@@ -118,7 +124,7 @@ namespace PhysicsOptimizations.Modules
                                         state.IsStabilized = true;
                                         if (config.EnableDebugLogging)
                                         {
-                                            Log.Info($"[SubgridStabilizer] Stabilized joint on '{grid.DisplayName}' / '{mechBlock.CustomName}'.");
+                                            Log.Info(LogSource, $"Stabilized joint on '{grid.DisplayName}' / '{mechBlock.CustomName}'.");
                                         }
                                     }
                                 }
@@ -176,7 +182,7 @@ namespace PhysicsOptimizations.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[SubgridStabilizerModule] Error during mechanical subgrid stabilization!");
+                Log.Error(ex, LogSource, "Error during mechanical subgrid stabilization!");
             }
         }
 
@@ -261,13 +267,13 @@ namespace PhysicsOptimizations.Modules
                     MyPhysics.RefreshCollisionFilter(subGrid.Physics);
                     if (debugLogging)
                     {
-                        Log.Info($"[SubgridStabilizer] Applied collision mask to small utility subgrid '{subGrid.DisplayName}' ({subGrid.BlocksCount} blocks <= {_plugin.Config.MaskSmallUtilitySubgridMaxBlocks}) on '{baseGrid.DisplayName}'.");
+                        Log.Info(LogSource, $"Applied collision mask to small utility subgrid '{subGrid.DisplayName}' ({subGrid.BlocksCount} blocks <= {_plugin.Config.MaskSmallUtilitySubgridMaxBlocks}) on '{baseGrid.DisplayName}'.");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Warn(ex, "[SubgridStabilizer] Error applying subgrid collision mask.");
+                Log.Warn(ex, LogSource, "Error applying subgrid collision mask.");
             }
         }
 
@@ -280,6 +286,124 @@ namespace PhysicsOptimizations.Modules
 
         public void UpdateConfig(PhysicsOptimizerConfig config)
         {
+        }
+
+        /// <summary>
+        /// Registers the mechanical detach/split broadphase-reset detours via Torch's <see cref="PatchContext"/>.
+        /// </summary>
+        /// <param name="ctx">Torch patch context.</param>
+        public static void RegisterPatches(PatchContext ctx)
+        {
+            try
+            {
+                var detachMethod = typeof(MyMechanicalConnectionBlockBase).GetMethod(
+                    "Detach",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    [typeof(MyCubeGrid), typeof(bool)],
+                    null);
+
+                if (detachMethod != null)
+                {
+                    var detachPostfix = typeof(SubgridStabilizer).GetMethod(nameof(DetachPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(detachMethod).Suffixes.Add(detachPostfix);
+                    PatchConflictAudit.RegisterTarget(detachMethod);
+                    Log.Info(LogSource, "Registered MyMechanicalConnectionBlockBase.Detach(MyCubeGrid, bool) hook.");
+                }
+                else
+                {
+                    Log.Warn(LogSource, "MyMechanicalConnectionBlockBase.Detach not found");
+                }
+
+                var splitMethod = typeof(MyCubeGrid).GetMethod(
+                    "CreateSplit",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    [typeof(MyCubeGrid), typeof(System.Collections.Generic.List<MySlimBlock>), typeof(bool), typeof(long)],
+                    null);
+
+                if (splitMethod != null)
+                {
+                    var splitPostfix = typeof(SubgridStabilizer).GetMethod(nameof(CreateSplitPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(splitMethod).Suffixes.Add(splitPostfix);
+                    PatchConflictAudit.RegisterTarget(splitMethod);
+                    Log.Info(LogSource, "Registered MyCubeGrid.CreateSplit hook.");
+                }
+                else
+                {
+                    Log.Warn(LogSource, "MyCubeGrid.CreateSplit not found");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, LogSource, "Critical error during subgrid hook registration!");
+            }
+        }
+
+        /// <summary>Postfix after mechanical detach: refresh broadphase IDs so detached subgrids leave stale filter groups.</summary>
+        public static void DetachPostfix(MyMechanicalConnectionBlockBase __instance, MyCubeGrid topGrid, bool updateGroups)
+        {
+            var config = PhysicsOptimizerPlugin.Instance?.Config;
+            if (config == null || !config.EnableSubgridStabilization || !config.MaskSmallUtilitySubgrids) return;
+
+            if (__instance?.CubeGrid != null)
+            {
+                ResetSubgridBroadphase(__instance.CubeGrid);
+            }
+            if (topGrid != null)
+            {
+                ResetSubgridBroadphase(topGrid);
+            }
+        }
+
+        /// <summary>Postfix after grid split: refresh broadphase IDs on both halves.</summary>
+        public static void CreateSplitPostfix(MyCubeGrid originalGrid, MyCubeGrid __result)
+        {
+            var config = PhysicsOptimizerPlugin.Instance?.Config;
+            if (config == null || !config.EnableSubgridStabilization || !config.MaskSmallUtilitySubgrids) return;
+
+            if (originalGrid != null)
+            {
+                ResetSubgridBroadphase(originalGrid);
+            }
+            if (__result != null)
+            {
+                ResetSubgridBroadphase(__result);
+            }
+        }
+
+        private static readonly PropertyInfo HavokCollisionSystemIdProp =
+            typeof(MyGridPhysics).GetProperty("HavokCollisionSystemID", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        private static void ResetSubgridBroadphase(MyCubeGrid grid)
+        {
+            if (grid == null || grid.Physics == null || grid.Closed || grid.MarkedForClose) return;
+
+            try
+            {
+                int newId = 0;
+                var world = grid.Physics.HavokWorld;
+                if (world != null)
+                {
+                    var filter = world.GetCollisionFilter();
+                    newId = filter.GetNewSystemGroup();
+                }
+
+                if (newId != 0 && HavokCollisionSystemIdProp != null)
+                {
+                    HavokCollisionSystemIdProp.SetValue(grid.Physics, newId);
+                    MyPhysics.RefreshCollisionFilter(grid.Physics);
+
+                    if (PhysicsOptimizerPlugin.Instance?.Config?.EnableDebugLogging == true)
+                    {
+                        Log.Info(LogSource, $"Reset Havok broadphase collision ID for grid '{grid.DisplayName}' to {newId}.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(ex, LogSource, "Failed to reset HavokCollisionSystemID on subgrid detach/split.");
+            }
         }
     }
 }

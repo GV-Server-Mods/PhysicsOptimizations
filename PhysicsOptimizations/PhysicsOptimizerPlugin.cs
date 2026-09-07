@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Threading;
 using System.Windows.Controls;
-using NLog;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Multiplayer;
 using Torch;
@@ -12,19 +10,17 @@ using Torch.API;
 using Torch.API.Plugins;
 using Torch.Managers.PatchManager;
 using VRage.Game.Entity;
-using PhysicsOptimizations.Config;
-using PhysicsOptimizations.Engine;
-using PhysicsOptimizations.Modules;
-using PhysicsOptimizations.Patches;
-using PhysicsOptimizations.Services;
-using PhysicsOptimizations.Views;
-using PhysicsOptimizations.Utils;
+using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Modules;
+using PhysicsOptimizer.Services;
+using PhysicsOptimizer.Views;
+using PhysicsOptimizer.Utils;
 
-namespace PhysicsOptimizations
+namespace PhysicsOptimizer
 {
     public class PhysicsOptimizerPlugin : TorchPluginBase, IWpfPlugin
     {
-        public static readonly ILogger Log = LogManager.GetLogger("PhysicsOptimizer");
+        private const string LogSource = "Plugin";
 
         public static PhysicsOptimizerPlugin Instance { get; private set; }
 
@@ -37,13 +33,12 @@ namespace PhysicsOptimizations
         public OptimizationTelemetry Telemetry { get; private set; }
         public DefenseStatistics DefenseStats { get; private set; }
 
-        public WheelOptimizerModule WheelOptimizer { get; private set; }
-        public RigidBodySleepModule SleepManager { get; private set; }
-        public FloatingObjectModule OreOptimizer { get; private set; }
-        public SubgridStabilizerModule SubgridStabilizer { get; private set; }
-        public AdaptiveCollisionModule AdaptiveCollision { get; private set; }
-        
-        public DeformationDefenseEngine Engine { get; private set; }
+        public WheelOptimizer WheelOptimizer { get; private set; }
+        public RigidBodySleep Sleep { get; private set; }
+        public OreMerge OreMerge { get; private set; }
+        public SubgridStabilizer SubgridStabilizer { get; private set; }
+        public AdaptiveCollision AdaptiveCollision { get; private set; }
+        public GridDefender GridDefender { get; private set; }
 
         private readonly List<IPhysicsModule> _modules = [];
 
@@ -57,30 +52,30 @@ namespace PhysicsOptimizations
             DefenseStats = new DefenseStatistics();
 
             InitializeModules();
-            
-            Engine = new DeformationDefenseEngine(Config, DefenseStats);
 
             RegisterPatches();
 
             MyEntities.OnEntityAdd += OnEntityAdded;
             MyEntities.OnEntityRemove += OnEntityRemoved;
 
-            Log.Info("[PhysicsOptimizer] Plugin v2.0.0 initialized successfully. Unified Havok engine is ACTIVE.");
+            Log.Info(LogSource, "Plugin v2.0.0 initialized successfully. Unified Havok engine is ACTIVE.");
         }
 
         private void InitializeModules()
         {
-            WheelOptimizer = new WheelOptimizerModule();
-            SleepManager = new RigidBodySleepModule();
-            OreOptimizer = new FloatingObjectModule();
-            SubgridStabilizer = new SubgridStabilizerModule();
-            AdaptiveCollision = new AdaptiveCollisionModule();
+            WheelOptimizer = new WheelOptimizer();
+            Sleep = new RigidBodySleep();
+            OreMerge = new OreMerge();
+            SubgridStabilizer = new SubgridStabilizer();
+            AdaptiveCollision = new AdaptiveCollision();
+            GridDefender = new GridDefender();
 
             _modules.Add(WheelOptimizer);
-            _modules.Add(SleepManager);
-            _modules.Add(OreOptimizer);
+            _modules.Add(Sleep);
+            _modules.Add(OreMerge);
             _modules.Add(SubgridStabilizer);
             _modules.Add(AdaptiveCollision);
+            _modules.Add(GridDefender);
 
             foreach (var module in _modules)
             {
@@ -96,28 +91,23 @@ namespace PhysicsOptimizations
                 {
                     PatchConflictAudit.CapturePatchManager(patchManager);
                     var ctx = patchManager.AcquireContext();
-                    MotorSuspensionPatch.Patch(ctx);
-                    CockpitInputWakePatch.Patch(ctx);
-                    GridDamageWakePatch.Patch(ctx);
-                    
-                    MyGridPhysicsPatch.Patch(ctx);
-                    MyExplosionPatch.Patch(ctx);
-                    
-                    DeformationOcclusionPatch.Patch(ctx);
-                    ThrusterDamagePatch.Patch(ctx);
-                    MechanicalDetachPatch.Patch(ctx);
-                    
+
+                    WheelOptimizer.RegisterPatches(ctx);
+                    RigidBodySleep.RegisterPatches(ctx);
+                    SubgridStabilizer.RegisterPatches(ctx);
+                    GridDefender.RegisterPatches(ctx);
+
                     patchManager.Commit();
-                    Log.Info("[PhysicsOptimizer] All patches successfully registered with Torch PatchManager.");
+                    Log.Info(LogSource, "All patches successfully registered with Torch PatchManager.");
                 }
                 else
                 {
-                    Log.Warn("[PhysicsOptimizer] Torch PatchManager not found. Optimizations requiring patches will not function.");
+                    Log.Warn(LogSource, "Torch PatchManager not found. Optimizations requiring patches will not function.");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[PhysicsOptimizer] Critical error during patch registration.");
+                Log.Error(ex, LogSource, "Critical error during patch registration.");
             }
         }
 
@@ -131,10 +121,6 @@ namespace PhysicsOptimizations
 
         private void OnEntityRemoved(MyEntity entity)
         {
-            if (entity != null)
-            {
-                DeformationOcclusionPatch.RemoveCollisionContext(entity.EntityId);
-            }
             foreach (var module in _modules)
             {
                 module.OnEntityRemoved(entity);
@@ -156,13 +142,14 @@ namespace PhysicsOptimizations
 
             if (Config.EnablePhysicsOptimizations)
             {
-                foreach (var module in _modules)
-                {
-                    module.Update(_frameCounter);
-                }
+                WheelOptimizer?.Update(_frameCounter);
+                Sleep?.Update(_frameCounter);
+                OreMerge?.Update(_frameCounter);
+                SubgridStabilizer?.Update(_frameCounter);
+                AdaptiveCollision?.Update(_frameCounter);
             }
-            
-            Engine?.SweepCaches(_frameCounter);
+
+            GridDefender?.Update(_frameCounter);
 
             int intervalTicks = Math.Max(1, Config.ConsoleTelemetryIntervalSeconds) * 60;
             if (Config.EnablePeriodicConsoleTelemetry && _frameCounter % (ulong)intervalTicks == 0)
@@ -188,7 +175,7 @@ namespace PhysicsOptimizations
             long arr = DefenseStats?.ClangVibrationsArrested ?? 0;
             long inv = DefenseStats?.VoxelNormalsInverted ?? 0;
 
-            Log.Info(string.Format(CultureInfo.InvariantCulture,
+            Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
                 "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Clang: {10} Arr, {11} Inv",
                 speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, arr, inv));
         }
@@ -203,8 +190,6 @@ namespace PhysicsOptimizations
                 module.Dispose();
             }
             _modules.Clear();
-            
-            Engine?.Dispose();
 
             base.Dispose();
         }
@@ -217,14 +202,14 @@ namespace PhysicsOptimizations
                 _config = Persistent<PhysicsOptimizerConfig>.Load(configPath);
                 if (_config.Data == null)
                 {
-                    Log.Warn("[PhysicsOptimizer] Config loaded as null, creating new default config.");
+                    Log.Warn(LogSource, "Config loaded as null, creating new default config.");
                     _config = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
                 }
-                Log.Info($"[PhysicsOptimizer] Loaded config from {configPath}");
+                Log.Info(LogSource, $"Loaded config from {configPath}");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[PhysicsOptimizer] Error loading configuration.");
+                Log.Error(ex, LogSource, "Error loading configuration.");
                 _config = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
             }
         }
@@ -242,14 +227,12 @@ namespace PhysicsOptimizations
                 {
                     module.UpdateConfig(Config);
                 }
-                
-                Engine?.UpdateConfig(Config);
 
-                Log.Info("[PhysicsOptimizer] Configuration saved successfully.");
+                Log.Info(LogSource, "Configuration saved successfully.");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[PhysicsOptimizer] Error saving configuration.");
+                Log.Error(ex, LogSource, "Error saving configuration.");
             }
         }
 

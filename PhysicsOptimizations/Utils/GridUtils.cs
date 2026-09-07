@@ -3,7 +3,7 @@ using VRage.Game;
 using VRage.Game.ModAPI;
 using VRageMath;
 
-namespace PhysicsOptimizations.Utils
+namespace PhysicsOptimizer.Utils
 {
     /// <summary>
     /// Utility methods for grid queries, grouping checks, and speed evaluation.

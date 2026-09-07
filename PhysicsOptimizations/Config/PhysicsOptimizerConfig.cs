@@ -3,7 +3,7 @@ using System.Xml.Serialization;
 using Torch;
 using Torch.Views;
 
-namespace PhysicsOptimizations.Config
+namespace PhysicsOptimizer.Config
 {
     public enum ThrusterDamageMode
     {
@@ -21,13 +21,13 @@ namespace PhysicsOptimizations.Config
         private int _consoleTelemetryIntervalSeconds = 30;
 
         // Logging specific modules
-        private bool _logWheelSuspensionSleep = false;
+        private bool _logWheelOptimizer = false;
         private bool _logRigidBodySleep = false;
-        private bool _logAdaptiveTOI = false;
+        private bool _logAdaptiveCollision = false;
         private bool _logThrusterClearance = false;
-        private bool _logCollisionsPMW = false;
+        private bool _logMissileDefense = false;
         private bool _logVoxelNormals = false;
-        private bool _logSubgridStabilization = false;
+        private bool _logSubgridStabilizer = false;
 
         // --- Module 1: Wheel & Suspension ---
         private bool _enableWheelOptimization = true;
@@ -36,20 +36,20 @@ namespace PhysicsOptimizations.Config
         private float _roverSleepDelaySeconds = 2.0f;
         
         // --- Module 2: Rigid Body Sleeping ---
-        private bool _enableAggressiveSleeping = true;
+        private bool _enableRigidBodySleep = true;
         private float _sleepLinearVelocityThreshold = 0.05f; // m/s
         private float _sleepAngularVelocityThreshold = 0.01f; // rad/s
         private int _idleSecondsBeforeSleep = 3;
 
         // --- Module 3: Floating Objects & Ore ---
-        private bool _enableFloatingObjectOptimizer = true;
+        private bool _enableOreMerge = true;
         private bool _autoMergeNearbyOre = true;
         private float _oreMergeRadiusMeters = 3.0f;
         private int _oreMergeIntervalTicks = 120;
         private int _maxSectorFloatingObjects = 64;
 
         // --- Module 4: Subgrid Constraints ---
-        private bool _enableSubgridConstraintOptimizer = true;
+        private bool _enableSubgridStabilizer = true;
         private bool _enableSubgridStabilization = true;
         private float _subgridRestVelocityThreshold = 0.005f;
         private int _subgridRestFramesThreshold = 60;
@@ -58,7 +58,7 @@ namespace PhysicsOptimizations.Config
         private bool _subgridDetachBroadphaseReset = true;
 
         // --- Module 5: Adaptive TOI / Collision Detection ---
-        private bool _enableAdaptiveTOI = true;
+        private bool _enableAdaptiveCollision = true;
         private bool _enableSpeedThresholds = true;
         private float _continuousCollisionSpeedThreshold = 40.0f;
         private float _discreteCollisionSpeedThreshold = 15.0f;
@@ -72,7 +72,7 @@ namespace PhysicsOptimizations.Config
         private int _discreteSmallGridMinBlocks = 40;
 
         // --- Thruster Clearance Optimizer ---
-        private bool _enableThrusterClearanceEngine = true;
+        private bool _enableThrusterClearance = true;
         private ThrusterDamageMode _thrusterDamageMode = ThrusterDamageMode.Optimized;
         private bool _landingPadImmunity = true;
         private bool _instantOwnConstructVaporization = true;
@@ -124,31 +124,31 @@ namespace PhysicsOptimizations.Config
         public bool EnablePeriodicConsoleTelemetry { get => _enablePeriodicConsoleTelemetry; set => SetValue(ref _enablePeriodicConsoleTelemetry, value); }
         public int ConsoleTelemetryIntervalSeconds { get => _consoleTelemetryIntervalSeconds; set => SetValue(ref _consoleTelemetryIntervalSeconds, value); }
 
-        public bool LogWheelSuspensionSleep { get => _logWheelSuspensionSleep; set => SetValue(ref _logWheelSuspensionSleep, value); }
+        public bool LogWheelOptimizer { get => _logWheelOptimizer; set => SetValue(ref _logWheelOptimizer, value); }
         public bool LogRigidBodySleep { get => _logRigidBodySleep; set => SetValue(ref _logRigidBodySleep, value); }
-        public bool LogAdaptiveTOI { get => _logAdaptiveTOI; set => SetValue(ref _logAdaptiveTOI, value); }
+        public bool LogAdaptiveCollision { get => _logAdaptiveCollision; set => SetValue(ref _logAdaptiveCollision, value); }
         public bool LogThrusterClearance { get => _logThrusterClearance; set => SetValue(ref _logThrusterClearance, value); }
-        public bool LogCollisionsPMW { get => _logCollisionsPMW; set => SetValue(ref _logCollisionsPMW, value); }
+        public bool LogMissileDefense { get => _logMissileDefense; set => SetValue(ref _logMissileDefense, value); }
         public bool LogVoxelNormals { get => _logVoxelNormals; set => SetValue(ref _logVoxelNormals, value); }
-        public bool LogSubgridStabilization { get => _logSubgridStabilization; set => SetValue(ref _logSubgridStabilization, value); }
+        public bool LogSubgridStabilizer { get => _logSubgridStabilizer; set => SetValue(ref _logSubgridStabilizer, value); }
 
         public bool EnableWheelOptimization { get => _enableWheelOptimization; set => SetValue(ref _enableWheelOptimization, value); }
         public bool EnableWheelCollisionFilter { get => _enableWheelCollisionFilter; set => SetValue(ref _enableWheelCollisionFilter, value); }
         public bool SleepParkedRovers { get => _sleepParkedRovers; set => SetValue(ref _sleepParkedRovers, value); }
         public float RoverSleepDelaySeconds { get => _roverSleepDelaySeconds; set => SetValue(ref _roverSleepDelaySeconds, value); }
 
-        public bool EnableAggressiveSleeping { get => _enableAggressiveSleeping; set => SetValue(ref _enableAggressiveSleeping, value); }
+        public bool EnableRigidBodySleep { get => _enableRigidBodySleep; set => SetValue(ref _enableRigidBodySleep, value); }
         public float SleepLinearVelocityThreshold { get => _sleepLinearVelocityThreshold; set => SetValue(ref _sleepLinearVelocityThreshold, value); }
         public float SleepAngularVelocityThreshold { get => _sleepAngularVelocityThreshold; set => SetValue(ref _sleepAngularVelocityThreshold, value); }
         public int IdleSecondsBeforeSleep { get => _idleSecondsBeforeSleep; set => SetValue(ref _idleSecondsBeforeSleep, value); }
 
-        public bool EnableFloatingObjectOptimizer { get => _enableFloatingObjectOptimizer; set => SetValue(ref _enableFloatingObjectOptimizer, value); }
+        public bool EnableOreMerge { get => _enableOreMerge; set => SetValue(ref _enableOreMerge, value); }
         public bool AutoMergeNearbyOre { get => _autoMergeNearbyOre; set => SetValue(ref _autoMergeNearbyOre, value); }
         public float OreMergeRadiusMeters { get => _oreMergeRadiusMeters; set => SetValue(ref _oreMergeRadiusMeters, value); }
         public int OreMergeIntervalTicks { get => _oreMergeIntervalTicks; set => SetValue(ref _oreMergeIntervalTicks, value); }
         public int MaxSectorFloatingObjects { get => _maxSectorFloatingObjects; set => SetValue(ref _maxSectorFloatingObjects, value); }
 
-        public bool EnableSubgridConstraintOptimizer { get => _enableSubgridConstraintOptimizer; set => SetValue(ref _enableSubgridConstraintOptimizer, value); }
+        public bool EnableSubgridStabilizer { get => _enableSubgridStabilizer; set => SetValue(ref _enableSubgridStabilizer, value); }
         public bool EnableSubgridConstraintStabilization { get => _enableSubgridStabilization; set => SetValue(ref _enableSubgridStabilization, value); }
         public bool EnableSubgridStabilization { get => _enableSubgridStabilization; set => SetValue(ref _enableSubgridStabilization, value); }
         public float SubgridRestVelocityThreshold { get => _subgridRestVelocityThreshold; set => SetValue(ref _subgridRestVelocityThreshold, value); }
@@ -156,9 +156,9 @@ namespace PhysicsOptimizations.Config
         public bool MaskSmallUtilitySubgrids { get => _maskSmallUtilitySubgrids; set => SetValue(ref _maskSmallUtilitySubgrids, value); }
         public int MaskSmallUtilitySubgridMaxBlocks { get => _maskSmallUtilitySubgridMaxBlocks; set => SetValue(ref _maskSmallUtilitySubgridMaxBlocks, Math.Max(1, value)); }
         public int SmallUtilitySubgridMaxBlocks { get => _maskSmallUtilitySubgridMaxBlocks; set => MaskSmallUtilitySubgridMaxBlocks = value; }
-        public bool SubgridDetachBroadphaseReset { get => _maskSmallUtilitySubgrids; set => SetValue(ref _subgridDetachBroadphaseReset, value); }
+        public bool SubgridDetachBroadphaseReset { get => _subgridDetachBroadphaseReset; set => SetValue(ref _subgridDetachBroadphaseReset, value); }
 
-        public bool EnableAdaptiveTOI { get => _enableAdaptiveTOI; set => SetValue(ref _enableAdaptiveTOI, value); }
+        public bool EnableAdaptiveCollision { get => _enableAdaptiveCollision; set => SetValue(ref _enableAdaptiveCollision, value); }
         public bool EnableSpeedThresholds { get => _enableSpeedThresholds; set => SetValue(ref _enableSpeedThresholds, value); }
         public float ContinuousCollisionSpeedThreshold { get => _continuousCollisionSpeedThreshold; set => SetValue(ref _continuousCollisionSpeedThreshold, value); }
         public float DiscreteCollisionSpeedThreshold { get => _discreteCollisionSpeedThreshold; set => SetValue(ref _discreteCollisionSpeedThreshold, value); }
@@ -171,7 +171,7 @@ namespace PhysicsOptimizations.Config
         public bool EnforceDiscreteSmallGrids { get => _enforceDiscreteSmallGrids; set => SetValue(ref _enforceDiscreteSmallGrids, value); }
         public int DiscreteSmallGridMinBlocks { get => _discreteSmallGridMinBlocks; set => SetValue(ref _discreteSmallGridMinBlocks, Math.Max(0, value)); }
 
-        public bool EnableThrusterClearanceEngine { get => _enableThrusterClearanceEngine; set => SetValue(ref _enableThrusterClearanceEngine, value); }
+        public bool EnableThrusterClearance { get => _enableThrusterClearance; set => SetValue(ref _enableThrusterClearance, value); }
         
         public ThrusterDamageMode ThrusterDamageMode
         {

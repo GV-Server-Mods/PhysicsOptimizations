@@ -7,7 +7,7 @@ using Torch.Mod.Messages;
 using VRage.Game;
 using VRageMath;
 
-namespace PhysicsOptimizations.Utils
+namespace PhysicsOptimizer.Utils
 {
     /// <summary>
     /// Utility methods for sending in-game notifications to players.

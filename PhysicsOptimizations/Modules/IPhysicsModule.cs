@@ -1,7 +1,7 @@
-using PhysicsOptimizations.Config;
+using PhysicsOptimizer.Config;
 using VRage.Game.Entity;
 
-namespace PhysicsOptimizations.Modules
+namespace PhysicsOptimizer.Modules
 {
     public interface IPhysicsModule
     {
@@ -16,5 +16,3 @@ namespace PhysicsOptimizations.Modules
         void OnEntityRemoved(MyEntity entity);
     }
 }
-
-

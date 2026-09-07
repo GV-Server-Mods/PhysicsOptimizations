@@ -5,7 +5,7 @@ using Torch.Commands;
 using Torch.Commands.Permissions;
 using VRage.Game.ModAPI;
 
-namespace PhysicsOptimizations.Commands
+namespace PhysicsOptimizer.Commands
 {
     [Category("phys")]
     public class PhysicsOptimizerCommands : CommandModule
@@ -35,27 +35,27 @@ namespace PhysicsOptimizations.Commands
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Parked Rover Sleep: {0} (Delay: {1:F1}s)", cfg.SleepParkedRovers, cfg.RoverSleepDelaySeconds));
             sb.AppendLine();
             sb.AppendLine("* Rigid Body Sleep Manager:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableAggressiveSleeping));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableRigidBodySleep));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Thresholds: Lin < {0:F2} m/s, Ang < {1:F3} rad/s for {2}s", cfg.SleepLinearVelocityThreshold, cfg.SleepAngularVelocityThreshold, cfg.IdleSecondsBeforeSleep));
             sb.AppendLine();
             sb.AppendLine("* Floating Object & Ore Optimizer:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableFloatingObjectOptimizer));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableOreMerge));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Auto-Merge: {0} (Radius: {1:F1}m, Interval: {2} ticks)", cfg.AutoMergeNearbyOre, cfg.OreMergeRadiusMeters, cfg.OreMergeIntervalTicks));
             sb.AppendLine();
             sb.AppendLine("* Subgrid Constraint Stabilizer:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Stabilization: {1}", cfg.EnableSubgridConstraintOptimizer, cfg.EnableSubgridStabilization));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Stabilization: {1}", cfg.EnableSubgridStabilizer, cfg.EnableSubgridStabilization));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Mask Small Utility Subgrids: {0} (Max: {1} blocks)", cfg.MaskSmallUtilitySubgrids, cfg.MaskSmallUtilitySubgridMaxBlocks));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Rest Velocity: {0:F3} rad/s for {1} frames", cfg.SubgridRestVelocityThreshold, cfg.SubgridRestFramesThreshold));
             sb.AppendLine();
             sb.AppendLine("* Adaptive TOI / Collision Pruning:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableAdaptiveTOI));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableAdaptiveCollision));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Large Grid Discrete Override: {0} (Min: {1} blks)", cfg.EnforceDiscreteLargeGrids, cfg.DiscreteLargeGridMinBlocks));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Small Grid Discrete Override: {0} (Min: {1} blks)", cfg.EnforceDiscreteSmallGrids, cfg.DiscreteSmallGridMinBlocks));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Speed Limits: Enabled={0} (Discrete < {1:F1} m/s | Continuous > {2:F1} m/s)", cfg.EnableSpeedThresholds, cfg.DiscreteCollisionSpeedThreshold, cfg.ContinuousCollisionSpeedThreshold));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Safety Overrides: Proximity Revert ({0}, {1:F0}m) | Terrain Alt Revert ({2}, < {3:F1}m)", cfg.RevertNearOtherDynamicGrids, cfg.DynamicGridProximityRevertDistanceMeters, cfg.EnableAltitudeTOIReversion, cfg.ContinuousAltitudeThreshold));
             sb.AppendLine();
             sb.AppendLine("* Thruster Clearance Optimizer:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Mode: {1})", cfg.EnableThrusterClearanceEngine, cfg.ThrusterDamageMode));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Mode: {1})", cfg.EnableThrusterClearance, cfg.ThrusterDamageMode));
             sb.AppendLine();
             sb.AppendLine("* Ship, Rover & Station Protection:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Ship Ramming: {0} | Voxel Crash: {1} | Stations: {2} | Subgrids: {3} | Debris: {4}", cfg.ProtectShipsAgainstRamming, cfg.ProtectShipsAgainstVoxels, cfg.ProtectStaticGrids, cfg.ProtectSubgrids, cfg.ProtectAgainstFloatingObjects));
@@ -124,13 +124,13 @@ namespace PhysicsOptimizations.Commands
         [Permission(MyPromoteLevel.Admin)]
         public void SleepAll()
         {
-            if (Plugin?.SleepManager == null)
+            if (Plugin?.Sleep == null)
             {
                 Context.Respond("Sleep Manager is not initialized.");
                 return;
             }
 
-            int count = Plugin.SleepManager.ForceSleepAllIdleGrids();
+            int count = Plugin.Sleep.ForceSleepAllIdleGrids();
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Force-slept {0} idle dynamic grids.", count));
         }
 
@@ -138,13 +138,13 @@ namespace PhysicsOptimizations.Commands
         [Permission(MyPromoteLevel.Admin)]
         public void MergeOre()
         {
-            if (Plugin?.OreOptimizer == null)
+            if (Plugin?.OreMerge == null)
             {
                 Context.Respond("Ore Optimizer is not initialized.");
                 return;
             }
 
-            int eliminated = Plugin.OreOptimizer.MergeProximityFloatingObjects();
+            int eliminated = Plugin.OreMerge.MergeProximityFloatingObjects();
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Proximity merge complete: eliminated {0} redundant floating entities.", eliminated));
         }
 
@@ -180,12 +180,12 @@ namespace PhysicsOptimizations.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Parked Rover Suspension Sleep is now {0}.", cfg.SleepParkedRovers ? "ENABLED" : "DISABLED");
                     break;
                 case "sleep":
-                    cfg.EnableAggressiveSleeping = !cfg.EnableAggressiveSleeping;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Aggressive Rigid Body Sleeping is now {0}.", cfg.EnableAggressiveSleeping ? "ENABLED" : "DISABLED");
+                    cfg.EnableRigidBodySleep = !cfg.EnableRigidBodySleep;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Aggressive Rigid Body Sleeping is now {0}.", cfg.EnableRigidBodySleep ? "ENABLED" : "DISABLED");
                     break;
                 case "ore":
-                    cfg.EnableFloatingObjectOptimizer = !cfg.EnableFloatingObjectOptimizer;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Floating Object / Ore Optimizer is now {0}.", cfg.EnableFloatingObjectOptimizer ? "ENABLED" : "DISABLED");
+                    cfg.EnableOreMerge = !cfg.EnableOreMerge;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Floating Object / Ore Optimizer is now {0}.", cfg.EnableOreMerge ? "ENABLED" : "DISABLED");
                     break;
                 case "subgrids":
                     cfg.EnableSubgridStabilization = !cfg.EnableSubgridStabilization;
@@ -197,8 +197,8 @@ namespace PhysicsOptimizations.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Small Utility Subgrid Masking is now {0}.", cfg.MaskSmallUtilitySubgrids ? "ENABLED" : "DISABLED");
                     break;
                 case "toi":
-                    cfg.EnableAdaptiveTOI = !cfg.EnableAdaptiveTOI;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Adaptive TOI Collision Pruning is now {0}.", cfg.EnableAdaptiveTOI ? "ENABLED" : "DISABLED");
+                    cfg.EnableAdaptiveCollision = !cfg.EnableAdaptiveCollision;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Adaptive TOI Collision Pruning is now {0}.", cfg.EnableAdaptiveCollision ? "ENABLED" : "DISABLED");
                     break;
                 case "debug":
                     cfg.EnableDebugLogging = !cfg.EnableDebugLogging;
@@ -227,13 +227,13 @@ namespace PhysicsOptimizations.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Voxel Normal Force Arbitrator is now {0}.", cfg.EnableVoxelNormalArbitrator ? "ENABLED" : "DISABLED");
                     break;
                 case "thruster":
-                    cfg.EnableThrusterClearanceEngine = !cfg.EnableThrusterClearanceEngine;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Thruster Clearance Optimizer is now {0}.", cfg.EnableThrusterClearanceEngine ? "ENABLED" : "DISABLED");
+                    cfg.EnableThrusterClearance = !cfg.EnableThrusterClearance;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Thruster Clearance Optimizer is now {0}.", cfg.EnableThrusterClearance ? "ENABLED" : "DISABLED");
                     break;
                 case "thrustermode":
-                    cfg.ThrusterDamageMode = cfg.ThrusterDamageMode == PhysicsOptimizations.Config.ThrusterDamageMode.Optimized 
-                        ? PhysicsOptimizations.Config.ThrusterDamageMode.VanillaLike 
-                        : PhysicsOptimizations.Config.ThrusterDamageMode.Optimized;
+                    cfg.ThrusterDamageMode = cfg.ThrusterDamageMode == PhysicsOptimizer.Config.ThrusterDamageMode.Optimized 
+                        ? PhysicsOptimizer.Config.ThrusterDamageMode.VanillaLike 
+                        : PhysicsOptimizer.Config.ThrusterDamageMode.Optimized;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Thruster Damage Mode is now {0}.", cfg.ThrusterDamageMode);
                     break;
                 case "discretelarge":
@@ -278,7 +278,7 @@ namespace PhysicsOptimizations.Commands
                     {
                         if (!grid.Physics.RigidBody.IsActive)
                         {
-                            Plugin?.SleepManager?.WakeGrid(grid, "Admin wakeall command");
+                            Plugin?.Sleep?.WakeGrid(grid, "Admin wakeall command");
                             Plugin?.WheelOptimizer?.WakeRover(grid.EntityId, "Admin wakeall command");
                             count++;
                         }
