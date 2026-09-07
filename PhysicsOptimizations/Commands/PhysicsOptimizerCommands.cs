@@ -231,8 +231,8 @@ namespace PhysicsOptimizer.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Thruster Clearance Optimizer is now {0}.", cfg.EnableThrusterClearance ? "ENABLED" : "DISABLED");
                     break;
                 case "thrustermode":
-                    cfg.ThrusterDamageMode = cfg.ThrusterDamageMode == PhysicsOptimizer.Config.ThrusterDamageMode.Optimized 
-                        ? PhysicsOptimizer.Config.ThrusterDamageMode.VanillaLike 
+                    cfg.ThrusterDamageMode = cfg.ThrusterDamageMode == PhysicsOptimizer.Config.ThrusterDamageMode.Optimized
+                        ? PhysicsOptimizer.Config.ThrusterDamageMode.VanillaLike
                         : PhysicsOptimizer.Config.ThrusterDamageMode.Optimized;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Thruster Damage Mode is now {0}.", cfg.ThrusterDamageMode);
                     break;

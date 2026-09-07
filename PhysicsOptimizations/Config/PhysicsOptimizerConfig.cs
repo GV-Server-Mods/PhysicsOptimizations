@@ -34,7 +34,7 @@ namespace PhysicsOptimizer.Config
         private bool _enableWheelCollisionFilter = true;
         private bool _sleepParkedRovers = true;
         private float _roverSleepDelaySeconds = 2.0f;
-        
+
         // --- Module 2: Rigid Body Sleeping ---
         private bool _enableRigidBodySleep = true;
         private float _sleepLinearVelocityThreshold = 0.05f; // m/s
@@ -172,7 +172,7 @@ namespace PhysicsOptimizer.Config
         public int DiscreteSmallGridMinBlocks { get => _discreteSmallGridMinBlocks; set => SetValue(ref _discreteSmallGridMinBlocks, Math.Max(0, value)); }
 
         public bool EnableThrusterClearance { get => _enableThrusterClearance; set => SetValue(ref _enableThrusterClearance, value); }
-        
+
         public ThrusterDamageMode ThrusterDamageMode
         {
             get => _thrusterDamageMode;
@@ -331,7 +331,7 @@ namespace PhysicsOptimizer.Config
             get => _pushApartDistance;
             set => SetValue(ref _pushApartDistance, Math.Max(0.1f, Math.Min(5.0f, value)));
         }
-        
+
         public float MinDrivingVelocity
         {
             get => _minDrivingVelocity;
