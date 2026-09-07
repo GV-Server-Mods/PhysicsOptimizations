@@ -36,17 +36,14 @@ The plugin is built from exactly **13 Torch PatchManager patch targets** across 
 
 ```mermaid
 graph TD
-    UI[WPF 3-Tab Dashboard<br/>Physics Optimizations - Grid Defender - Live Telemetry] --> Plugin
+    UI[WPF 7-Tab Dashboard<br/>Wheel - Sleep - Ore - Subgrid - TOI - Defender - Telemetry] --> Plugin
     CFG[(PhysicsOptimizer.cfg)] --> Plugin
     Plugin[PhysicsOptimizerPlugin<br/>Torch lifecycle + 60Hz frame dispatcher] --> Tel[Live Telemetry + Defense Statistics]
     Plugin --> Audit[PatchConflictAudit<br/>first-tick conflict scan of all 13 targets]
 
-    Plugin --> Modules[5 Stepped Simulation Modules - 30 to 120 frame intervals<br/>1. Wheel and Suspension Optimizer<br/>2. Rigid Body Sleep Manager<br/>3. Floating Object and Ore Merger<br/>4. Subgrid Constraint Stabilizer<br/>5. Adaptive TOI Collision Pruner]
+    Plugin --> Modules[6 Self-Contained Feature Modules<br/>1. WheelOptimizer - 30 frame interval<br/>2. RigidBodySleep - 60 frame interval<br/>3. OreMerge - 120 tick interval<br/>4. SubgridStabilizer - 30 frame interval<br/>5. AdaptiveCollision - 30 frame interval<br/>6. GridDefender - event-driven + tick queue]
 
-    Plugin --> Engine[DeformationDefenseEngine - event driven<br/>8-stage collision pipeline<br/>PMW classification - anti-clang arrest - push-apart]
-
-    Modules --> Patches[8 Torch PatchManager Patch Files<br/>13 registered game method targets<br/>MotorSuspension x3 - CockpitWake x1 - DamageWake x1<br/>MyGridPhysics x2 - Explosion x2 - Occlusion x1<br/>ThrusterDamage x1 - MechanicalDetach x2]
-    Engine --> Patches
+    Modules --> Patches[13 Torch PatchManager Targets Embedded in Modules<br/>WheelOptimizer: MotorSuspension x3<br/>RigidBodySleep: ShipController x1, DamageSystem x1<br/>SubgridStabilizer: Detach x1, CreateSplit x1<br/>GridDefender: GridPhysics x2, Explosion x2, Occlusion x1, ThrusterDamage x1]
 
     Patches --> Game[SE Game Code<br/>MyMotorSuspension - MyShipController - MyDamageSystem<br/>MyGridPhysics - MyExplosion - MyThrust<br/>MyMechanicalConnectionBlockBase - MyCubeGrid]
 ```
@@ -58,47 +55,36 @@ All patches are registered through **Torch PatchManager** (`PatchContext.GetPatt
 | Component | File | Description |
 | :--- | :--- | :--- |
 | **Plugin Entry** | [`PhysicsOptimizerPlugin.cs`](PhysicsOptimizations/PhysicsOptimizerPlugin.cs) | Central lifecycle manager (`TorchPluginBase`, `IWpfPlugin`). Frame-counter dispatcher for all modules, patch registration, entity add/remove hooks, config persistence, and console telemetry heartbeat. |
-| **Config Model** | [`Config/PhysicsOptimizerConfig.cs`](PhysicsOptimizations/Config/PhysicsOptimizerConfig.cs) | Persistent ViewModel managing all engine toggles, thresholds, logging flags, and collision defense properties. Includes legacy compatibility aliases. |
-| **Module Interface** | [`Modules/IPhysicsModule.cs`](PhysicsOptimizations/Modules/IPhysicsModule.cs) | Common contract for the 5 stepped modules: `Init`, `Update`, `OnEntityAdded/Removed`, `UpdateConfig`, `Dispose`. |
+| **Config Model** | [`Config/PhysicsOptimizerConfig.cs`](PhysicsOptimizations/Config/PhysicsOptimizerConfig.cs) | Persistent ViewModel managing all engine toggles, thresholds, logging flags, and collision defense properties. |
+| **Module Interface** | [`Modules/IPhysicsModule.cs`](PhysicsOptimizations/Modules/IPhysicsModule.cs) | Common contract for all feature modules: `Init`, `Update`, `OnEntityAdded/Removed`, `UpdateConfig`, `Dispose`. |
 | **Optimization Telemetry** | [`Services/OptimizationTelemetry.cs`](PhysicsOptimizations/Services/OptimizationTelemetry.cs) | Thread-safe live gauges for active/sleeping bodies, rovers, wheels, ore merges, TOI states, and subgrids. Includes diagnostic clipboard export. |
 | **Defense Statistics** | [`Services/DefenseStatistics.cs`](PhysicsOptimizations/Services/DefenseStatistics.cs) | Cumulative counters: evaluated/blocked/allowed deformations, missile hits, ramming/voxel/subgrid/low-speed/station/debris/cooldown blocks, clang arrests, grids separated, armor occlusions, voxel normals inverted, thruster vaporizations, voxel cutouts prevented, piloted buggy saves. |
-| **Defense Engine** | [`Engine/DeformationDefenseEngine.cs`](PhysicsOptimizations/Engine/DeformationDefenseEngine.cs) | Event-driven collision governor: 8-stage deformation pipeline, PMW engagement tracking, anti-clang vibration arrest, push-apart queue, impact damping, and `MyFakes.DEFORMATION_EXPLOSIONS` sync. |
-| **Patch Conflict Audit** | [`Utils/PatchConflictAudit.cs`](PhysicsOptimizations/Utils/PatchConflictAudit.cs) | One-shot first-tick audit of all 13 targets: checks Torch PatchManager rewrite patterns for foreign detours and (when a raw-Harmony plugin is loaded) Harmony patch ownership. Logs known interop plugins (e.g. Concealment). |
-| **Module 1 (Wheels)** | [`Modules/WheelOptimizerModule.cs`](PhysicsOptimizations/Modules/WheelOptimizerModule.cs) | Symmetrical broadphase collision masking (`subSystemDontCollideWith = 3`), cold-start rover discovery, and parked suspension sleeping. |
-| **Module 2 (Sleep)** | [`Modules/RigidBodySleepModule.cs`](PhysicsOptimizations/Modules/RigidBodySleepModule.cs) | Stepped evaluator forcing idle dynamic grids into Havok sleep mode (`rigidBody.Deactivate()`) with gravity, landing gear, and thruster safety guards. |
-| **Module 3 (Ore)** | [`Modules/FloatingObjectModule.cs`](PhysicsOptimizations/Modules/FloatingObjectModule.cs) | $O(N)$ spatial grid cell bucketing merging nearby matching ore and dropped item stacks with pooled collections. |
-| **Module 4 (Subgrids)**| [`Modules/SubgridStabilizerModule.cs`](PhysicsOptimizations/Modules/SubgridStabilizerModule.cs) | Havok micro-velocity synchronization across resting mechanical subgrids, plus collision masking of tiny utility subgrids (weapons/tools/warheads blacklisted). |
-| **Module 5 (TOI)** | [`Modules/AdaptiveCollisionModule.cs`](PhysicsOptimizations/Modules/AdaptiveCollisionModule.cs) | Switches slow cruising grids to discrete collision quality while preserving Continuous TOI via a 4-level safety priority chain. |
-
-| **Wheel Patch** | [`Patches/MotorSuspensionPatch.cs`](PhysicsOptimizations/Patches/MotorSuspensionPatch.cs) | 3 targets: `CreateConstraint` + `CubeGrid_OnPhysicsChanged` suffixes (masking) and `Update` prefix (parked suspension sleep short-circuit). |
-| **Cockpit Wake Patch** | [`Patches/CockpitInputWakePatch.cs`](PhysicsOptimizations/Patches/CockpitInputWakePatch.cs) | Suffix on `MyShipController.MoveAndRotate` waking sleeping grids/rovers instantly upon pilot control input. |
-| **Damage Wake Patch** | [`Patches/GridDamageWakePatch.cs`](PhysicsOptimizations/Patches/GridDamageWakePatch.cs) | Suffix on `MyDamageSystem.RaiseAfterDamageApplied` waking sleeping bodies upon damage from vanilla or WeaponCore weapons, grinders, and impacts. |
-| **Grid Physics Patch** | [`Patches/MyGridPhysicsPatch.cs`](PhysicsOptimizations/Patches/MyGridPhysicsPatch.cs) | 2 targets: `PerformDeformation` prefix (defense pipeline gate) and `RigidBody_ContactPointCallbackImpl` prefix (impact context tracking + Voxel Normal Arbitrator). |
-| **Explosion Patch** | [`Patches/MyExplosionPatch.cs`](PhysicsOptimizations/Patches/MyExplosionPatch.cs) | 2 targets: prefixes on `MyExplosion.ApplyExplosionOnVoxel` and `MyExplosion.CutOutVoxelMap` suppressing explosive cratering. |
-| **Armor Occlusion Patch**| [`Patches/DeformationOcclusionPatch.cs`](PhysicsOptimizations/Patches/DeformationOcclusionPatch.cs) | Suffix on `MyDamageSystem.LoadData`/`Init` registering a priority-100 before-damage handler enforcing structural armor shielding. |
-| **Thruster Damage Patch**| [`Patches/ThrusterDamagePatch.cs`](PhysicsOptimizations/Patches/ThrusterDamagePatch.cs) | Prefix on `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) replacing volumetric flame casts with tiered 1/5/9-ray nozzle raycasts. |
-| **Detach Reset Patch** | [`Patches/MechanicalDetachPatch.cs`](PhysicsOptimizations/Patches/MechanicalDetachPatch.cs) | 2 targets: suffixes on `MyMechanicalConnectionBlockBase.Detach` and `MyCubeGrid.CreateSplit` assigning fresh `HavokCollisionSystemID`s. |
+| **Module 1: Wheel Optimizer** | [`Modules/WheelOptimizer.cs`](PhysicsOptimizations/Modules/WheelOptimizer.cs) | Symmetrical broadphase collision masking (`subSystemDontCollideWith = 3`), cold-start rover discovery, and parked suspension sleeping. Owns 3 `MyMotorSuspension` detours. |
+| **Module 2: Rigid Body Sleep** | [`Modules/RigidBodySleep.cs`](PhysicsOptimizations/Modules/RigidBodySleep.cs) | Stepped evaluator forcing idle dynamic grids into Havok sleep mode (`rigidBody.Deactivate()`) with safety guards. Owns cockpit input and damage wake detours. |
+| **Module 3: Ore Merge** | [`Modules/OreMerge.cs`](PhysicsOptimizations/Modules/OreMerge.cs) | $O(N)$ spatial grid cell bucketing merging nearby matching ore and dropped item stacks with pooled collections. |
+| **Module 4: Subgrid Stabilizer** | [`Modules/SubgridStabilizer.cs`](PhysicsOptimizations/Modules/SubgridStabilizer.cs) | Havok micro-velocity synchronization across resting mechanical subgrids, collision masking of tiny utility subgrids, and broadphase ID resets on detach and split. |
+| **Module 5: Adaptive Collision** | [`Modules/AdaptiveCollision.cs`](PhysicsOptimizations/Modules/AdaptiveCollision.cs) | Switches slow cruising grids to discrete collision quality while preserving Continuous TOI via a 4-level safety priority chain. |
+| **Module 6: Grid Defender** | [`Modules/GridDefender.cs`](PhysicsOptimizations/Modules/GridDefender.cs) | Zero-cost collision defense: 8-stage deformation pipeline, PMW engagement tracking, anti-clang vibration arrest, push-apart queue, layered armor occlusion, and radial raycast thruster clearance. Owns 7 detours. |
+| **Logging Facade** | [`Utils/Log.cs`](PhysicsOptimizations/Utils/Log.cs) | Centralized logging facade with standard `[{tag}] message` formatting. |
+| **Patch Conflict Audit** | [`Utils/PatchConflictAudit.cs`](PhysicsOptimizations/Utils/PatchConflictAudit.cs) | One-shot first-tick audit of all 13 targets: checks Torch PatchManager rewrite patterns for foreign detours and raw-Harmony patch ownership. |
 | **Grid Utilities** | [`Utils/GridUtils.cs`](PhysicsOptimizations/Utils/GridUtils.cs) | High-performance grid size queries, linear speed calculations, and mechanical/logical grouping checks. |
-| **Chat Utilities** | [`Utils/ChatUtils.cs`](PhysicsOptimizations/Utils/ChatUtils.cs) | Plain ASCII on-screen notification helpers using Torch ModCommunication. |
-| **Player Utilities** | [`Utils/PlayerUtils.cs`](PhysicsOptimizations/Utils/PlayerUtils.cs) | Steam ID identity resolution and admin status checking. |
 | **Admin Commands** | [`Commands/PhysicsOptimizerCommands.cs`](PhysicsOptimizations/Commands/PhysicsOptimizerCommands.cs) | In-game and Torch console admin commands under the `!phys` prefix using culture-invariant parsing and plain ASCII. |
-| **WPF GUI Control** | [`Views/PhysicsOptimizerControl.xaml`](PhysicsOptimizations/Views/PhysicsOptimizerControl.xaml) | 3-tab WPF interface: **Physics Optimizations**, **Grid Defender**, and **Live Telemetry & Actions**. |
+| **WPF GUI Control** | [`Views/PhysicsOptimizerControl.xaml`](PhysicsOptimizations/Views/PhysicsOptimizerControl.xaml) | 7-tab WPF interface: **Wheel Optimizer**, **Rigid Body Sleep**, **Ore Merge**, **Subgrid Stabilizer**, **Adaptive Collision**, **Grid Defender**, and **Live Telemetry & Actions**. |
 
 ---
 
-## 3. The 5 Stepped Simulation Modules
+## 3. The 6 Self-Contained Feature Modules
 
 All modules are driven off the plugin's shared frame counter, run server-authoritative only, and evaluate on stepped intervals with zero hot-path allocations.
 
 | # | Module | Interval | Purpose |
 | :- | :--- | :--- | :--- |
-| 1 | `WheelOptimizerModule` | 30 frames (0.5s) | Rover discovery/tracking, symmetrical wheel broadphase masking, parked suspension sleep. |
-| 2 | `RigidBodySleepModule` | 60 frames (1s) | Forced Havok deactivation of idle unpiloted dynamic grids. |
-| 3 | `FloatingObjectModule` | `OreMergeIntervalTicks` (min 30, default 120) | Spatial-hash proximity merge of floating ore/items (server only). |
-| 4 | `SubgridStabilizerModule` | 30 frames (0.5s) | Micro-velocity sync of resting mechanical joints + small utility subgrid masking. |
-| 5 | `AdaptiveCollisionModule` | 30 frames (0.5s) | Dynamic Discrete/Continuous TOI collision quality management. |
-
-Details for each are in Section 5 (Systems 1-6).
+| 1 | `WheelOptimizer` | 30 frames (0.5s) | Rover discovery/tracking, symmetrical wheel broadphase masking, parked suspension sleep. |
+| 2 | `RigidBodySleep` | 60 frames (1s) | Forced Havok deactivation of idle unpiloted dynamic grids + universal wake paths. |
+| 3 | `OreMerge` | `OreMergeIntervalTicks` (min 30, default 120) | Spatial-hash proximity merge of floating ore/items (server only). |
+| 4 | `SubgridStabilizer` | 30 frames (0.5s) | Micro-velocity sync of resting mechanical joints + small utility subgrid masking + detach broadphase refresh. |
+| 5 | `AdaptiveCollision` | 30 frames (0.5s) | Dynamic Discrete/Continuous TOI collision quality management. |
+| 6 | `GridDefender` | 60Hz + event-driven | Zero-cost collision defense, anti-clang damping, push-apart, layered armor occlusion, thruster clearance. |
 
 ---
 
@@ -106,21 +92,21 @@ Details for each are in Section 5 (Systems 1-6).
 
 Every game method this plugin patches, in registration order. All targets are registered into `PatchConflictAudit` at registration time.
 
-| # | Patched Game Method | Type | File | Consumed By |
+| # | Patched Game Method | Type | Declaring Module | Consumed By |
 | :- | :--- | :--- | :--- | :--- |
-| 1 | `MyMotorSuspension.CreateConstraint` | Suffix | `MotorSuspensionPatch.cs` | System 1 (Wheel Masking) |
-| 2 | `MyMotorSuspension.CubeGrid_OnPhysicsChanged` | Suffix | `MotorSuspensionPatch.cs` | System 1 (Wheel Masking re-apply) |
-| 3 | `MyMotorSuspension.Update` | Prefix | `MotorSuspensionPatch.cs` | System 1 (Parked Suspension Sleep) |
-| 4 | `MyShipController.MoveAndRotate(Vector3, Vector2, float)` | Suffix | `CockpitInputWakePatch.cs` | System 2 (Instant Pilot Wake) |
-| 5 | `MyDamageSystem.RaiseAfterDamageApplied` | Suffix | `GridDamageWakePatch.cs` | System 2 (Universal Damage Wake) |
-| 6 | `MyGridPhysics.PerformDeformation` | Prefix | `MyGridPhysicsPatch.cs` | System 7 (Defense Pipeline) |
-| 7 | `MyGridPhysics.RigidBody_ContactPointCallbackImpl` | Prefix | `MyGridPhysicsPatch.cs` | Systems 7, 8, 12 (Impact Context + Voxel Normal Arbitrator) |
-| 8 | `MyExplosion.ApplyExplosionOnVoxel` | Prefix | `MyExplosionPatch.cs` | System 13 (Voxel Cutout Suppression) |
-| 9 | `MyExplosion.CutOutVoxelMap` | Prefix | `MyExplosionPatch.cs` | System 13 (Voxel Cutout Suppression) |
-| 10 | `MyDamageSystem.LoadData` (fallback `Init`) | Suffix | `DeformationOcclusionPatch.cs` | System 10 (Layered Armor Occlusion handler registration) |
-| 11 | `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) | Prefix | `ThrusterDamagePatch.cs` | System 11 (Thruster Clearance) |
-| 12 | `MyMechanicalConnectionBlockBase.Detach(MyCubeGrid, bool)` | Suffix | `MechanicalDetachPatch.cs` | System 5 (Detach Broadphase Reset) |
-| 13 | `MyCubeGrid.CreateSplit` (static) | Suffix | `MechanicalDetachPatch.cs` | System 5 (Grid Split Broadphase Reset) |
+| 1 | `MyMotorSuspension.CreateConstraint` | Suffix | `WheelOptimizer.cs` | System 1 (Wheel Masking) |
+| 2 | `MyMotorSuspension.CubeGrid_OnPhysicsChanged` | Suffix | `WheelOptimizer.cs` | System 1 (Wheel Masking re-apply) |
+| 3 | `MyMotorSuspension.Update` | Prefix | `WheelOptimizer.cs` | System 1 (Parked Suspension Sleep) |
+| 4 | `MyShipController.MoveAndRotate(Vector3, Vector2, float)` | Suffix | `RigidBodySleep.cs` | System 2 (Instant Pilot Wake) |
+| 5 | `MyDamageSystem.RaiseAfterDamageApplied` | Suffix | `RigidBodySleep.cs` | System 2 (Universal Damage Wake) |
+| 6 | `MyGridPhysics.PerformDeformation` | Prefix | `GridDefender.cs` | System 7 (Defense Pipeline) |
+| 7 | `MyGridPhysics.RigidBody_ContactPointCallbackImpl` | Prefix | `GridDefender.cs` | Systems 7, 8, 12 (Impact Context + Voxel Normal Arbitrator) |
+| 8 | `MyExplosion.ApplyExplosionOnVoxel` | Prefix | `GridDefender.cs` | System 13 (Voxel Cutout Suppression) |
+| 9 | `MyExplosion.CutOutVoxelMap` | Prefix | `GridDefender.cs` | System 13 (Voxel Cutout Suppression) |
+| 10 | `MyDamageSystem.LoadData` (fallback `Init`) | Suffix | `GridDefender.cs` | System 10 (Layered Armor Occlusion handler registration) |
+| 11 | `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) | Prefix | `GridDefender.cs` | System 11 (Thruster Clearance) |
+| 12 | `MyMechanicalConnectionBlockBase.Detach(MyCubeGrid, bool)` | Suffix | `SubgridStabilizer.cs` | System 5 (Detach Broadphase Reset) |
+| 13 | `MyCubeGrid.CreateSplit` (static) | Suffix | `SubgridStabilizer.cs` | System 5 (Grid Split Broadphase Reset) |
 
 **Hard rules**: never add a 14th target without running the compatibility audit (see Design Notes); never patch `MyEntityComponentUpdater.*` / the per-entity update dispatch family (Concealment's home turf); never strip `GC.Collect` call sites transpiled by `se-performance-improvements`.
 
