@@ -26,38 +26,36 @@ namespace PhysicsOptimizer.Commands
             var sb = new StringBuilder();
             sb.AppendLine("=== [GVK Physics Optimizer Status v2.0.0] ===");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Plugin Master: {0}", cfg.Enabled));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Physics Optimizations (Tab 1): {0}", cfg.EnablePhysicsOptimizations));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Grid Defender (Tab 2): {0}", cfg.EnableCollisionDamageDefense));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Physics Optimizations: {0}", cfg.EnablePhysicsOptimizations));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Grid Defender: {0}", cfg.EnableGridDefender));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Debug Logging: {0} | Telemetry Interval: {1}s", cfg.EnableDebugLogging, cfg.ConsoleTelemetryIntervalSeconds));
             sb.AppendLine();
-            sb.AppendLine("* Wheel & Suspension Optimizer:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Symmetrical Masking: {1}", cfg.EnableWheelOptimization, cfg.EnableWheelCollisionFilter));
+            sb.AppendLine("* Wheel Optimizer:");
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Symmetrical Masking: {1}", cfg.EnableWheelOptimizer, cfg.EnableWheelCollisionFilter));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Parked Rover Sleep: {0} (Delay: {1:F1}s)", cfg.SleepParkedRovers, cfg.RoverSleepDelaySeconds));
             sb.AppendLine();
-            sb.AppendLine("* Rigid Body Sleep Manager:");
+            sb.AppendLine("* Rigid Body Sleep:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableRigidBodySleep));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Thresholds: Lin < {0:F2} m/s, Ang < {1:F3} rad/s for {2}s", cfg.SleepLinearVelocityThreshold, cfg.SleepAngularVelocityThreshold, cfg.IdleSecondsBeforeSleep));
             sb.AppendLine();
-            sb.AppendLine("* Floating Object & Ore Optimizer:");
+            sb.AppendLine("* Ore Merge:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableOreMerge));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Auto-Merge: {0} (Radius: {1:F1}m, Interval: {2} ticks)", cfg.AutoMergeNearbyOre, cfg.OreMergeRadiusMeters, cfg.OreMergeIntervalTicks));
             sb.AppendLine();
-            sb.AppendLine("* Subgrid Constraint Stabilizer:");
+            sb.AppendLine("* Subgrid Stabilizer:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Stabilization: {1}", cfg.EnableSubgridStabilizer, cfg.EnableSubgridStabilization));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Mask Small Utility Subgrids: {0} (Max: {1} blocks)", cfg.MaskSmallUtilitySubgrids, cfg.MaskSmallUtilitySubgridMaxBlocks));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Rest Velocity: {0:F3} rad/s for {1} frames", cfg.SubgridRestVelocityThreshold, cfg.SubgridRestFramesThreshold));
             sb.AppendLine();
-            sb.AppendLine("* Adaptive TOI / Collision Pruning:");
+            sb.AppendLine("* Adaptive Collision:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableAdaptiveCollision));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Large Grid Discrete Override: {0} (Min: {1} blks)", cfg.EnforceDiscreteLargeGrids, cfg.DiscreteLargeGridMinBlocks));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Small Grid Discrete Override: {0} (Min: {1} blks)", cfg.EnforceDiscreteSmallGrids, cfg.DiscreteSmallGridMinBlocks));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Speed Limits: Enabled={0} (Discrete < {1:F1} m/s | Continuous > {2:F1} m/s)", cfg.EnableSpeedThresholds, cfg.DiscreteCollisionSpeedThreshold, cfg.ContinuousCollisionSpeedThreshold));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Safety Overrides: Proximity Revert ({0}, {1:F0}m) | Terrain Alt Revert ({2}, < {3:F1}m)", cfg.RevertNearOtherDynamicGrids, cfg.DynamicGridProximityRevertDistanceMeters, cfg.EnableAltitudeTOIReversion, cfg.ContinuousAltitudeThreshold));
             sb.AppendLine();
-            sb.AppendLine("* Thruster Clearance Optimizer:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Mode: {1})", cfg.EnableThrusterClearance, cfg.ThrusterDamageMode));
-            sb.AppendLine();
-            sb.AppendLine("* Ship, Rover & Station Protection:");
+            sb.AppendLine("* Grid Defender:");
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Allowed Multiplier: {1:F2})", cfg.EnableGridDefender, cfg.DeformationMultiplier));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Ship Ramming: {0} | Voxel Crash: {1} | Stations: {2} | Subgrids: {3} | Debris: {4}", cfg.ProtectShipsAgainstRamming, cfg.ProtectShipsAgainstVoxels, cfg.ProtectStaticGrids, cfg.ProtectSubgrids, cfg.ProtectAgainstFloatingObjects));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Fallback Gates (Applicable={0}): Safe Harbor < {1:F1} m/s | Max Deform < {2:F1} m/s | Cooldown: {3} frames", cfg.IsSpeedGatesApplicable, cfg.MinDrivingVelocity, cfg.MaxDeformationVelocity, cfg.DeformationCooldownFrames));
             sb.AppendLine();
@@ -168,8 +166,10 @@ namespace PhysicsOptimizer.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Master Plugin is now {0}.", cfg.Enabled ? "ENABLED" : "DISABLED");
                     break;
                 case "wheels":
-                    cfg.EnableWheelOptimization = !cfg.EnableWheelOptimization;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel Optimizer is now {0}.", cfg.EnableWheelOptimization ? "ENABLED" : "DISABLED");
+                case "wheel":
+                case "wheeloptimizer":
+                    cfg.EnableWheelOptimizer = !cfg.EnableWheelOptimizer;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel Optimizer is now {0}.", cfg.EnableWheelOptimizer ? "ENABLED" : "DISABLED");
                     break;
                 case "mask":
                     cfg.EnableWheelCollisionFilter = !cfg.EnableWheelCollisionFilter;
@@ -180,16 +180,24 @@ namespace PhysicsOptimizer.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Parked Rover Suspension Sleep is now {0}.", cfg.SleepParkedRovers ? "ENABLED" : "DISABLED");
                     break;
                 case "sleep":
+                case "rigidbodysleep":
                     cfg.EnableRigidBodySleep = !cfg.EnableRigidBodySleep;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Aggressive Rigid Body Sleeping is now {0}.", cfg.EnableRigidBodySleep ? "ENABLED" : "DISABLED");
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Rigid Body Sleep is now {0}.", cfg.EnableRigidBodySleep ? "ENABLED" : "DISABLED");
                     break;
                 case "ore":
+                case "oremerge":
                     cfg.EnableOreMerge = !cfg.EnableOreMerge;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Floating Object / Ore Optimizer is now {0}.", cfg.EnableOreMerge ? "ENABLED" : "DISABLED");
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Ore Merge is now {0}.", cfg.EnableOreMerge ? "ENABLED" : "DISABLED");
+                    break;
+                case "subgridstabilizer":
+                case "stabilizer":
+                    cfg.EnableSubgridStabilizer = !cfg.EnableSubgridStabilizer;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Subgrid Stabilizer is now {0}.", cfg.EnableSubgridStabilizer ? "ENABLED" : "DISABLED");
                     break;
                 case "subgrids":
+                case "subgridstabilization":
                     cfg.EnableSubgridStabilization = !cfg.EnableSubgridStabilization;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Subgrid Constraint Stabilization is now {0}.", cfg.EnableSubgridStabilization ? "ENABLED" : "DISABLED");
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Subgrid Joint Stabilization is now {0}.", cfg.EnableSubgridStabilization ? "ENABLED" : "DISABLED");
                     break;
                 case "utilitymask":
                 case "subgridmask":
@@ -197,8 +205,14 @@ namespace PhysicsOptimizer.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Small Utility Subgrid Masking is now {0}.", cfg.MaskSmallUtilitySubgrids ? "ENABLED" : "DISABLED");
                     break;
                 case "toi":
+                case "adaptivecollision":
                     cfg.EnableAdaptiveCollision = !cfg.EnableAdaptiveCollision;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Adaptive TOI Collision Pruning is now {0}.", cfg.EnableAdaptiveCollision ? "ENABLED" : "DISABLED");
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Adaptive Collision is now {0}.", cfg.EnableAdaptiveCollision ? "ENABLED" : "DISABLED");
+                    break;
+                case "defender":
+                case "griddefender":
+                    cfg.EnableGridDefender = !cfg.EnableGridDefender;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Grid Defender is now {0}.", cfg.EnableGridDefender ? "ENABLED" : "DISABLED");
                     break;
                 case "debug":
                     cfg.EnableDebugLogging = !cfg.EnableDebugLogging;
@@ -256,7 +270,7 @@ namespace PhysicsOptimizer.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Voxel Cutout Explosion Suppression is now {0}.", cfg.SuppressAllVoxelExplosionDamage ? "ENABLED" : "DISABLED");
                     break;
                 default:
-                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgrids, utilitymask, toi, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, normal, thruster, thrustermode, cutout, debug, telemetry.", featureName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, normal, thruster, thrustermode, cutout, debug, telemetry.", featureName));
                     return;
             }
 

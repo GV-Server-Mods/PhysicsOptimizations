@@ -315,56 +315,58 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `EnableDebugLogging` | `bool` | `false` | Enables verbose trace logging in the Torch console. |
 | `EnablePeriodicConsoleTelemetry` | `bool` | `true` | Periodically prints a telemetry heartbeat to the server log. |
 | `ConsoleTelemetryIntervalSeconds` | `int` | `30` | Interval (seconds) between console telemetry heartbeats. |
-| `LogWheelSuspensionSleep` | `bool` | `false` | Logs rover suspension sleep/wake events. |
+| `LogWheelOptimizer` | `bool` | `false` | Logs rover suspension sleep/wake and wheel filter events. |
 | `LogRigidBodySleep` | `bool` | `false` | Logs rigid body deactivation/activation events. |
-| `LogAdaptiveTOI` | `bool` | `false` | Logs discrete/continuous TOI transitions. |
+| `LogOreMerge` | `bool` | `false` | Logs proximity ore merging and floating object elimination passes. |
+| `LogSubgridStabilizer` | `bool` | `false` | Logs subgrid joint stabilization and masking events. |
+| `LogAdaptiveCollision` | `bool` | `false` | Logs discrete/continuous TOI transitions. |
+| `LogGridDefender` | `bool` | `false` | Logs kinetic collision damping and defender events. |
 | `LogThrusterClearance` | `bool` | `false` | Logs thruster clearance raycasts and vaporizations. |
-| `LogCollisionsPMW` | `bool` | `false` | Logs kinetic collision damping and PMW impact events. |
+| `LogMissileDefense` | `bool` | `false` | Logs kinetic PMW missile impact events. |
 | `LogVoxelNormals` | `bool` | `false` | Logs Voxel Normal Arbitrator inversions. |
-| `LogSubgridStabilization` | `bool` | `false` | Logs subgrid joint stabilization and masking events. |
 
-### System 1: Wheel & Suspension Optimizer
+### Module 1: Wheel Optimizer
 | Setting | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
-| `EnableWheelOptimization` | `bool` | `true` | Master toggle for suspension optimizations and rover tracking. |
+| `EnableWheelOptimizer` | `bool` | `true` | Master toggle for suspension optimizations and rover tracking (alias: `EnableWheelOptimization`). |
 | `EnableWheelCollisionFilter` | `bool` | `true` | Enforces symmetrical broadphase masking for wheel wells (`subSystemDontCollideWith = 3`). |
 | `SleepParkedRovers` | `bool` | `true` | Pauses 60Hz raycasts and suspension math when rovers are parked. |
 | `RoverSleepDelaySeconds` | `float` | `2.0` | Motionless seconds (with handbrake) before parked rover suspensions sleep. |
 
-### System 2: Rigid Body Sleep Manager
+### Module 2: Rigid Body Sleep
 | Setting | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
-| `EnableAggressiveSleeping` | `bool` | `true` | Master toggle for idle dynamic grid rigid body deactivation. |
+| `EnableRigidBodySleep` | `bool` | `true` | Master toggle for idle dynamic grid rigid body deactivation. |
 | `SleepLinearVelocityThreshold` | `float` | `0.05` | Linear velocity (m/s) below which a grid is sleep-eligible. |
 | `SleepAngularVelocityThreshold` | `float` | `0.01` | Angular velocity (rad/s) below which a grid is sleep-eligible. |
 | `IdleSecondsBeforeSleep` | `int` | `3` | Motionless seconds required before deactivating grid physics. |
 
-### System 3: Floating Object & Ore Optimizer
+### Module 3: Ore Merge
 | Setting | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
-| `EnableFloatingObjectOptimizer` | `bool` | `true` | Master toggle for spatial ore and dropped item merging. |
+| `EnableOreMerge` | `bool` | `true` | Master toggle for spatial ore and dropped item merging. |
 | `AutoMergeNearbyOre` | `bool` | `true` | Automatically merges matching floating items within proximity. |
 | `OreMergeRadiusMeters` | `float` | `3.0` | Spatial radius (meters) for clustering floating items. |
 | `OreMergeIntervalTicks` | `int` | `120` | Simulation ticks between merge passes (clamped to >= 30; 60 ticks = 1s). |
-| `MaxSectorFloatingObjects` | `int` | `64` | Reserved threshold for local floating object density (not currently enforced by the merge pass). |
+| `MaxSectorFloatingObjects` | `int` | `64` | Reserved threshold for local floating object density. |
 
-### Systems 4-5: Subgrid Stabilizer & Utility Masking
+### Module 4: Subgrid Stabilizer
 | Setting | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
-| `EnableSubgridConstraintOptimizer` | `bool` | `true` | Master toggle for the Subgrid Stabilizer module (stabilization + masking). |
-| `EnableSubgridStabilization` | `bool` | `true` | Joint rest detection and Havok micro-velocity synchronization (also gates the detach broadphase reset). |
+| `EnableSubgridStabilizer` | `bool` | `true` | Master toggle for the Subgrid Stabilizer module (stabilization + masking). |
+| `EnableSubgridStabilization` | `bool` | `true` | Joint rest detection and Havok micro-velocity synchronization (alias: `EnableSubgridConstraintStabilization`). |
 | `SubgridRestVelocityThreshold` | `float` | `0.005` | Relative joint angular speed (rad/s) below which a subgrid is considered at rest. |
 | `SubgridRestFramesThreshold` | `int` | `60` | Rest frames (~1s) required before a joint is marked stabilized. |
-| `MaskSmallUtilitySubgrids` | `bool` | `true` | Masks collision pairs on tiny aesthetic subgrids (<= MaxBlocks, no weapons/tools/warheads); also enables the detach/split broadphase reset. |
+| `MaskSmallUtilitySubgrids` | `bool` | `true` | Masks collision pairs on tiny aesthetic subgrids (<= MaxBlocks, no weapons/tools/warheads). |
 | `MaskSmallUtilitySubgridMaxBlocks` | `int` | `10` | Max block count for small utility subgrids eligible for masking. |
 | `SubgridDetachBroadphaseReset` | `bool` | `true` | Legacy compatibility alias of `MaskSmallUtilitySubgrids`. |
 
-### System 6: Adaptive TOI
+### Module 5: Adaptive Collision
 > **Priority**: PMW Missiles (always Continuous) > Grid-Size Discrete Overrides > Safety Reversions (speed >= 40 m/s, altitude < 50m, dynamic grid within 500m, small craft <= 40 blocks) > Discrete Demotion (<= 15 m/s).
 
 | Setting | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
-| `EnableAdaptiveTOI` | `bool` | `true` | Master toggle for dynamic discrete/continuous collision quality optimization. |
+| `EnableAdaptiveCollision` | `bool` | `true` | Master toggle for dynamic discrete/continuous collision quality optimization. |
 | `EnforceDiscreteLargeGrids` | `bool` | `false` | Unconditionally assigns qualifying Large Grids to Discrete collision. |
 | `DiscreteLargeGridMinBlocks` | `int` | `20` | Minimum block count for large grids to qualify for forced discrete. |
 | `EnforceDiscreteSmallGrids` | `bool` | `false` | Unconditionally assigns qualifying Small Grids to Discrete collision. |
@@ -377,18 +379,10 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `EnableAltitudeTOIReversion` | `bool` | `true` | Forces Continuous TOI when flying close to planetary surfaces. |
 | `ContinuousAltitudeThreshold` | `float` | `50.0` | Terrain altitude floor (meters) below which Continuous TOI is enforced. |
 
-### System 11: Thruster Clearance Engine
+### Module 6: Grid Defender
 | Setting | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
-| `EnableThrusterClearanceEngine` | `bool` | `true` | Replaces volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. |
-| `ThrusterDamageMode` | `enum` | `Optimized` | `Optimized` (anti-exploit: own-construct instant vaporization, landing pads immune) or `VanillaLike` (gradual thermal damage on own construct and external grids). |
-| `LandingPadImmunity` | `bool` | `true` | Legacy compatibility alias; mirrors `ThrusterDamageMode == Optimized`. |
-| `InstantOwnConstructVaporization` | `bool` | `true` | Legacy compatibility alias; mirrors `ThrusterDamageMode == Optimized`. |
-
-### Systems 7-8: Collision Defense & Anti-Clang (Grid Defender)
-| Setting | Type | Default | Description |
-| :--- | :---: | :---: | :--- |
-| `EnableCollisionDamageDefense` | `bool` | `true` | Master toggle for the deformation defense engine pipeline. |
+| `EnableGridDefender` | `bool` | `true` | Master toggle for the deformation defense engine pipeline (alias: `EnableCollisionDamageDefense`). |
 | `MaxDeformationVelocity` | `float` | `110.0` | Extreme-velocity ceiling (m/s): non-missile impacts **above** this speed are suppressed with damping (anti-freeze). |
 | `MinDrivingVelocity` | `float` | `10.0` | Low-speed floor (m/s) below which collisions are suppressed as docking bumps. |
 | `ProtectShipsAgainstRamming` | `bool` | `true` | Suppresses grid-on-grid ramming damage. |
@@ -406,10 +400,6 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `EnablePushApart` | `bool` | `true` | Nudges grids apart when physics bodies stay in sustained contact. |
 | `PushApartThreshold` | `int` | `25` | Consecutive contact frames before push-apart triggers. |
 | `PushApartDistance` | `float` | `0.5` | Push distance (meters, 0.1-5.0); grid-on-voxel pushes follow the gravity up-vector. |
-
-### Systems 9-10, 13: PMWs, Armor Occlusion & Voxel Protection
-| Setting | Type | Default | Description |
-| :--- | :---: | :---: | :--- |
 | `AllowMissileDamage` | `bool` | `true` | Allows qualified kinetic torpedoes to inflict deformation damage. |
 | `ExemptPilotedFromMissileStatus` | `bool` | `true` | Actively piloted vehicles (`IsControlled`) are never treated as PMWs. |
 | `SmallGridMissileMinBlocks` | `int` | `4` | Minimum blocks to qualify as a small grid PMW. |
@@ -420,26 +410,37 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `EnableLayeredArmorOcclusion` | `bool` | `true` | Enables $O(1)$ directional structural armor shielding against deformation. |
 | `EnforceStructuralArmorCheck` | `bool` | `true` | Requires occluding blocks to be structural armor (`FatBlock == null`) or low deformation ratio (< 0.5). |
 | `EnableVoxelNormalArbitrator` | `bool` | `true` | Corrects phantom downward contact normals to eliminate Voxel-Vice terrain trapping. |
+| `EnableThrusterClearance` | `bool` | `true` | Replaces volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. |
+| `ThrusterDamageMode` | `enum` | `Optimized` | `Optimized` (anti-exploit: own-construct instant vaporization, landing pads immune) or `VanillaLike` (gradual thermal damage on own construct and external grids). |
+| `LandingPadImmunity` | `bool` | `true` | Legacy compatibility alias; mirrors `ThrusterDamageMode == Optimized`. |
+| `InstantOwnConstructVaporization` | `bool` | `true` | Legacy compatibility alias; mirrors `ThrusterDamageMode == Optimized`. |
 
 ---
 
-## 8. Torch WPF Server Interface (3-Tab Dashboard)
+## 8. Torch WPF Server Interface (7-Tab Dashboard)
 
-The Torch server window hosts the plugin's management UI across 3 tabs:
+The Torch server window hosts the plugin's management UI across 7 dedicated tabs matching the canonical architecture:
 
-### Tab 1: Physics Optimizations
-Sliders and toggles for the Wheel Optimizer (masking, parked-sleep delay), Rigid Body Sleep thresholds, Ore Merging radius/interval, Subgrid Stabilization and utility masking, and Adaptive TOI speed/altitude/override cutoffs - plus the per-subsystem debug log checkboxes and the periodic telemetry heartbeat controls.
+### Tab 1: Wheel Optimizer
+Sliders and toggles for symmetrical wheel well collision filtering and parked rover suspension sleeping.
 
-### Tab 2: Grid Defender
-Collision protection velocity cutoffs (docking floor, extreme-velocity ceiling), the structural protection tier toggles (ramming / voxels / stations / subgrids / floating objects), PMW block bands and velocity, armor occlusion controls, anti-clang thresholds and push-apart distance, and voxel cutout suppression.
+### Tab 2: Rigid Body Sleep
+Velocity thresholds (linear and angular) and idle countdown duration for deactivating motionless dynamic grids into Havok sleep mode.
 
-### Tab 3: Live Telemetry & Actions
-High-contrast operational cards updating live at 2Hz:
-1. **Havok Simulation Health**: sim speed, tracked grids, active/sleeping rigid bodies, merged ore stacks.
-2. **Rover & Subgrid Status**: monitored rovers, parked rovers asleep, total wheels, sleeping wheels, stabilized joints.
-3. **Collision Defense & PMWs**: tracked grids, detected PMWs, suppressed collision events, voxel normal interventions.
-4. **Armor & Voxel Protection**: occluded armor hits, voxel cutouts prevented, thruster vaporizations, anti-clang arrests/separations.
-* **Diagnostics Export**: a **Copy Diagnostics** button formats the server's live physics pulse onto the clipboard for instant Discord ticket support and performance audits.
+### Tab 3: Ore Merge
+Proximity merging radius, interval tick rate, and local floating object density thresholds.
+
+### Tab 4: Subgrid Stabilizer
+Joint angular velocity threshold and motionless frame window for constraint stabilization, plus small utility subgrid collision masking.
+
+### Tab 5: Adaptive Collision
+Speed thresholds (discrete demotion / continuous promotion), grid-size discrete overrides, terrain altitude floor, and dynamic grid proximity safety bubbles.
+
+### Tab 6: Grid Defender
+Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, voxel cutout suppression, and thruster clearance optimization.
+
+### Tab 7: Telemetry & Actions
+Real-time gauges updating at 2Hz across 4 operational cards (Havok Simulation Health, Rover & Subgrid Status, Collision Defense & PMWs, Armor & Voxel Protection) plus manual admin action buttons (**Sleep All Grids**, **Wake All Grids**, **Merge Ore Now**, **Reset Gauges**).
 
 ---
 

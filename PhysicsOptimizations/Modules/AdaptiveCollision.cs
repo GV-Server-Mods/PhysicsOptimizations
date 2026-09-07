@@ -19,7 +19,7 @@ namespace PhysicsOptimizer.Modules
     {
         private const string LogSource = "AdaptiveCollision";
 
-        public string Name => "Adaptive TOI & Collision Pruner";
+        public string Name => "Adaptive Collision";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAdaptiveCollision;
 
         private PhysicsOptimizerPlugin _plugin;

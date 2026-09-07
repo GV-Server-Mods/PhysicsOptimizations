@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
@@ -23,8 +23,8 @@ namespace PhysicsOptimizer.Modules
     {
         private const string LogSource = "WheelOptimizer";
 
-        public string Name => "Wheel & Suspension Optimizer";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableWheelOptimization;
+        public string Name => "Wheel Optimizer";
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableWheelOptimizer;
 
         private PhysicsOptimizerPlugin _plugin;
 

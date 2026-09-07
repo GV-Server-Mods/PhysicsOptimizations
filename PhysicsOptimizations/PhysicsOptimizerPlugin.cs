@@ -34,7 +34,8 @@ namespace PhysicsOptimizer
         public DefenseStatistics DefenseStats { get; private set; }
 
         public WheelOptimizer WheelOptimizer { get; private set; }
-        public RigidBodySleep Sleep { get; private set; }
+        public RigidBodySleep RigidBodySleep { get; private set; }
+        public RigidBodySleep Sleep => RigidBodySleep;
         public OreMerge OreMerge { get; private set; }
         public SubgridStabilizer SubgridStabilizer { get; private set; }
         public AdaptiveCollision AdaptiveCollision { get; private set; }
@@ -64,14 +65,14 @@ namespace PhysicsOptimizer
         private void InitializeModules()
         {
             WheelOptimizer = new WheelOptimizer();
-            Sleep = new RigidBodySleep();
+            RigidBodySleep = new RigidBodySleep();
             OreMerge = new OreMerge();
             SubgridStabilizer = new SubgridStabilizer();
             AdaptiveCollision = new AdaptiveCollision();
             GridDefender = new GridDefender();
 
             _modules.Add(WheelOptimizer);
-            _modules.Add(Sleep);
+            _modules.Add(RigidBodySleep);
             _modules.Add(OreMerge);
             _modules.Add(SubgridStabilizer);
             _modules.Add(AdaptiveCollision);

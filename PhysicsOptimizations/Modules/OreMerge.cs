@@ -18,7 +18,7 @@ namespace PhysicsOptimizer.Modules
     {
         private const string LogSource = "OreMerge";
 
-        public string Name => "Floating Object & Ore Optimizer";
+        public string Name => "Ore Merge";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableOreMerge;
 
         private PhysicsOptimizerPlugin _plugin;

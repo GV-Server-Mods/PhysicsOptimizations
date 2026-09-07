@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
@@ -22,7 +22,7 @@ namespace PhysicsOptimizer.Modules
     {
         private const string LogSource = "RigidBodySleep";
 
-        public string Name => "Rigid Body Sleep Manager";
+        public string Name => "Rigid Body Sleep";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableRigidBodySleep;
 
         private PhysicsOptimizerPlugin _plugin;

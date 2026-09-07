@@ -23,14 +23,16 @@ namespace PhysicsOptimizer.Config
         // Logging specific modules
         private bool _logWheelOptimizer = false;
         private bool _logRigidBodySleep = false;
+        private bool _logOreMerge = false;
+        private bool _logSubgridStabilizer = false;
         private bool _logAdaptiveCollision = false;
+        private bool _logGridDefender = false;
         private bool _logThrusterClearance = false;
         private bool _logMissileDefense = false;
         private bool _logVoxelNormals = false;
-        private bool _logSubgridStabilizer = false;
 
         // --- Module 1: Wheel & Suspension ---
-        private bool _enableWheelOptimization = true;
+        private bool _enableWheelOptimizer = true;
         private bool _enableWheelCollisionFilter = true;
         private bool _sleepParkedRovers = true;
         private float _roverSleepDelaySeconds = 2.0f;
@@ -78,7 +80,7 @@ namespace PhysicsOptimizer.Config
         private bool _instantOwnConstructVaporization = true;
 
         // --- Ship, Rover & Station Protection ---
-        private bool _enableCollisionDamageDefense = true;
+        private bool _enableGridDefender = true;
         private float _collisionSpeedThreshold = 110.0f;
         private bool _protectAgainstRamming = true;
         private bool _protectAgainstVoxels = true;
@@ -126,13 +128,17 @@ namespace PhysicsOptimizer.Config
 
         public bool LogWheelOptimizer { get => _logWheelOptimizer; set => SetValue(ref _logWheelOptimizer, value); }
         public bool LogRigidBodySleep { get => _logRigidBodySleep; set => SetValue(ref _logRigidBodySleep, value); }
+        public bool LogOreMerge { get => _logOreMerge; set => SetValue(ref _logOreMerge, value); }
+        public bool LogSubgridStabilizer { get => _logSubgridStabilizer; set => SetValue(ref _logSubgridStabilizer, value); }
         public bool LogAdaptiveCollision { get => _logAdaptiveCollision; set => SetValue(ref _logAdaptiveCollision, value); }
+        public bool LogGridDefender { get => _logGridDefender; set => SetValue(ref _logGridDefender, value); }
         public bool LogThrusterClearance { get => _logThrusterClearance; set => SetValue(ref _logThrusterClearance, value); }
         public bool LogMissileDefense { get => _logMissileDefense; set => SetValue(ref _logMissileDefense, value); }
         public bool LogVoxelNormals { get => _logVoxelNormals; set => SetValue(ref _logVoxelNormals, value); }
-        public bool LogSubgridStabilizer { get => _logSubgridStabilizer; set => SetValue(ref _logSubgridStabilizer, value); }
 
-        public bool EnableWheelOptimization { get => _enableWheelOptimization; set => SetValue(ref _enableWheelOptimization, value); }
+        public bool EnableWheelOptimizer { get => _enableWheelOptimizer; set => SetValue(ref _enableWheelOptimizer, value); }
+        [XmlIgnore]
+        public bool EnableWheelOptimization { get => EnableWheelOptimizer; set => EnableWheelOptimizer = value; }
         public bool EnableWheelCollisionFilter { get => _enableWheelCollisionFilter; set => SetValue(ref _enableWheelCollisionFilter, value); }
         public bool SleepParkedRovers { get => _sleepParkedRovers; set => SetValue(ref _sleepParkedRovers, value); }
         public float RoverSleepDelaySeconds { get => _roverSleepDelaySeconds; set => SetValue(ref _roverSleepDelaySeconds, value); }
@@ -149,6 +155,7 @@ namespace PhysicsOptimizer.Config
         public int MaxSectorFloatingObjects { get => _maxSectorFloatingObjects; set => SetValue(ref _maxSectorFloatingObjects, value); }
 
         public bool EnableSubgridStabilizer { get => _enableSubgridStabilizer; set => SetValue(ref _enableSubgridStabilizer, value); }
+        [XmlIgnore]
         public bool EnableSubgridConstraintStabilization { get => _enableSubgridStabilization; set => SetValue(ref _enableSubgridStabilization, value); }
         public bool EnableSubgridStabilization { get => _enableSubgridStabilization; set => SetValue(ref _enableSubgridStabilization, value); }
         public float SubgridRestVelocityThreshold { get => _subgridRestVelocityThreshold; set => SetValue(ref _subgridRestVelocityThreshold, value); }
@@ -228,7 +235,9 @@ namespace PhysicsOptimizer.Config
             }
         }
 
-        public bool EnableCollisionDamageDefense { get => _enableCollisionDamageDefense; set => SetValue(ref _enableCollisionDamageDefense, value); }
+        public bool EnableGridDefender { get => _enableGridDefender; set => SetValue(ref _enableGridDefender, value); }
+        [XmlIgnore]
+        public bool EnableCollisionDamageDefense { get => EnableGridDefender; set => EnableGridDefender = value; }
         public float MaxDeformationVelocity { get => _collisionSpeedThreshold; set => SetValue(ref _collisionSpeedThreshold, Math.Max(0.0f, value)); }
         public bool ProtectShipsAgainstRamming
         {

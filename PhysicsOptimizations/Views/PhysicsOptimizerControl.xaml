@@ -96,11 +96,11 @@
                         </Border>
 
                         <!-- Wheel & Suspension -->
-                        <GroupBox Header="🏎️ Wheel &amp; Suspension Optimizer">
+                        <GroupBox Header="🏎️ Wheel Optimizer">
                             <StackPanel>
-                                <CheckBox Content="Enable Wheel &amp; Suspension Optimizer" IsChecked="{Binding Config.EnableWheelOptimization}" FontWeight="SemiBold" Margin="0,0,0,6"
+                                <CheckBox Content="Enable Wheel Optimizer" IsChecked="{Binding Config.EnableWheelOptimizer}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for wheel and suspension optimizations. Controls parked rover suspension sleep and symmetrical wheel well collision filtering."/>
-                                <StackPanel IsEnabled="{Binding Config.EnableWheelOptimization}">
+                                <StackPanel IsEnabled="{Binding Config.EnableWheelOptimizer}">
                                     <TextBlock Text="Sleeps 60Hz raycasts on parked rovers and masks wheel well armor to eliminate compound shape collision checks." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
                                     <CheckBox Content="Enable Symmetrical Wheel Well Collision Masking" IsChecked="{Binding Config.EnableWheelCollisionFilter}" Margin="16,2,0,2"
                                               ToolTip="Applies Havok collision bitmasks to prevent wheels from performing compound shape collision checks against their own chassis wheel well armor blocks."/>
@@ -132,9 +132,9 @@
                         </Border>
 
                         <!-- Rigid Body Sleeping -->
-                        <GroupBox Header="💤 Rigid Body Sleep Manager">
+                        <GroupBox Header="💤 Rigid Body Sleep">
                             <StackPanel>
-                                <CheckBox Content="Enable Rigid Body Sleep Manager" IsChecked="{Binding Config.EnableRigidBodySleep}" FontWeight="SemiBold" Margin="0,0,0,6"
+                                <CheckBox Content="Enable Rigid Body Sleep" IsChecked="{Binding Config.EnableRigidBodySleep}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Actively deactivates Havok rigid bodies on idle, unpiloted, and supported dynamic grids into Havok sleep mode to eliminate solver CPU overhead."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableRigidBodySleep}">
                                     <TextBlock Text="Deactivates motionless unpiloted dynamic grids into Havok sleep mode, waking instantly on cockpit input, damage, or movement." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
@@ -179,9 +179,9 @@
                         </Border>
 
                         <!-- Floating Objects & Ore -->
-                        <GroupBox Header="⛏️ Floating Object &amp; Ore Optimizer">
+                        <GroupBox Header="⛏️ Ore Merge">
                             <StackPanel>
-                                <CheckBox Content="Enable Floating Object &amp; Ore Optimizer" IsChecked="{Binding Config.EnableOreMerge}" FontWeight="SemiBold" Margin="0,0,0,6"
+                                <CheckBox Content="Enable Ore Merge" IsChecked="{Binding Config.EnableOreMerge}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for floating objects and ore optimizations. Merges nearby floating ores and dropped item entities."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableOreMerge}">
                                     <TextBlock Text="Merges nearby floating ore rocks and items into single larger stacks to slash rigid body counts and accelerate sector cleanup." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
@@ -224,9 +224,9 @@
                         </Border>
 
                         <!-- Subgrid Constraints -->
-                        <GroupBox Header="🦾 Subgrid Constraint Stabilizer">
+                        <GroupBox Header="🦾 Subgrid Stabilizer">
                             <StackPanel>
-                                <CheckBox Content="Enable Subgrid Constraint Stabilizer" IsChecked="{Binding Config.EnableSubgridStabilizer}" FontWeight="SemiBold" Margin="0,0,0,6"
+                                <CheckBox Content="Enable Subgrid Stabilizer" IsChecked="{Binding Config.EnableSubgridStabilizer}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for subgrid constraint stabilization. Micro-dampens velocity drift between resting subgrids and parent grids and masks small utility subgrids to eliminate Clang oscillation loops."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableSubgridStabilizer}">
                                     <TextBlock Text="Micro-dampens constraint tension on resting mechanical joints (rotors, hinges, pistons) and masks small utility subgrids to stop Clang loops." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
@@ -270,9 +270,9 @@
                         </Border>
 
                         <!-- Adaptive TOI / Collision Detection -->
-                        <GroupBox Header="🚀 Adaptive TOI / Collision Pruning">
+                        <GroupBox Header="🚀 Adaptive Collision">
                             <StackPanel>
-                                <CheckBox Content="Enable Adaptive TOI Collision Pruning" IsChecked="{Binding Config.EnableAdaptiveCollision}" FontWeight="SemiBold" Margin="0,0,0,6"
+                                <CheckBox Content="Enable Adaptive Collision" IsChecked="{Binding Config.EnableAdaptiveCollision}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for dynamic Discrete/Continuous collision quality optimization. Demotes slow, isolated grids to Discrete to save CPU while enforcing Continuous near hazards and high speeds."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableAdaptiveCollision}">
                                     <TextBlock Text="Demotes cruising and large grids to Discrete collision to slash broadphase CPU load while preserving Continuous TOI for missiles and hazards." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,4"/>
@@ -373,10 +373,10 @@
                         <!-- Master Grid Defender Toggle -->
                         <GroupBox Header="🛡️ Master Grid Defender">
                             <StackPanel>
-                                <CheckBox Content="Enable Master Collision Damage Defense" IsChecked="{Binding Config.EnableCollisionDamageDefense}" FontWeight="Bold" Margin="0,0,0,6"
+                                <CheckBox Content="Enable Grid Defender" IsChecked="{Binding Config.EnableGridDefender}" FontWeight="Bold" Margin="0,0,0,6"
                                           ToolTip="Master switch for Grid Defender collision protection, anti-clang damping, and grid separation."/>
 
-                                <StackPanel IsEnabled="{Binding Config.EnableCollisionDamageDefense}">
+                                <StackPanel IsEnabled="{Binding Config.EnableGridDefender}">
                                     <TextBlock Text="Master switch for collision defense and kinetic damage interception. Intercepts Keen's deformation solver to suppress crash damage, scale impact multipliers, and separate grids." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
                                     <Grid Margin="16,2,0,2">
                                         <Grid.ColumnDefinitions>
@@ -401,7 +401,7 @@
                         </GroupBox>
 
                         <!-- Collision Damage Defense Container -->
-                        <StackPanel IsEnabled="{Binding Config.EnableCollisionDamageDefense}">
+                        <StackPanel IsEnabled="{Binding Config.EnableGridDefender}">
 
                             <!-- Thruster Clearance Optimizer (Sub-feature of Grid Defender) -->
                             <GroupBox Header="🔥 Thruster Clearance Optimizer">

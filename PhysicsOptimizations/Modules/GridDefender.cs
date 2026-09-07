@@ -33,7 +33,7 @@ namespace PhysicsOptimizer.Modules
         private const string LogSource = "GridDefender";
 
         public string Name => "Grid Defender";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableCollisionDamageDefense;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableGridDefender;
 
         private PhysicsOptimizerPlugin _plugin;
 
@@ -192,7 +192,7 @@ namespace PhysicsOptimizer.Modules
         /// </summary>
         public bool ShouldAllowDeformation(MyGridPhysics physics, MyEntity otherEntity, ref float separatingVelocity)
         {
-            if (_plugin?.Config == null || !_plugin.Config.Enabled || !_plugin.Config.EnableCollisionDamageDefense) return true;
+            if (_plugin?.Config == null || !_plugin.Config.Enabled || !_plugin.Config.EnableGridDefender) return true;
             var config = _plugin.Config;
             var stats = _plugin.DefenseStats;
 

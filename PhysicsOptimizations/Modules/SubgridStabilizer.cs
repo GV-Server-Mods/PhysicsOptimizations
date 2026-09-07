@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
@@ -23,7 +23,7 @@ namespace PhysicsOptimizer.Modules
     {
         private const string LogSource = "SubgridStabilizer";
 
-        public string Name => "Subgrid Constraint Stabilizer";
+        public string Name => "Subgrid Stabilizer";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableSubgridStabilizer;
 
         private PhysicsOptimizerPlugin _plugin;
