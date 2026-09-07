@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Threading;
 
-namespace GVK.PhysicsOptimizations.Services
+namespace PhysicsOptimizations.Services
 {
     public class OptimizationTelemetry : INotifyPropertyChanged
     {
@@ -197,6 +197,17 @@ namespace GVK.PhysicsOptimizations.Services
         public void IncrementForcedSleepEvents(int count = 1)
         {
             Interlocked.Add(ref _forcedSleepEventsTotal, count);
+        }
+
+        public string GetDiagnosticSummary()
+        {
+            return $"Sim Speed: {ServerSimulationSpeed:F2} TPS\n" +
+                   $"Active Bodies: {ActiveRigidBodies}, Sleeping: {SleepingRigidBodies}\n" +
+                   $"Rovers: {TrackedRoversCount}, Parked: {ParkedRoversAsleep}, Sleeping Wheels: {SleepingWheelsCount}/{TotalRoverWheelsCount}\n" +
+                   $"Forced Sleep Events: {ForcedSleepEventsTotal}\n" +
+                   $"Merged Ore Stacks: {OreStacksMergedTotal}, Eliminated: {OreEntitiesEliminatedTotal}\n" +
+                   $"Subgrid Constraints Stabilized: {StabilizedSubgridConstraints}/{TrackedSubgridConstraints}\n" +
+                   $"TOI Grids Discrete: {DiscreteTOIGridsCount}, Continuous: {ContinuousTOIGridsCount}";
         }
 
         public void ResetLiveCounters()

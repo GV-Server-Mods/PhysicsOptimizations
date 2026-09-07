@@ -1,31 +1,34 @@
 # ⚡ GVK Physics Optimizer
 
-**High-Performance Havok Physics Optimization & Suspension Stabilizer for Space Engineers Torch Servers**
+**Unified High-Performance Havok Physics Optimization & Collision Defense Engine for Space Engineers Dedicated Servers (Torch)**
 
-* **Plugin Type**: Torch Dedicated Server Plugin (.NET Framework 4.8)  
-* **Target Server**: GV - Deserts of Kharak (GVK)  
-* **Package**: `GVK_PhysicsOptimizations.zip`  
-* **Version**: 1.0.0  
+* **Plugin Type**: Torch Dedicated Server Plugin (.NET Framework 4.8, x64, WPF UI)
+* **Target Environment**: Space Engineers Dedicated Servers / Torch (Universal Standalone Plugin, battle-tested on GV: Deserts of Kharak)
+* **Package**: `GVK_PhysicsOptimizations.zip` (plugin DLL + PDB + manifest)
+* **Version**: 2.0.0 (in-log and command branding; `manifest.xml` / `.csproj` `<Version>` fields still read 1.0.0 - bump at next release)
 
 ---
 
-## 1. Project Intent & Philosophy
+## 1. Project Intent & Core Philosophy
 
-In Space Engineers, Havok physics calculations consume up to 60–70% of server CPU time on rover-heavy and combat worlds. Server sim-speed craters due to non-critical physics workloads:
-1. Active 60Hz physics calculations on motionless and drifting ships.
-2. Continuous ground-raycasts, air-shock checks, and suspension math on parked rovers with handbrakes engaged.
-3. Hundreds of individual floating ore boulders calculating ground collisions simultaneously after mining or combat.
-4. Continuous constraint stress and micro-vibration calculations across resting mechanical subgrids (rotors/hinges/pistons).
-5. Continuous collision detection (CCD/TOI) overhead on slow-moving grids.
+In Space Engineers, Havok physics calculations consume up to 60-70% of server CPU time on rover-heavy and combat worlds. When rovers collide with voxels, thrusters burn internal armor, or idle grids drift, the server sim-speed craters.
 
-**`GVK.PhysicsOptimizer`** eliminates these bottlenecks through non-destructive, intelligent deactivation and throttling, maintaining **60 TPS server sim-speed** while leaving vehicle handling, drifting, and combat 100% intact:
-* 🏎️ **Consolidated Wheel & Suspension Physics**: Eliminates wheel well armor compound queries, discovers world rovers on server cold start & entity spawns, and sleeps 60Hz raycasts on parked rovers with an ultra-fast ~1ns short-circuit flag.
-* 💤 **Aggressive Rigid Body Sleeping**: Actively forces motionless unpiloted dynamic grids into Havok sleep mode (`rigidBody.Deactivate()`), backed by fail-safe flight guards for hovering thrust, locked landing gear/magnets, and autopilot.
-* ⛏️ **$O(N)$ Proximity Ore & Item Merging**: Automatically merges floating ore boulders and dropped components using spatial grid hashing and object pooling, slashing active rigid body counts by up to 80% with zero heap allocations.
-* 🦾 **Subgrid Constraint Stabilizer & Micro-Dampening**: Dampens constraint tension and actively synchronizes resting subgrid velocities (rotors, hinges, pistons), banishing Clang feedback loops and phantom torque before oscillations begin.
-* 🚀 **Adaptive TOI Pruning**: Dynamically assigns discrete collision quality to low-speed cruising grids while preserving continuous TOI for high-speed grids and player-made missiles (PMWs).
-* ⚡ **Zero Hot-Path Allocations**: Zero memory allocations in simulation loops with stepped evaluation intervals (30–120 frames), atomic telemetry updates, and deterministic entity eviction on despawn.
-* 🛡️ **GridDefender Harmony**: Clean architectural separation—GridDefender handles deformation protection, missile kinetics, and anti-clang voxel nudging, while PhysicsOptimizer manages physics performance & suspension math.
+**`PhysicsOptimizer` (v2.0)** is a unified server-side physics overhaul. It permanently fuses high-performance suspension and rigid body deactivation routines with the battle-tested structural collision defenses formerly housed in `GridDefender`. The engine delivers a locked **60 TPS server sim-speed** while actively preventing Clang kraken events, phantom forces, and voxel tunneling.
+
+The plugin is built from exactly **13 Torch PatchManager patch targets** across 8 patch files, **5 stepped simulation modules**, and **1 event-driven collision defense engine**. All 13 targets are enumerated in Section 4; every feature system that consumes them is documented in Section 5.
+
+### Key Performance & Defense Pillars:
+* 🏎️ **Consolidated Wheel & Suspension Physics**: Eliminates wheel-well armor compound queries via symmetrical broadphase collision masks, discovers world rovers on server cold-start, and sleeps 60Hz raycasts on parked rovers with a ~1ns short-circuit flag.
+* 💤 **Aggressive Rigid Body Sleeping**: Actively forces motionless unpiloted dynamic grids into Havok sleep mode (`rigidBody.Deactivate()`), backed by fail-safe gravity/landing-gear/thruster guards and three independent instant-wake paths.
+* ⛏️ **$O(N)$ Proximity Ore & Item Merging**: Merges floating ore boulders and dropped components using spatial grid hashing and object pooling, slashing active rigid body counts with zero heap allocations.
+* 🦾 **Subgrid Constraint Stabilizer & Detach Reset**: Synchronizes Havok micro-velocities across resting mechanical subgrids (rotors/hinges/pistons) to kill Clang vibration loops, masks tiny utility subgrids out of broadphase, and forces an immediate broadphase refresh on detach/split to eliminate the persistent subgrid "ghost" collision bug.
+* 🚀 **Adaptive TOI & Heightmap Reversion**: Dynamically assigns discrete collision quality to cruising grids to cut continuous TOI pairs, while reverting to Continuous TOI near planetary surfaces, near other dynamic grids, for small craft, and always for PMW missiles.
+* 🎯 **Deformation Defense Engine (8-Stage Pipeline)**: A single gate on `MyGridPhysics.PerformDeformation` that classifies every collision - subgrid contacts, floating debris, PMW missiles, docking bumps, station strikes, terrain crashes, ship ramming - and suppresses or scales deformation damage accordingly.
+* 🛡️ **Layered Armor Occlusion**: A `MyDamageSystem` before-damage handler that shields interior components behind true structural armor blocks from spherical deformation damage bleed.
+* 🔥 **Instant Thruster Clearance & Vaporization**: Replaces expensive volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. External grids (landing pads) receive immunity in Optimized mode, while illegally buried thrusters instantly vaporize their own obstructing blocks.
+* ⛰️ **Voxel Normal Arbitrator & Cutout Suppression**: Eliminates "Voxel-Vice" terrain trapping by detecting inverted downward contact normals against voxels and correcting them, and suppresses explosive voxel carving to preserve planetary terrain.
+* 🎪 **Anti-Clang Vibration Arrest & Push-Apart**: Detects grids stuck in consecutive-contact feedback loops, dampens their velocities, and physically nudges them out of terrain or overlapping grids along the gravity up-vector.
+* ⚡ **Zero Hot-Path Allocations**: Zero memory allocations in simulation loops with stepped evaluation intervals (30-120 frames), atomic telemetry updates, pooled collections, and deterministic entity eviction on despawn.
 
 ---
 
@@ -33,287 +36,523 @@ In Space Engineers, Havok physics calculations consume up to 60–70% of server 
 
 ```mermaid
 graph TD
-    subgraph Torch Server Host
-        TorchGUI[Torch Server WPF Window] -->|Loads Tab via IWpfPlugin| UI[PhysicsOptimizerControl.xaml]
-        UI -->|Data Binds to| Plugin[PhysicsOptimizerPlugin.cs]
-        Plugin -->|Async Saves via ThreadPool| CfgFile[PhysicsOptimizer.cfg]
-        Plugin -->|INotifyPropertyChanged 2Hz| Telemetry[OptimizationTelemetry.cs]
-        Plugin -->|Commands| Commands[PhysicsOptimizerCommands.cs]
-    end
+    UI[WPF 3-Tab Dashboard<br/>Physics Optimizations - Grid Defender - Live Telemetry] --> Plugin
+    CFG[(PhysicsOptimizer.cfg)] --> Plugin
+    Plugin[PhysicsOptimizerPlugin<br/>Torch lifecycle + 60Hz frame dispatcher] --> Tel[Live Telemetry + Defense Statistics]
+    Plugin --> Audit[PatchConflictAudit<br/>first-tick conflict scan of all 13 targets]
 
-    subgraph Optimization Modules
-        Plugin --> M1[Module 1: Wheel & Suspension Optimizer]
-        Plugin --> M2[Module 2: Rigid Body Sleep Manager]
-        Plugin --> M3[Module 3: Floating Object & Ore Optimizer]
-        Plugin --> M4[Module 4: Subgrid Constraint Stabilizer]
-        Plugin --> M5[Module 5: Adaptive TOI / Collision Pruner]
-    end
+    Plugin --> Modules[5 Stepped Simulation Modules - 30 to 120 frame intervals<br/>1. Wheel and Suspension Optimizer<br/>2. Rigid Body Sleep Manager<br/>3. Floating Object and Ore Merger<br/>4. Subgrid Constraint Stabilizer<br/>5. Adaptive TOI Collision Pruner]
 
-    subgraph Harmony Patches & Engine Hooks
-        M1 --> P1[MotorSuspensionPatch.cs]
-        M2 --> P2[CockpitInputWakePatch.cs]
-        M2 --> P3[GridDamageWakePatch.cs]
-        P1 --> GameSuspension[MyMotorSuspension.Update & CreateConstraint]
-        P2 --> GameCockpit[MyShipController.MoveAndRotate]
-        P3 --> GameDamage[MyDamageSystem.RaiseAfterDamageApplied]
-    end
+    Plugin --> Engine[DeformationDefenseEngine - event driven<br/>8-stage collision pipeline<br/>PMW classification - anti-clang arrest - push-apart]
+
+    Modules --> Patches[8 Torch PatchManager Patch Files<br/>13 registered game method targets<br/>MotorSuspension x3 - CockpitWake x1 - DamageWake x1<br/>MyGridPhysics x2 - Explosion x2 - Occlusion x1<br/>ThrusterDamage x1 - MechanicalDetach x2]
+    Engine --> Patches
+
+    Patches --> Game[SE Game Code<br/>MyMotorSuspension - MyShipController - MyDamageSystem<br/>MyGridPhysics - MyExplosion - MyThrust<br/>MyMechanicalConnectionBlockBase - MyCubeGrid]
 ```
 
-### Project Structure & Key Components
+All patches are registered through **Torch PatchManager** (`PatchContext.GetPattern` + `Prefixes`/`Suffixes`) - Torch's own MSIL rewriter, not Harmony. Every target is also registered into `PatchConflictAudit`, which runs once on the first session tick and warns on any foreign detour (Torch or raw-Harmony) touching our methods.
 
-| Component | File | Purpose |
+### Project Structure & Component Index
+
+| Component | File | Description |
 | :--- | :--- | :--- |
-| **Plugin Entry** | [`PhysicsOptimizerPlugin.cs`](PhysicsOptimizations/PhysicsOptimizerPlugin.cs) | Main lifecycle controller (`TorchPluginBase`, `IWpfPlugin`). Manages persistent config, telemetry, module updates, entity lifecycle (`OnEntityAdd`/`OnEntityRemove`), and PatchManager. |
-| **Config Model** | [`Config/PhysicsOptimizerConfig.cs`](PhysicsOptimizations/Config/PhysicsOptimizerConfig.cs) | Persistent ViewModel containing all configurable thresholds and toggles with Torch `[Display]` annotations. |
-| **Telemetry** | [`Services/OptimizationTelemetry.cs`](PhysicsOptimizations/Services/OptimizationTelemetry.cs) | Thread-safe live gauges implementing `INotifyPropertyChanged` for 2Hz WPF dashboard binding (Active/Sleeping bodies, Parked rovers, Sleeping wheels, Merged ore, Stabilized joints). |
-| **Module 1 (Wheels)** | [`Modules/WheelOptimizerModule.cs`](PhysicsOptimizations/Modules/WheelOptimizerModule.cs) | Symmetrical broadphase collision masking (`subSystemDontCollideWith = 3`), cold-start rover discovery, and parked rover suspension sleeping with `HasAnySleepingRovers` fast short-circuit. |
-| **Module 2 (Sleep)** | [`Modules/RigidBodySleepModule.cs`](PhysicsOptimizations/Modules/RigidBodySleepModule.cs) | Stepped evaluator forcing idle dynamic grids into Havok sleep mode (`rigidBody.Deactivate()`), with fail-safe guards for hovering thrusters, landing gear, and autopilots. |
-| **Module 3 (Ore)** | [`Modules/FloatingObjectModule.cs`](PhysicsOptimizations/Modules/FloatingObjectModule.cs) | $O(N)$ spatial grid cell bucketing merging nearby matching ore/item stacks within configured radius using pooled collections to eliminate GC pressure. |
-| **Module 4 (Subgrids)**| [`Modules/SubgridStabilizerModule.cs`](PhysicsOptimizations/Modules/SubgridStabilizerModule.cs) | Active Havok micro-velocity dampening and constraint solver stabilization across resting mechanical subgrid joints (rotors, hinges, pistons). |
-| **Module 5 (TOI)** | [`Modules/AdaptiveCollisionModule.cs`](PhysicsOptimizations/Modules/AdaptiveCollisionModule.cs) | Switches slow-moving cruising grids to discrete collision quality to eliminate continuous TOI pairs. |
-| **Wheel Patch** | [`Patches/MotorSuspensionPatch.cs`](PhysicsOptimizations/Patches/MotorSuspensionPatch.cs) | Hooks `CreateConstraint`, `CubeGrid_OnPhysicsChanged`, and short-circuits `Update()` when rovers are parked. |
-| **Cockpit Patch** | [`Patches/CockpitInputWakePatch.cs`](PhysicsOptimizations/Patches/CockpitInputWakePatch.cs) | Postfix on `MyShipController.MoveAndRotate` waking sleeping grids/rovers instantly upon pilot control input. |
-| **Damage Patch** | [`Patches/GridDamageWakePatch.cs`](PhysicsOptimizations/Patches/GridDamageWakePatch.cs) | Postfix on `MyDamageSystem.RaiseAfterDamageApplied` waking sleeping rigid bodies upon receiving damage from vanilla weapons, WeaponCore ballistics/beams, tools, or collisions. |
-| **Commands** | [`Commands/PhysicsOptimizerCommands.cs`](PhysicsOptimizations/Commands/PhysicsOptimizerCommands.cs) | In-game and Torch console admin commands under the `!phys` prefix using culture-invariant parsing and plain ASCII. |
-| **WPF GUI View** | [`Views/PhysicsOptimizerControl.xaml`](PhysicsOptimizations/Views/PhysicsOptimizerControl.xaml) | Dark-themed WPF interface with **Configuration** and real-time **Live Telemetry** tabs. |
+| **Plugin Entry** | [`PhysicsOptimizerPlugin.cs`](PhysicsOptimizations/PhysicsOptimizerPlugin.cs) | Central lifecycle manager (`TorchPluginBase`, `IWpfPlugin`). Frame-counter dispatcher for all modules, patch registration, entity add/remove hooks, config persistence, and console telemetry heartbeat. |
+| **Config Model** | [`Config/PhysicsOptimizerConfig.cs`](PhysicsOptimizations/Config/PhysicsOptimizerConfig.cs) | Persistent ViewModel managing all engine toggles, thresholds, logging flags, and collision defense properties. Includes legacy compatibility aliases. |
+| **Module Interface** | [`Modules/IPhysicsModule.cs`](PhysicsOptimizations/Modules/IPhysicsModule.cs) | Common contract for the 5 stepped modules: `Init`, `Update`, `OnEntityAdded/Removed`, `UpdateConfig`, `Dispose`. |
+| **Optimization Telemetry** | [`Services/OptimizationTelemetry.cs`](PhysicsOptimizations/Services/OptimizationTelemetry.cs) | Thread-safe live gauges for active/sleeping bodies, rovers, wheels, ore merges, TOI states, and subgrids. Includes diagnostic clipboard export. |
+| **Defense Statistics** | [`Services/DefenseStatistics.cs`](PhysicsOptimizations/Services/DefenseStatistics.cs) | Cumulative counters: evaluated/blocked/allowed deformations, missile hits, ramming/voxel/subgrid/low-speed/station/debris/cooldown blocks, clang arrests, grids separated, armor occlusions, voxel normals inverted, thruster vaporizations, voxel cutouts prevented, piloted buggy saves. |
+| **Defense Engine** | [`Engine/DeformationDefenseEngine.cs`](PhysicsOptimizations/Engine/DeformationDefenseEngine.cs) | Event-driven collision governor: 8-stage deformation pipeline, PMW engagement tracking, anti-clang vibration arrest, push-apart queue, impact damping, and `MyFakes.DEFORMATION_EXPLOSIONS` sync. |
+| **Patch Conflict Audit** | [`Utils/PatchConflictAudit.cs`](PhysicsOptimizations/Utils/PatchConflictAudit.cs) | One-shot first-tick audit of all 13 targets: checks Torch PatchManager rewrite patterns for foreign detours and (when a raw-Harmony plugin is loaded) Harmony patch ownership. Logs known interop plugins (e.g. Concealment). |
+| **Module 1 (Wheels)** | [`Modules/WheelOptimizerModule.cs`](PhysicsOptimizations/Modules/WheelOptimizerModule.cs) | Symmetrical broadphase collision masking (`subSystemDontCollideWith = 3`), cold-start rover discovery, and parked suspension sleeping. |
+| **Module 2 (Sleep)** | [`Modules/RigidBodySleepModule.cs`](PhysicsOptimizations/Modules/RigidBodySleepModule.cs) | Stepped evaluator forcing idle dynamic grids into Havok sleep mode (`rigidBody.Deactivate()`) with gravity, landing gear, and thruster safety guards. |
+| **Module 3 (Ore)** | [`Modules/FloatingObjectModule.cs`](PhysicsOptimizations/Modules/FloatingObjectModule.cs) | $O(N)$ spatial grid cell bucketing merging nearby matching ore and dropped item stacks with pooled collections. |
+| **Module 4 (Subgrids)**| [`Modules/SubgridStabilizerModule.cs`](PhysicsOptimizations/Modules/SubgridStabilizerModule.cs) | Havok micro-velocity synchronization across resting mechanical subgrids, plus collision masking of tiny utility subgrids (weapons/tools/warheads blacklisted). |
+| **Module 5 (TOI)** | [`Modules/AdaptiveCollisionModule.cs`](PhysicsOptimizations/Modules/AdaptiveCollisionModule.cs) | Switches slow cruising grids to discrete collision quality while preserving Continuous TOI via a 4-level safety priority chain. |
+
+| **Wheel Patch** | [`Patches/MotorSuspensionPatch.cs`](PhysicsOptimizations/Patches/MotorSuspensionPatch.cs) | 3 targets: `CreateConstraint` + `CubeGrid_OnPhysicsChanged` suffixes (masking) and `Update` prefix (parked suspension sleep short-circuit). |
+| **Cockpit Wake Patch** | [`Patches/CockpitInputWakePatch.cs`](PhysicsOptimizations/Patches/CockpitInputWakePatch.cs) | Suffix on `MyShipController.MoveAndRotate` waking sleeping grids/rovers instantly upon pilot control input. |
+| **Damage Wake Patch** | [`Patches/GridDamageWakePatch.cs`](PhysicsOptimizations/Patches/GridDamageWakePatch.cs) | Suffix on `MyDamageSystem.RaiseAfterDamageApplied` waking sleeping bodies upon damage from vanilla or WeaponCore weapons, grinders, and impacts. |
+| **Grid Physics Patch** | [`Patches/MyGridPhysicsPatch.cs`](PhysicsOptimizations/Patches/MyGridPhysicsPatch.cs) | 2 targets: `PerformDeformation` prefix (defense pipeline gate) and `RigidBody_ContactPointCallbackImpl` prefix (impact context tracking + Voxel Normal Arbitrator). |
+| **Explosion Patch** | [`Patches/MyExplosionPatch.cs`](PhysicsOptimizations/Patches/MyExplosionPatch.cs) | 2 targets: prefixes on `MyExplosion.ApplyExplosionOnVoxel` and `MyExplosion.CutOutVoxelMap` suppressing explosive cratering. |
+| **Armor Occlusion Patch**| [`Patches/DeformationOcclusionPatch.cs`](PhysicsOptimizations/Patches/DeformationOcclusionPatch.cs) | Suffix on `MyDamageSystem.LoadData`/`Init` registering a priority-100 before-damage handler enforcing structural armor shielding. |
+| **Thruster Damage Patch**| [`Patches/ThrusterDamagePatch.cs`](PhysicsOptimizations/Patches/ThrusterDamagePatch.cs) | Prefix on `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) replacing volumetric flame casts with tiered 1/5/9-ray nozzle raycasts. |
+| **Detach Reset Patch** | [`Patches/MechanicalDetachPatch.cs`](PhysicsOptimizations/Patches/MechanicalDetachPatch.cs) | 2 targets: suffixes on `MyMechanicalConnectionBlockBase.Detach` and `MyCubeGrid.CreateSplit` assigning fresh `HavokCollisionSystemID`s. |
+| **Grid Utilities** | [`Utils/GridUtils.cs`](PhysicsOptimizations/Utils/GridUtils.cs) | High-performance grid size queries, linear speed calculations, and mechanical/logical grouping checks. |
+| **Chat Utilities** | [`Utils/ChatUtils.cs`](PhysicsOptimizations/Utils/ChatUtils.cs) | Plain ASCII on-screen notification helpers using Torch ModCommunication. |
+| **Player Utilities** | [`Utils/PlayerUtils.cs`](PhysicsOptimizations/Utils/PlayerUtils.cs) | Steam ID identity resolution and admin status checking. |
+| **Admin Commands** | [`Commands/PhysicsOptimizerCommands.cs`](PhysicsOptimizations/Commands/PhysicsOptimizerCommands.cs) | In-game and Torch console admin commands under the `!phys` prefix using culture-invariant parsing and plain ASCII. |
+| **WPF GUI Control** | [`Views/PhysicsOptimizerControl.xaml`](PhysicsOptimizations/Views/PhysicsOptimizerControl.xaml) | 3-tab WPF interface: **Physics Optimizations**, **Grid Defender**, and **Live Telemetry & Actions**. |
 
 ---
 
-## 3. Core Optimization Modules Deep-Dive
+## 3. The 5 Stepped Simulation Modules
 
-### 🏎️ Module 1: Wheel & Suspension Physics Optimizer
-* **Broadphase Collision Masking**: Space Engineers by default sets asymmetrical sub-system collision masks (`1, 1` on wheels vs `0, 0` on chassis). This causes Havok to perform high-frequency AABB compound shape checks against nearby armor blocks (fenders, wheel skirts, wheel wells) every single tick. The optimizer applies **symmetrical sub-system masking** (`subSystemDontCollideWith = 3` bits 0 and 1), completely eliminating redundant compound tree queries while leaving native wheel-to-ground physics 100% intact.
-* **Cold-Start Rover Discovery & Spawn Interception**:
-  * In Keen's dedicated server startup sequence, world sector grids load *before* Torch plugins initialize. On startup, `DiscoverExistingRovers()` scans `MyEntities.GetEntities()` to index and optimize all pre-existing rovers immediately.
-  * Hooks `MyEntities.OnEntityAdd` to automatically configure newly pasted, projected, or spawned rovers on the fly.
-* **Parked Rover Suspension Sleep**: When a rover has its handbrake engaged and remains stationary ($< 0.1 \text{ m/s}$ linear, $< 0.02 \text{ rad/s}$ angular) for $\ge 2.0\text{s}$:
-  * Suspends per-frame `MyMotorSuspension.Update()` calls, 60Hz ground raycasts, air-shock checks, and artificial braking impulses.
-* **Hot-Path 60Hz Acceleration**: Maintains a static `volatile bool HasAnySleepingRovers` flag. When no rovers on the server are parked, `MotorSuspensionPatch.UpdatePrefix` passes through in ~1ns with zero dictionary hashing or allocations.
-* **Instant Wakeup**: Wakes up immediately on handbrake release, pilot movement input (WASD/Space/C), or external impact.
+All modules are driven off the plugin's shared frame counter, run server-authoritative only, and evaluate on stepped intervals with zero hot-path allocations.
 
-### 💤 Module 2: Rigid Body Sleep Manager (Idle Grid Deactivator)
-* **Stepped Scan**: Evaluates dynamic grids every 60 frames (1 second) without hot-path allocations.
-* **Sleep Conditions**: If an unpiloted dynamic grid maintains linear velocity $< 0.05 \text{ m/s}$ and angular velocity $< 0.01 \text{ rad/s}$ for $\ge 3\text{ seconds}$, calls `grid.Physics.RigidBody.Deactivate()` to put the Havok rigid body to sleep.
-* **Hover & Flight Safety Guards**:
-  * **Planetary Gravity Guard**: Grids inside natural gravity will **never** sleep mid-air if thrusters are actively firing against gravity (`thrust.IsWorking && (thrust.ThrustForceLength > 0.01f || thrust.ThrustOverride > 0f)`).
-  * **Docking / Landing Support**: Grids in gravity only sleep if wheels are parked, landing gear / magnetic feet are locked (`landingSystem.IsParked || landingSystem.Locked == AllEnabled || landingSystem.Locked == Mixed`), or the grid is an unpowered wreck at rest on voxels.
-  * **Piloting & Autopilot Guard**: Protects cockpit pilots, remote control sessions, and active autopilots (`sc.IsAutopilotControlled`).
-* **Universal Damage Wake (WeaponCore + Vanilla)**:
-  * Hooks `MyDamageSystem.RaiseAfterDamageApplied(object target, MyDamageInformation info)`.
-  * Catches all damage sources: vanilla bullets/missiles, WeaponCore ballistics/energy beams/shrapnel, grinder ticks, drill impacts, and physical collisions.
+| # | Module | Interval | Purpose |
+| :- | :--- | :--- | :--- |
+| 1 | `WheelOptimizerModule` | 30 frames (0.5s) | Rover discovery/tracking, symmetrical wheel broadphase masking, parked suspension sleep. |
+| 2 | `RigidBodySleepModule` | 60 frames (1s) | Forced Havok deactivation of idle unpiloted dynamic grids. |
+| 3 | `FloatingObjectModule` | `OreMergeIntervalTicks` (min 30, default 120) | Spatial-hash proximity merge of floating ore/items (server only). |
+| 4 | `SubgridStabilizerModule` | 30 frames (0.5s) | Micro-velocity sync of resting mechanical joints + small utility subgrid masking. |
+| 5 | `AdaptiveCollisionModule` | 30 frames (0.5s) | Dynamic Discrete/Continuous TOI collision quality management. |
 
-### ⛏️ Module 3: Floating Object & Ore Optimizer
-* **Proximity Stack Merging**: Mining drills and rover combat scatter dozens of small ore rocks and dropped items into the world, each calculating independent Havok voxel collisions.
-* **$O(N)$ Spatial Grid Hashing**:
-  * Replaces legacy $O(N^2)$ all-pairs distance loops with spatial cell bucketing (`Vector3I.Floor(pos / cellSize)`).
-  * Only compares items within the same cell or adjacent 26 neighborhood cells.
-* **Zero-Allocation Memory Pooling**:
-  * Uses pooled list buffers (`_listPool`) and spatial cell dictionary recycling (`RecycleBuckets`), guaranteeing zero heap allocations during proximity merge sweeps.
-* **Entity Elimination**: Merges item amounts into a single primary stack entity and closes redundant floating entities, reducing debris physics overhead by up to 80%.
-
-### 🦾 Module 4: Subgrid Constraint Stabilizer & Micro-Dampening
-* **Mechanical Joint Evaluation**: Monitors mechanical connection blocks via ModAPI interfaces (`IMyMotorStator`, `IMyPistonBase`), seamlessly supporting vanilla and modded rotors, hinges, and pistons while strictly excluding wheel suspensions.
-* **Rest Detection**: When no target velocity is commanded (`TargetVelocityRPM == 0`, `Velocity == 0`), pistons are not extending/retracting, and relative movement is $< 0.005 \text{ rad/s}$ for $> 60\text{ frames}$:
-  * Stabilizes constraint solver damping.
-  * **Active Havok Micro-Velocity Dampening**: Automatically synchronizes the top grid's `AngularVelocity` and `LinearVelocity` to match the base grid whenever micro-drift exceeds $10^{-6}$.
-  * Stops micro-jitter and eliminates Havok constraint solver tension loops across cranes, arms, and rover subparts before Clang can strike.
-
-### 🚀 Module 5: Adaptive TOI (Continuous Collision) Pruning
-* **Broadphase TOI Optimization**: Continuous collision detection (CCD/TOI) is computationally expensive in Havok broadphase.
-* **Discrete Collision for Slow Grids**: Grids cruising below $15.0 \text{ m/s}$ are set to discrete `Debris` collision quality, bypassing continuous TOI pair generation.
-* **Continuous TOI for Fast Grids & Missiles**: High-speed grids ($> 40.0 \text{ m/s}$) and small missiles retain continuous TOI collision to guarantee zero tunneling through voxels or armor.
+Details for each are in Section 5 (Systems 1-6).
 
 ---
 
-## 4. Engineering Standards & Edge Cases
+## 4. The 13 Torch PatchManager Patch Targets
 
-### A. Non-Conflict Harmony with GridDefender
-* **Separation of Concerns**: All wheel broadphase filter masking, suspension throttling, and subgrid micro-dampening live exclusively inside `PhysicsOptimizer`.
-* **Anti-Clang Exclusion**: Anti-clang voxel penetration detection and physical nudge/recovery routines are **intentionally omitted** from PhysicsOptimizer. `GridDefender` manages voxel anti-clang and kinetic damage overrides on GVK; running duplicate nudge systems would create severe Havok solver conflicts.
+Every game method this plugin patches, in registration order. All targets are registered into `PatchConflictAudit` at registration time.
 
-### B. Deterministic Entity Lifecycle & Memory Safety
-* Hooks `MyEntities.OnEntityRemove` to instantly evict despawned, deleted, or closed entities from all module dictionaries ($O(1)$ removal).
-* Cold-path sweeps (`frameCounter % 300 == 0`) safely clean stale weak references without allocating garbage.
-* All temporary sweep buffers (`_cleanupBuffer`, `_removalBuffer`) are flushed with `.Clear()` immediately after processing.
+| # | Patched Game Method | Type | File | Consumed By |
+| :- | :--- | :--- | :--- | :--- |
+| 1 | `MyMotorSuspension.CreateConstraint` | Suffix | `MotorSuspensionPatch.cs` | System 1 (Wheel Masking) |
+| 2 | `MyMotorSuspension.CubeGrid_OnPhysicsChanged` | Suffix | `MotorSuspensionPatch.cs` | System 1 (Wheel Masking re-apply) |
+| 3 | `MyMotorSuspension.Update` | Prefix | `MotorSuspensionPatch.cs` | System 1 (Parked Suspension Sleep) |
+| 4 | `MyShipController.MoveAndRotate(Vector3, Vector2, float)` | Suffix | `CockpitInputWakePatch.cs` | System 2 (Instant Pilot Wake) |
+| 5 | `MyDamageSystem.RaiseAfterDamageApplied` | Suffix | `GridDamageWakePatch.cs` | System 2 (Universal Damage Wake) |
+| 6 | `MyGridPhysics.PerformDeformation` | Prefix | `MyGridPhysicsPatch.cs` | System 7 (Defense Pipeline) |
+| 7 | `MyGridPhysics.RigidBody_ContactPointCallbackImpl` | Prefix | `MyGridPhysicsPatch.cs` | Systems 7, 8, 12 (Impact Context + Voxel Normal Arbitrator) |
+| 8 | `MyExplosion.ApplyExplosionOnVoxel` | Prefix | `MyExplosionPatch.cs` | System 13 (Voxel Cutout Suppression) |
+| 9 | `MyExplosion.CutOutVoxelMap` | Prefix | `MyExplosionPatch.cs` | System 13 (Voxel Cutout Suppression) |
+| 10 | `MyDamageSystem.LoadData` (fallback `Init`) | Suffix | `DeformationOcclusionPatch.cs` | System 10 (Layered Armor Occlusion handler registration) |
+| 11 | `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) | Prefix | `ThrusterDamagePatch.cs` | System 11 (Thruster Clearance) |
+| 12 | `MyMechanicalConnectionBlockBase.Detach(MyCubeGrid, bool)` | Suffix | `MechanicalDetachPatch.cs` | System 5 (Detach Broadphase Reset) |
+| 13 | `MyCubeGrid.CreateSplit` (static) | Suffix | `MechanicalDetachPatch.cs` | System 5 (Grid Split Broadphase Reset) |
 
-### C. Exception Handling & Zero Empty Catch Rule
-* Precondition checks (`if (grid == null || grid.Closed || grid.MarkedForClose) return;`) are used exclusively in place of try/catch blocks on tick updates.
-* Delegate event unhooking (`-=`) is executed cleanly without redundant catch blocks.
-
-### D. Client Presentation & Internationalization
-* Chat messages, notifications, and console logs strictly use plain ASCII (`- `, `*`, `->`, `[!]`). All unicode emojis and non-standard bullets are banned to prevent Keen's bitmap font renderer from producing "tofu" missing-glyph boxes in in-game chat.
-* All numeric formatting and parsing enforce `CultureInfo.InvariantCulture` to prevent comma/period decimal bugs across different server system locales.
-
-### E. Asynchronous Disk I/O
-* Live config saves (`!phys toggle`, GUI slider adjustments) offload XML serialization to `ThreadPool.QueueUserWorkItem` under a dedicated lock, preventing server simulation stalls. Server shutdown (`Dispose`) performs a synchronous save.
-
----
-
-## 5. In-Game & Console Admin Commands (`!phys`)
-
-All commands require `Admin` permission level.
-
-| Command | Description | Example |
-| :--- | :--- | :--- |
-| `!phys status` | Displays the status of all 5 optimization modules and current thresholds. | `!phys status` |
-| `!phys stats` | Outputs real-time telemetry (Active/Sleeping bodies, Parked rovers asleep, Ore merged, Stabilized joints). | `!phys stats` |
-| `!phys sleepall` | Forces all eligible idle dynamic grids on the server into Havok sleep mode immediately. | `!phys sleepall` |
-| `!phys mergeore` | Triggers an instant proximity merge sweep across all floating ores and dropped items. | `!phys mergeore` |
-| `!phys toggle <module>` | Toggles an individual optimization module on or off on the fly (`all`, `wheels`, `mask`, `parkedsleep`, `sleep`, `ore`, `subgrids`, `toi`, `debug`). | `!phys toggle parkedsleep` |
-| `!phys reload` | Reloads configuration from `PhysicsOptimizer.cfg` on disk. | `!phys reload` |
-| `!phys resetstats` | Resets live telemetry counters to zero. | `!phys resetstats` |
+**Hard rules**: never add a 14th target without running the compatibility audit (see Design Notes); never patch `MyEntityComponentUpdater.*` / the per-entity update dispatch family (Concealment's home turf); never strip `GC.Collect` call sites transpiled by `se-performance-improvements`.
 
 ---
 
-## 6. Configuration Reference (`PhysicsOptimizer.cfg`)
+## 5. Feature Systems Deep-Dive
 
-The configuration file is saved automatically to `Torch\Plugins\Storage\PhysicsOptimizer\PhysicsOptimizer.cfg` (or in the plugin directory).
+### 🏎️ System 1: Wheel & Suspension Physics Optimizer
+*Files: `WheelOptimizerModule.cs`, `MotorSuspensionPatch.cs` (targets 1-3)*
 
-### Configuration Options Table
+* **Symmetrical Broadphase Collision Masking**: Vanilla SE sets asymmetrical collision masks (`1, 1` on wheels vs `0, 0` on chassis), forcing Havok to run expensive compound shape tree queries against nearby armor blocks (fenders, wheel skirts) every tick. The optimizer applies `HkGroupFilter.CalcFilterInfo(layer, systemId, 1, 3)` (sub-system bits 0 and 1 ignored) to the wheel body via the `CreateConstraint` and `CubeGrid_OnPhysicsChanged` suffixes, then calls `MyPhysics.RefreshCollisionFilter` on both grids - eliminating redundant checks while preserving wheel-to-ground contact.
+* **Cold-Start Rover Discovery**: Scans world entities on module init (`DiscoverExistingRovers`) and via `MyEntities.OnEntityAdd` to immediately index and mask pre-existing and newly spawned rovers (any grid whose `GridSystems.WheelSystem` reports wheels).
+* **Parked Rover Suspension Sleep**: Evaluated every 30 frames. When a rover's handbrake is engaged and it remains nearly stationary (< 0.1 m/s linear, < 0.02 rad/s angular) for `RoverSleepDelaySeconds` (default 2.0s), the `MyMotorSuspension.Update` prefix returns `false`, skipping the expensive per-frame suspension math, 60Hz ground raycasts, air-shock checks, and artificial braking impulses. Uses a static `volatile bool HasAnySleepingRovers` flag so active rovers skip dictionary lookups in ~1ns.
+* **Instant Wakeup**: Handbrake release, velocity drift (sliding down a Pertam dune while parked), pilot movement input (System 2), or external damage (System 2) all wake the suspension instantly.
 
+### 💤 System 2: Rigid Body Sleep Manager & Universal Wake Paths
+*Files: `RigidBodySleepModule.cs`, `CockpitInputWakePatch.cs` (target 4), `GridDamageWakePatch.cs` (target 5)*
+
+* **Stepped Scan**: Every 60 frames, sweeps all entities for dynamic grids (static grids skipped) without hot-path allocations.
+* **Sleep Conditions**: An unpiloted dynamic grid sustaining linear velocity < 0.05 m/s and angular velocity < 0.01 rad/s for `IdleSecondsBeforeSleep` (default 3s) is deactivated with `grid.Physics.RigidBody.Deactivate()`.
+* **Gravity Support Guard** (`IsGridSafelySupportedOrNotInGravity`):
+  * Grids outside significant gravity sleep freely.
+  * Grids in gravity must be supported: wheels with handbrake engaged, landing gear / magnetic feet locked (`LandingSystem.IsParked` or gear lock All/Mixed), or be an unpowered wreck at rest on terrain.
+  * Grids with thrusters actively fighting gravity (`IsWorking` and `ThrustForceLength > 0.01` or `ThrustOverride > 0`) are never frozen mid-air.
+* **Pilot Guard**: Grids with seated pilots never sleep; `ForceSleepAllIdleGrids` (admin command) also skips piloted grids.
+* **Instant Wake Paths**:
+  1. **Pilot input**: the `MyShipController.MoveAndRotate` suffix detects any non-zero move/rotation/roll input and wakes both the grid body and its parked suspensions.
+  2. **Damage**: the `MyDamageSystem.RaiseAfterDamageApplied` suffix wakes the owning grid on any damage event with `Amount > 0` - catches vanilla ballistics/missiles, WeaponCore projectiles and energy beams, grinder ticks, explosions, and physical impacts. The handler accepts both `MySlimBlock` and `MyCubeGrid` targets.
+
+### ⛏️ System 3: Floating Object & Ore Optimizer
+*File: `FloatingObjectModule.cs`*
+
+* **O(N) Spatial Grid Hashing**: Replaces O(N^2) all-pairs distance loops with spatial cell bucketing (cell size = merge radius), scanning only adjacent neighborhood cells with a same-cell dedup offset.
+* **Zero-Allocation Pooling**: Pooled list buffers and bucket recycling (`RecycleBuckets`) eliminate GC allocations during proximity sweeps; all buffers cleared in `finally`.
+* **Entity Elimination**: Matching `TypeId` + `SubtypeName` pairs within `OreMergeRadiusMeters` (default 3.0m, squared-distance check) merge their amounts into the primary stack (`primary.Amount.Value +=`, `RefreshDisplayName`) and the redundant entity is `Close()`d - reducing debris rigid body counts directly at the Havok source.
+* **Server Authority**: Merge passes run only when `Sync.IsServer`.
+
+### 🦾 System 4: Subgrid Constraint Stabilizer & Small Utility Masking
+*File: `SubgridStabilizerModule.cs`*
+
+* **Joint Rest Detection**: Every 30 frames, monitors all `MyMechanicalConnectionBlockBase` joints (suspensions excluded) with a `TopGrid`. A joint is at rest when the subgrid's relative linear velocity is negligible, relative angular velocity is below `SubgridRestVelocityThreshold` (0.005 rad/s), and the joint is uncommanded (rotor unlocked with ~0 target RPM; piston idle and not extending/retracting).
+* **Micro-Velocity Synchronization**: After `SubgridRestFramesThreshold` (default 60 frames worth of 30-tick passes, ~1s) of continuous rest, the joint is marked stabilized and - on every subsequent pass - the subgrid's `AngularVelocity` and `LinearVelocity` are hard-synced to the parent grid whenever they diverge. This kills constraint solver micro-oscillations and Clang vibration feedback loops at the source. Any pilot command or motion immediately de-stabilizes the joint.
+* **Small Utility Subgrid Masking** (`MaskSmallUtilitySubgrids`, max `MaskSmallUtilitySubgridMaxBlocks` = 10): Subgrids at or under the block cap get the same symmetrical broadphase mask as wheels (`CalcFilterInfo(layer, systemId, 1, 3)` + filter refresh) so their chassis pairs stop generating contact work. **Hard blacklist**: any subgrid containing user-controllable guns, ship tools, or warheads is never masked - closing the phantom-hull and retracting-weapon exploits (see Graveyard entry 2).
+
+### 🧲 System 5: Detach & Grid-Split Broadphase Reset
+*File: `MechanicalDetachPatch.cs` (targets 12-13)*
+
+* **The Bug**: In vanilla SE, detaching a rotor head, hinge, or splitting a grid leaves stale Havok collision filter bits. The detached grid often phases invisibly through the parent grid or gets trapped in phantom contact loops.
+* **The Fix**: Suffixes on `MyMechanicalConnectionBlockBase.Detach` and `MyCubeGrid.CreateSplit` reset both affected grids: a fresh collision system group is drawn from the Havok world's collision filter, written into `MyGridPhysics.HavokCollisionSystemID` (reflection), and `MyPhysics.RefreshCollisionFilter` fires immediately - making detached subgrids and split-off hull sections 100% physically solid on Tick 0.
+* **Gating**: Active while both `EnableSubgridStabilization` and `MaskSmallUtilitySubgrids` are enabled (the reset exists to keep masked subgrids safe; `SubgridDetachBroadphaseReset` in the config is a legacy alias of `MaskSmallUtilitySubgrids`).
+
+### 🚀 System 6: Adaptive TOI (Continuous Collision Detection) & Safety Reversions
+*File: `AdaptiveCollisionModule.cs`*
+
+* **Zero-Touch Sleep Guard**: Bodies already asleep (`!rb.IsActive`) skip evaluation entirely.
+* **Dynamic Priority Chain** (evaluated every 30 frames, in order):
+  1. **PMW Missiles**: Grids currently qualifying as missiles (System 9) always retain Continuous TOI - zero tunneling for torpedoes.
+  2. **Grid-Size Discrete Overrides** (off by default): `EnforceDiscreteLargeGrids` / `EnforceDiscreteSmallGrids` unconditionally assign Discrete (`HkCollidableQualityType.Debris`) to grids meeting their minimum block counts (20 / 40). Missiles bypass these overrides.
+  3. **Force-Continuous Safety Reversions** (when `EnableSpeedThresholds` is on):
+     * Speed at or above `ContinuousCollisionSpeedThreshold` (40 m/s).
+     * Altitude below `ContinuousAltitudeThreshold` (50m) from the closest planetary surface point (`MyGamePruningStructure.GetClosestPlanet` + `GetClosestSurfacePointGlobal`).
+     * Another dynamic grid within `DynamicGridProximityRevertDistanceMeters` (500m) - protects dogfights and ramming encounters.
+     * Small craft of 40 blocks or fewer always stay continuous (torpedo/buggy safety).
+  4. **Discrete Demotion**: Non-overridden grids cruising at or below `DiscreteCollisionSpeedThreshold` (15 m/s) are demoted to `Debris` quality, cutting continuous TOI pair generation.
+* **Quality Restoration**: Original `HkCollidableQualityType` is cached per grid and restored on demotion reversal, entity removal, admin restore, and plugin dispose - grids never stay stranded in the wrong quality tier.
+
+### 🎯 System 7: Deformation Defense Engine (8-Stage Collision Pipeline)
+*Files: `DeformationDefenseEngine.cs`, `MyGridPhysicsPatch.cs` (target 6)*
+
+The `PerformDeformation` prefix routes every grid collision deformation through a single sequential gate. `impactSpeed` is computed from grid speeds and the separating velocity. Stages, in order:
+
+1. **Subgrid / Mechanical Protection** (`ProtectSubgrids`): Collisions between grids in the same mechanical group (pistons, rotors, hinges, connectors) or same logical group are blocked outright, with anti-clang applied.
+2. **Floating Debris Protection** (`ProtectAgainstFloatingObjects`): Deformation caused by `MyFloatingObject` (loose ore, dropped items) is blocked.
+3. **Speed Classification**: Impact speed computed once, squared-distance math throughout.
+4. **PMW Missile Gate**: See System 9.
+5. **Safe Docking / Parking Floor** (`MinDrivingVelocity`, default 10 m/s): Any impact below this speed is suppressed as a docking bump or parking fender-bender.
+6. **Extreme Velocity Anti-Freeze Ceiling** (`MaxDeformationVelocity`, default 110 m/s): Non-missile impacts *above* this speed are suppressed with impact damping - ultra-high-speed wrecks don't trigger catastrophic Havok depenetration impulses.
+7. **Structural Protection Tiers** (each blocks damage + applies impact damping + anti-clang):
+   * A. **Static Stations** (`ProtectStaticGrids`): dynamic grids striking static stations.
+   * B. **Terrain Crashes** (`ProtectShipsAgainstVoxels`): grid vs voxel impacts.
+   * C. **Ship Ramming** (`ProtectShipsAgainstRamming`): grid vs grid impacts.
+8. **Deformation Cooldown** (`DeformationCooldownFrames`, default 30): Rate-limits any remaining unprotected continuous deformation per grid (grinding chains, repeated contact pulses).
+
+**Allow path**: `AllowOrScale` scales the separating velocity by `DeformationMultiplier` (0.0-1.0, default 1.0; 0 disables deformation entirely) and records the cooldown frame.
+
+**Impact Damping**: Suppressed collisions also dampen the striking grid's linear velocity by `max(0, 1 - ImpactVelocityDamping * 0.6)` (default factor 0.7 at `ImpactVelocityDamping` = 0.5), preventing invisible-wall ping-ponging.
+
+**Global Voxel Fakes**: While `SuppressAllVoxelExplosionDamage` is on, the engine holds `MyFakes.DEFORMATION_EXPLOSIONS = false`, disabling Keen's deformation-carving path globally, and restores the vanilla flag on dispose.
+
+### 🎪 System 8: Anti-Clang Vibration Arrest & Push-Apart
+*File: `DeformationDefenseEngine.cs`*
+
+* **Contact Frame Tracking**: Consecutive-frame contact counts are tracked per grid (reset when frames skip).
+* **Phase 1 - Vibration Arrest** (`AntiClangVibrationThreshold`, default 8 contact frames): linear velocity *= 0.75, angular velocity *= 0.2; runaway death-spins (|w|^2 > 16) are zeroed entirely when `StopClangSpinning` is on.
+* **Phase 2 - Push-Apart** (`PushApartThreshold`, default 25 contact frames): Separation is queued (never applied inline on the physics thread path) and drained on the plugin's cache sweep. Grid-on-grid pushes fire along the center-to-center direction; grid-on-voxel pushes fire along the local gravity up-vector (`-normalize(gravity)`), nudging trapped rovers out of the dirt by `PushApartDistance` (default 0.5m) with a small 0.8 m/s separation velocity and zeroed angular velocity. Mechanically/logically connected subgrids and static grids are excluded.
+* **Memory Hygiene**: All frame trackers and missile engagements are evicted via `MyEntities.OnEntityRemove` plus a cold-path sweep every 600 frames.
+
+### 🚀 System 9: PMW Kinetic Manager & Piloted Exemption
+*File: `DeformationDefenseEngine.cs`*
+
+* **PMW Classification** (`IsMissile`): An unpiloted dynamic grid is a Player-Made Missile when its speed meets `MissileMinVelocity` (default 20 m/s) and its block count falls within the size band for its grid size - small grids 4-150 blocks, large grids 3-50 blocks.
+* **Piloted Exemption** (`ExemptPilotedFromMissileStatus`): A grid with an active pilot (`GridSystems.ControlSystem.IsControlled`) is *never* classified as a PMW. When such a vehicle would otherwise qualify, the save is counted (`PilotedBuggySaves`) - light rover combat and ramming tactics remain completely organic.
+* **Missile Engagement Window**: When a qualifying missile strikes a target, an engagement is registered with a 60-frame (~1s) penetration window so follow-up contacts during the same penetration keep dealing damage instead of being re-classified. Both grids are tracked through `OnClose` and `OnGridSplit` (splits inherit the engagement).
+* **Split Friendly-Fire Shield**: Multiple contacts between two halves of the *same* missile engagement (after it snaps in half on impact) are suppressed, so the missile doesn't damage itself.
+* **Spin Clamp**: While a missile contact is allowed, extreme angular velocities are zeroed (when `StopClangSpinning` is on) without bleeding forward kinetic momentum - the missile keeps its punch but doesn't go into a torsional death-spin.
+* **Adaptive TOI Guarantee**: PMWs always retain Continuous TOI (System 6), guaranteeing zero tunneling through armor or terrain.
+
+### 🛡️ System 10: Layered Armor Occlusion
+*File: `DeformationOcclusionPatch.cs` (target 10)*
+
+* **The Problem**: Vanilla deformation damage spreads chaotically in a spherical radius. When a railgun or collision strikes an exterior armor plate, the deformation bypasses the armor and directly destroys hydrogen tanks, batteries, or gyroscopes behind it.
+* **Registration**: A priority-100 `RegisterBeforeDamageHandler` is attached via a suffix on `MyDamageSystem.LoadData` (fallback `Init`), with a direct-registration fallback if the session damage system already exists at patch time.
+* **Impact Context**: The contact callback (target 7) records the last global impact position per grid; the handler transforms it into local grid coordinates.
+* **$O(1)$ Directional Occlusion**: For `Deformation` damage only, the handler computes the direction from the impact point to the target block's center, rounds it to a single grid-space step, and inspects exactly one neighbor block:
+  * If that neighbor is a true structural armor block (`FatBlock == null`) - or any block with `DeformationRatio < 0.5f` when `EnforceStructuralArmorCheck` is relaxed - and it is not destroyed, it absorbs the blow: `info.Amount = 0f`.
+  * No impact context (e.g. deformation from a source that never produced a contact point) passes through untouched.
+* **Counter**: Occlusions increment `ArmorHitsOccluded` for telemetry.
+
+### 🔥 System 11: Instant Thruster Clearance & Vaporization
+*File: `ThrusterDamagePatch.cs` (target 11)*
+
+* **The Problem**: Vanilla thruster flame damage uses expensive volumetric Havok shape casts. When players bury thrusters inside hulls, the continuous flame recalculates compound physics shapes every frame, severely lagging the server.
+* **The Fix**: The `MyThrust.ThrustDamageAsync` prefix (fallback `DamageGrid`) replaces vanilla's volumetric cast with per-flame-dummy 1D raycasts of length `Radius * FlameDamageLengthScale * 2.5` (min 2.5m), tiered by nozzle radius to kill every bunker exploit:
+  * **Nozzle radius <= 0.75m** (small thrusters): 1 center ray.
+  * **Nozzle radius <= 2.0m**: 5-ray crosshair (center + 4 cardinal rays at 0.7R).
+  * **Nozzle radius > 2.0m** (large/Titan bells, 5x5 and 7x7): 9-ray radial fan (center + 4 cardinals at 0.75R + 4 diagonals) eliminating all corner blind spots on square nozzles.
+  * Blocks with no recognized flame dummies, and any internal error, fall back to vanilla behavior (never silently breaks thrust damage).
+* **Damage Routing**:
+  * **Characters**: 50 Environment burn damage - player safety fully preserved.
+  * **Own construct** (same physical grid group): In `Optimized` mode the obstructing block is instantly vaporized on first contact (`DoDamage(float.MaxValue)`), terminating the compound shape invalidation loop at the root. In `VanillaLike` mode, gradual `FlameDamage * CurrentStrength` thermal damage applies. The thruster's own slim block is never damaged (hard `ReferenceEquals` guard).
+  * **External grids** (landing pads, carrier decks, enemy hulls): In `Optimized` mode, 100% immune. In `VanillaLike` mode, gradual thermal damage at vanilla rates.
+* **Inactive Thrusters**: Deal no damage unless `MyFakes.INACTIVE_THRUSTER_DMG` is enabled.
+* **Mode Switching**: `ThrusterDamageMode` is `Optimized` (default) or `VanillaLike`; `LandingPadImmunity` and `InstantOwnConstructVaporization` are legacy compatibility aliases that mirror the mode.
+
+### ⛰️ System 12: Voxel Normal Arbitrator
+*File: `MyGridPhysicsPatch.cs` (target 7)*
+
+* **The Problem (Voxel-Vice)**: When high-speed rovers compress terrain meshes, Havok frequently calculates inverted contact normals pointing *downward* into the planet core. This pulls the vehicle into the ground, trapping it in continuous solver feedback loops that drop sim-speed to 0.20.
+* **The Fix**: The `RigidBody_ContactPointCallbackImpl` prefix inspects every contact event where either body is a voxel and the grid is in gravity:
+  1. Computes the gravity up-vector and measures the contact normal against it.
+  2. If the normal points downward against the up-vector (`dot < 0`), a 1.5m ray is cast into the up-vector direction against the voxel collision layer (thread-static hit list, zero allocation).
+  3. If open air is found, the contact normal is inverted, lifting the rover out of the ground before the solver can act on the bogus contact.
+* **Dual Duty**: The same prefix feeds the global impact-position tracker consumed by Layered Armor Occlusion (System 10).
+* **Counter**: Inversions increment `VoxelNormalsInverted`.
+
+### 🌋 System 13: Explosive Voxel Cutout Suppression
+*Files: `MyExplosionPatch.cs` (targets 8-9), `DeformationDefenseEngine.cs`*
+
+* **Prefixes on `MyExplosion.ApplyExplosionOnVoxel` and `MyExplosion.CutOutVoxelMap`**: When `SuppressAllVoxelExplosionDamage` is enabled, both methods are skipped entirely - warhead and missile detonations deal their normal block damage but carve **zero** craters into terrain meshes, saving the massive CPU cost of voxel deformation while keeping mining drills (which don't route through explosions) fully functional. Each suppressed cutout increments `VoxelCutoutsPrevented`.
+* **Global Flag Sync**: The defense engine additionally holds `MyFakes.DEFORMATION_EXPLOSIONS = false` for the lifetime of the config, disabling Keen's deformation-explosion carve path at the source, and restores the vanilla flag on plugin dispose.
+
+---
+
+## 6. In-Game & Console Admin Commands (`!phys`)
+
+All commands require `Admin` permission level (`MyPromoteLevel.Admin`) and work both in-game and from the Torch console.
+
+| Command | Description |
+| :--- | :--- |
+| `!phys status` | Prints the full status of every optimization and defense subsystem with current thresholds. |
+| `!phys stats` | Prints live physics solver gauges and cumulative optimization/defense counters. |
+| `!phys sleepall` | Forces all eligible idle dynamic grids into Havok sleep mode immediately. |
+| `!phys wakeall` | Wakes all sleeping dynamic grids and parked rovers immediately. |
+| `!phys mergeore` | Executes an immediate proximity merge sweep on all floating ores and items. |
+| `!phys toggle <feature>` | Toggles a single feature (see token list below). Saves config automatically. |
+| `!phys reload` | Reloads configuration from `PhysicsOptimizer.cfg` on disk. |
+| `!phys resetstats` | Resets all live telemetry gauges and defense counters to zero. |
+
+**`!phys toggle` feature tokens** (aliases in parentheses):
+
+| Token | Toggles |
+| :--- | :--- |
+| `all` | Master plugin toggle (`Enabled`). |
+| `wheels` | Wheel & Suspension Optimizer. |
+| `mask` | Symmetrical wheel broadphase masking. |
+| `parkedsleep` | Parked rover suspension sleep. |
+| `sleep` | Aggressive rigid body sleeping. |
+| `ore` | Floating object / ore merging. |
+| `subgrids` | Subgrid constraint stabilization. |
+| `utilitymask` (`subgridmask`) | Small utility subgrid broadphase masking. |
+| `toi` | Adaptive TOI collision pruning. |
+| `speedthresholds` (`speedtoi`) | Dynamic speed-based quality thresholds. |
+| `discretelarge` (`largediscrete`) | Forced discrete collision for qualifying large grids. |
+| `discretesmall` (`smalldiscrete`) | Forced discrete collision for qualifying small grids. |
+| `pmw` | PMW missile damage allowance. |
+| `armor` | Layered armor occlusion. |
+| `anticlang` | Anti-clang system (arrest + push-apart). |
+| `normal` (`voxelarbitrator`) | Voxel Normal Arbitrator. |
+| `thruster` | Thruster Clearance Engine. |
+| `thrustermode` | Cycles `ThrusterDamageMode` between `Optimized` and `VanillaLike`. |
+| `cutout` | Voxel cutout explosion suppression. |
+| `debug` | Verbose debug logging. |
+| `telemetry` (`telem`) | Periodic console telemetry heartbeat. |
+
+---
+
+## 7. Complete Configuration Reference (`PhysicsOptimizer.cfg`)
+
+Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\PhysicsOptimizer.cfg` via the Torch `Persistent<T>` serializer. Defaults below match the shipped code exactly.
+
+### General & Logging
 | Setting | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
 | `Enabled` | `bool` | `true` | Master plugin toggle. |
-| `EnableDebugLogging` | `bool` | `false` | Enables verbose trace logging in Torch console. |
-| `EnableWheelOptimization` | `bool` | `true` | Master toggle for Module 1 (Wheel & Suspension). |
-| `EnableWheelCollisionFilter` | `bool` | `true` | Symmetrical sub-system masking for wheel wells. |
-| `SleepParkedRovers` | `bool` | `true` | Pauses 60Hz raycasts & suspension math when parked. |
-| `RoverSleepDelaySeconds` | `float` | `2.0` | Motionless seconds before parked rover suspension enters sleep. |
-| `EnableAggressiveSleeping` | `bool` | `true` | Master toggle for Module 2 (Rigid Body Sleep). |
-| `SleepLinearVelocityThreshold` | `float` | `0.05` | Linear speed (m/s) below which an unpiloted grid is eligible for sleep. |
-| `SleepAngularVelocityThreshold` | `float` | `0.01` | Angular speed (rad/s) below which an unpiloted grid is eligible for sleep. |
-| `IdleSecondsBeforeSleep` | `int` | `3` | Motionless seconds required before deactivating grid rigid body. |
-| `EnableFloatingObjectOptimizer` | `bool` | `true` | Master toggle for Module 3 (Floating Objects & Ore). |
-| `AutoMergeNearbyOre` | `bool` | `true` | Automatically merges matching floating ores/items within proximity. |
-| `OreMergeRadiusMeters` | `float` | `3.0` | Spatial radius (meters) for proximity ore clustering. |
-| `OreMergeIntervalTicks` | `int` | `120` | Simulation ticks between proximity merge sweeps (60 = 1 sec). |
-| `MaxSectorFloatingObjects` | `int` | `64` | Local area floating object threshold. |
-| `EnableSubgridStabilization` | `bool` | `true` | Master toggle for Module 4 (Subgrid Constraint Stabilizer). |
-| `SubgridRestVelocityThreshold` | `float` | `0.005` | Joint angular velocity threshold (rad/s) to consider subgrid at rest. |
-| `SubgridRestFramesThreshold` | `int` | `60` | Consecutive rest frames (~1 sec) before locking constraint damping. |
-| `EnableAdaptiveTOI` | `bool` | `true` | Master toggle for Module 5 (Adaptive TOI Collision Pruning). |
-| `ContinuousCollisionSpeedThreshold` | `float` | `40.0` | Speed (m/s) above which grids retain continuous TOI collision. |
-| `DiscreteCollisionSpeedThreshold` | `float` | `15.0` | Speed (m/s) below which grids use discrete collision quality. |
+| `EnablePhysicsOptimizations` | `bool` | `true` | Master toggle gating all Tab-1 physics optimization modules (wheels, sleep, ore, subgrids, TOI, thrusters). |
+| `EnableDebugLogging` | `bool` | `false` | Enables verbose trace logging in the Torch console. |
+| `EnablePeriodicConsoleTelemetry` | `bool` | `true` | Periodically prints a telemetry heartbeat to the server log. |
+| `ConsoleTelemetryIntervalSeconds` | `int` | `30` | Interval (seconds) between console telemetry heartbeats. |
+| `LogWheelSuspensionSleep` | `bool` | `false` | Logs rover suspension sleep/wake events. |
+| `LogRigidBodySleep` | `bool` | `false` | Logs rigid body deactivation/activation events. |
+| `LogAdaptiveTOI` | `bool` | `false` | Logs discrete/continuous TOI transitions. |
+| `LogThrusterClearance` | `bool` | `false` | Logs thruster clearance raycasts and vaporizations. |
+| `LogCollisionsPMW` | `bool` | `false` | Logs kinetic collision damping and PMW impact events. |
+| `LogVoxelNormals` | `bool` | `false` | Logs Voxel Normal Arbitrator inversions. |
+| `LogSubgridStabilization` | `bool` | `false` | Logs subgrid joint stabilization and masking events. |
+
+### System 1: Wheel & Suspension Optimizer
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableWheelOptimization` | `bool` | `true` | Master toggle for suspension optimizations and rover tracking. |
+| `EnableWheelCollisionFilter` | `bool` | `true` | Enforces symmetrical broadphase masking for wheel wells (`subSystemDontCollideWith = 3`). |
+| `SleepParkedRovers` | `bool` | `true` | Pauses 60Hz raycasts and suspension math when rovers are parked. |
+| `RoverSleepDelaySeconds` | `float` | `2.0` | Motionless seconds (with handbrake) before parked rover suspensions sleep. |
+
+### System 2: Rigid Body Sleep Manager
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableAggressiveSleeping` | `bool` | `true` | Master toggle for idle dynamic grid rigid body deactivation. |
+| `SleepLinearVelocityThreshold` | `float` | `0.05` | Linear velocity (m/s) below which a grid is sleep-eligible. |
+| `SleepAngularVelocityThreshold` | `float` | `0.01` | Angular velocity (rad/s) below which a grid is sleep-eligible. |
+| `IdleSecondsBeforeSleep` | `int` | `3` | Motionless seconds required before deactivating grid physics. |
+
+### System 3: Floating Object & Ore Optimizer
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableFloatingObjectOptimizer` | `bool` | `true` | Master toggle for spatial ore and dropped item merging. |
+| `AutoMergeNearbyOre` | `bool` | `true` | Automatically merges matching floating items within proximity. |
+| `OreMergeRadiusMeters` | `float` | `3.0` | Spatial radius (meters) for clustering floating items. |
+| `OreMergeIntervalTicks` | `int` | `120` | Simulation ticks between merge passes (clamped to >= 30; 60 ticks = 1s). |
+| `MaxSectorFloatingObjects` | `int` | `64` | Reserved threshold for local floating object density (not currently enforced by the merge pass). |
+
+### Systems 4-5: Subgrid Stabilizer & Utility Masking
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableSubgridConstraintOptimizer` | `bool` | `true` | Master toggle for the Subgrid Stabilizer module (stabilization + masking). |
+| `EnableSubgridStabilization` | `bool` | `true` | Joint rest detection and Havok micro-velocity synchronization (also gates the detach broadphase reset). |
+| `SubgridRestVelocityThreshold` | `float` | `0.005` | Relative joint angular speed (rad/s) below which a subgrid is considered at rest. |
+| `SubgridRestFramesThreshold` | `int` | `60` | Rest frames (~1s) required before a joint is marked stabilized. |
+| `MaskSmallUtilitySubgrids` | `bool` | `true` | Masks collision pairs on tiny aesthetic subgrids (<= MaxBlocks, no weapons/tools/warheads); also enables the detach/split broadphase reset. |
+| `MaskSmallUtilitySubgridMaxBlocks` | `int` | `10` | Max block count for small utility subgrids eligible for masking. |
+| `SubgridDetachBroadphaseReset` | `bool` | `true` | Legacy compatibility alias of `MaskSmallUtilitySubgrids`. |
+
+### System 6: Adaptive TOI
+> **Priority**: PMW Missiles (always Continuous) > Grid-Size Discrete Overrides > Safety Reversions (speed >= 40 m/s, altitude < 50m, dynamic grid within 500m, small craft <= 40 blocks) > Discrete Demotion (<= 15 m/s).
+
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableAdaptiveTOI` | `bool` | `true` | Master toggle for dynamic discrete/continuous collision quality optimization. |
+| `EnforceDiscreteLargeGrids` | `bool` | `false` | Unconditionally assigns qualifying Large Grids to Discrete collision. |
+| `DiscreteLargeGridMinBlocks` | `int` | `20` | Minimum block count for large grids to qualify for forced discrete. |
+| `EnforceDiscreteSmallGrids` | `bool` | `false` | Unconditionally assigns qualifying Small Grids to Discrete collision. |
+| `DiscreteSmallGridMinBlocks` | `int` | `40` | Minimum block count for small grids to qualify for forced discrete. |
+| `EnableSpeedThresholds` | `bool` | `true` | Toggles dynamic speed-based quality adjustments and safety reversions for non-overridden grids. |
+| `DiscreteCollisionSpeedThreshold` | `float` | `15.0` | Demotion ceiling (m/s): un-overridden grids at or below this speed switch to Discrete. |
+| `ContinuousCollisionSpeedThreshold` | `float` | `40.0` | Promotion floor (m/s): grids at or above this speed revert to Continuous TOI. |
+| `RevertNearOtherDynamicGrids` | `bool` | `true` | Forces Continuous TOI whenever another dynamic grid enters proximity. |
+| `DynamicGridProximityRevertDistanceMeters` | `float` | `500.0` | Proximity radius (meters) enforcing Continuous TOI. |
+| `EnableAltitudeTOIReversion` | `bool` | `true` | Forces Continuous TOI when flying close to planetary surfaces. |
+| `ContinuousAltitudeThreshold` | `float` | `50.0` | Terrain altitude floor (meters) below which Continuous TOI is enforced. |
+
+### System 11: Thruster Clearance Engine
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableThrusterClearanceEngine` | `bool` | `true` | Replaces volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. |
+| `ThrusterDamageMode` | `enum` | `Optimized` | `Optimized` (anti-exploit: own-construct instant vaporization, landing pads immune) or `VanillaLike` (gradual thermal damage on own construct and external grids). |
+| `LandingPadImmunity` | `bool` | `true` | Legacy compatibility alias; mirrors `ThrusterDamageMode == Optimized`. |
+| `InstantOwnConstructVaporization` | `bool` | `true` | Legacy compatibility alias; mirrors `ThrusterDamageMode == Optimized`. |
+
+### Systems 7-8: Collision Defense & Anti-Clang (Grid Defender)
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableCollisionDamageDefense` | `bool` | `true` | Master toggle for the deformation defense engine pipeline. |
+| `MaxDeformationVelocity` | `float` | `110.0` | Extreme-velocity ceiling (m/s): non-missile impacts **above** this speed are suppressed with damping (anti-freeze). |
+| `MinDrivingVelocity` | `float` | `10.0` | Low-speed floor (m/s) below which collisions are suppressed as docking bumps. |
+| `ProtectShipsAgainstRamming` | `bool` | `true` | Suppresses grid-on-grid ramming damage. |
+| `ProtectShipsAgainstVoxels` | `bool` | `true` | Suppresses vehicle-on-terrain collision damage. |
+| `ProtectStaticGrids` | `bool` | `true` | Protects stations from dynamic grid impacts. |
+| `ProtectSubgrids` | `bool` | `true` | Suppresses internal collision damage between connected subgrids. |
+| `ProtectAgainstFloatingObjects` | `bool` | `true` | Suppresses deformation damage caused by loose ore and floating items. |
+| `SuppressAllVoxelExplosionDamage` | `bool` | `true` | Prevents explosive impacts from carving voxel cutouts (also holds `MyFakes.DEFORMATION_EXPLOSIONS = false`). |
+| `DeformationCooldownFrames` | `int` | `30` | Rate-limiting frame window between deformation events on the same grid. |
+| `ImpactVelocityDamping` | `float` | `0.5` | Linear velocity damping applied to absorbed collisions (0.0-1.0). |
+| `DeformationMultiplier` | `float` | `1.0` | Global scaling of allowed deformation separating velocity (0.0-1.0; 0 disables deformation). |
+| `EnableAntiClang` | `bool` | `true` | Master toggle for vibration arrest and push-apart. |
+| `StopClangSpinning` | `bool` | `true` | Zeroes runaway angular velocity (|w|^2 > 16) on caught grids. |
+| `AntiClangVibrationThreshold` | `int` | `8` | Consecutive contact frames before velocity dampening activates. |
+| `EnablePushApart` | `bool` | `true` | Nudges grids apart when physics bodies stay in sustained contact. |
+| `PushApartThreshold` | `int` | `25` | Consecutive contact frames before push-apart triggers. |
+| `PushApartDistance` | `float` | `0.5` | Push distance (meters, 0.1-5.0); grid-on-voxel pushes follow the gravity up-vector. |
+
+### Systems 9-10, 13: PMWs, Armor Occlusion & Voxel Protection
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `AllowMissileDamage` | `bool` | `true` | Allows qualified kinetic torpedoes to inflict deformation damage. |
+| `ExemptPilotedFromMissileStatus` | `bool` | `true` | Actively piloted vehicles (`IsControlled`) are never treated as PMWs. |
+| `SmallGridMissileMinBlocks` | `int` | `4` | Minimum blocks to qualify as a small grid PMW. |
+| `SmallGridMissileMaxBlocks` | `int` | `150` | Maximum blocks to qualify as a small grid PMW. |
+| `LargeGridMissileMinBlocks` | `int` | `3` | Minimum blocks to qualify as a large grid PMW. |
+| `LargeGridMissileMaxBlocks` | `int` | `50` | Maximum blocks to qualify as a large grid PMW. |
+| `MissileMinVelocity` | `float` | `20.0` | Minimum velocity (m/s) for a PMW to deliver kinetic damage. |
+| `EnableLayeredArmorOcclusion` | `bool` | `true` | Enables $O(1)$ directional structural armor shielding against deformation. |
+| `EnforceStructuralArmorCheck` | `bool` | `true` | Requires occluding blocks to be structural armor (`FatBlock == null`) or low deformation ratio (< 0.5). |
+| `EnableVoxelNormalArbitrator` | `bool` | `true` | Corrects phantom downward contact normals to eliminate Voxel-Vice terrain trapping. |
 
 ---
 
-## 7. Torch WPF Server Interface
+## 8. Torch WPF Server Interface (3-Tab Dashboard)
 
-The GUI integrates into the Torch Server window, matching the standard dark-themed layout of `GridDefender` and `TorchRemoteCleanupPlugin`:
+The Torch server window hosts the plugin's management UI across 3 tabs:
 
-1. **Configuration Tab**:
-   * Quick overview banner highlighting active optimization systems.
-   * Granular module toggles, threshold textboxes, and sliders.
-   * Quick **"Save Configuration"** button.
-2. **Live Telemetry Tab**:
-   * **Real-Time 2Hz Updating**: Implements `INotifyPropertyChanged` on the WPF dispatcher thread for fluid, live gauge monitoring with zero allocations on simulation threads.
-   * **4-Column Metric Card**: Active Bodies (Red), Sleeping Bodies (Green), Rovers Asleep (Blue), and Sleeping Wheels (Green).
-   * **Detailed Telemetry Breakdown**: Merged ore stacks, eliminated entities, forced sleep events, stabilized subgrid joints, and discrete TOI grid counts.
-   * **Manual Action Controls**: `Force Sleep All Idle Grids`, `Run Ore Proximity Merge Now`, and `Reset Counters`.
+### Tab 1: Physics Optimizations
+Sliders and toggles for the Wheel Optimizer (masking, parked-sleep delay), Rigid Body Sleep thresholds, Ore Merging radius/interval, Subgrid Stabilization and utility masking, and Adaptive TOI speed/altitude/override cutoffs - plus the per-subsystem debug log checkboxes and the periodic telemetry heartbeat controls.
 
----
+### Tab 2: Grid Defender
+Collision protection velocity cutoffs (docking floor, extreme-velocity ceiling), the structural protection tier toggles (ramming / voxels / stations / subgrids / floating objects), PMW block bands and velocity, armor occlusion controls, anti-clang thresholds and push-apart distance, and voxel cutout suppression.
 
-## 8. Building & Deployment
-
-### 1. Configure Torch Directory Path
-Open [`PhysicsOptimizations.csproj`](PhysicsOptimizations/PhysicsOptimizations.csproj) and verify `<TorchDir>`:
-```xml
-<TorchDir>C:\SE_GVK_S10</TorchDir>
-```
-
-### 2. Build the Solution
-```bash
-dotnet build -c Release PhysicsOptimizations\PhysicsOptimizations.csproj
-```
-The build automatically creates and deploys the zip archive:
-```
-C:\SE_GVK_S10\Plugins\GVK_PhysicsOptimizations.zip
-├── GVK.PhysicsOptimizations.dll
-├── GVK.PhysicsOptimizations.pdb
-└── manifest.xml
-```
+### Tab 3: Live Telemetry & Actions
+High-contrast operational cards updating live at 2Hz:
+1. **Havok Simulation Health**: sim speed, tracked grids, active/sleeping rigid bodies, merged ore stacks.
+2. **Rover & Subgrid Status**: monitored rovers, parked rovers asleep, total wheels, sleeping wheels, stabilized joints.
+3. **Collision Defense & PMWs**: tracked grids, detected PMWs, suppressed collision events, voxel normal interventions.
+4. **Armor & Voxel Protection**: occluded armor hits, voxel cutouts prevented, thruster vaporizations, anti-clang arrests/separations.
+* **Diagnostics Export**: a **Copy Diagnostics** button formats the server's live physics pulse onto the clipboard for instant Discord ticket support and performance audits.
 
 ---
 
-## 9. In-Game Testing Checklist
+## 9. Engineering Graveyard: Deliberately Rejected Concepts
 
-1. **GUI & Persistence Verification**:
-   - [ ] Start Torch Server $\rightarrow$ Open **GVK Physics Optimizer** tab.
-   - [ ] Verify both **Configuration** and **Live Telemetry** tabs are populated and telemetry values refresh live.
-   - [ ] Modify a threshold (e.g. Rover Sleep Delay) and click **Save Configuration**.
-2. **Module 1 (Wheels) Verification**:
-   - [ ] Spawn a rover and drive it onto terrain.
-   - [ ] Engage the handbrake and let it sit for $> 2$ seconds.
-   - [ ] Check **Live Telemetry** $\rightarrow$ Verify **Rovers Asleep** and **Sleeping Wheels** increment.
-   - [ ] Press `W` (throttle) $\rightarrow$ Verify suspension wakes up immediately with zero input lag.
-3. **Module 2 (Rigid Body Sleep) Verification**:
-   - [ ] Spawn an unpiloted dynamic ship and let it come to a complete stop.
-   - [ ] Verify **Sleeping Bodies** increments after 3 seconds.
-   - [ ] Shoot the ship with vanilla or WeaponCore weapons $\rightarrow$ Verify it immediately wakes up and responds to physics forces.
-   - [ ] Hover a ship in natural gravity $\rightarrow$ Verify active thrusters prevent it from freezing mid-air.
-4. **Module 3 (Ore Merging) Verification**:
-   - [ ] Drop or mine multiple ore boulders within 3 meters of each other.
-   - [ ] Verify the boulders merge into a single larger stack and redundant entities are removed.
-5. **Module 4 (Subgrids) Verification**:
-   - [ ] Spawn a ship with a multi-joint rotor/piston crane at rest.
-   - [ ] Verify **Stabilized Subgrid Joints** increments and joint micro-jitter stops.
+To prevent re-exploring failed ideas in future cycles, this section documents concepts that were evaluated and **deliberately rejected**:
 
----
-
-## 10. Engineering Graveyard: Rejected Concepts & Hard Lessons Learned
-
-To prevent the team from re-exploring failed ideas in future development cycles, this section permanently documents concepts that were thoroughly analyzed and **deliberately rejected**, along with the exact engine and gameplay reasons why:
-
-### 🪦 1. Throttling / Batching Havok Compound Shape Rebuilds (`GridPhysicsShapePatch`)
-* **The Pitch**: Intercept `MyGridPhysics.UpdateShape` / `AddDirtyBlock` during continuous damage, grinding, or welding, and rate-limit compound shape updates to 5 Hz instead of 60 Hz.
+### 🪦 1. Throttling / Batching Havok Compound Shape Rebuilds
+* **The Pitch**: Intercept `MyGridPhysics.UpdateShape` / `AddDirtyBlock` during damage, grinding, or welding, and rate-limit compound shape updates to 5 Hz instead of 60 Hz.
 * **Why Rejected**:
-  1. **Periodic Stutter Spikes**: Accumulating 15 frames of dirty block bounds and dumping them into a single tick creates periodic 5–8ms frame hitches. In Space Engineers, periodic micro-hitches cause player rubberbanding, which feels ten times worse than a steady simulation load.
-  2. **PvP Ghost Hitboxes**: In Keen's engine, block data and Havok physics shapes are separate. When an armor block is destroyed, the block is removed immediately, but delaying `UpdateShape` leaves an **invisible Havok collision box lingering in mid-air for 200ms**. In PvP, incoming railgun shells and player-made missiles would detonate on empty air against phantom armor hitboxes.
-  3. **Redundant**: The **Instant Thruster Vaporization Patch** already eliminates the continuous shape invalidation loop at the source by deleting obstructions on Tick 1.
+  1. **Periodic Stutter Spikes**: Dumping 15 frames of accumulated dirty block bounds into a single tick causes 5-8ms frame hitches and severe player rubberbanding.
+  2. **PvP Ghost Hitboxes**: Destroyed armor blocks leave phantom Havok collision boxes in mid-air for 200ms, causing railgun shells and missiles to detonate on thin air.
+  3. **Redundant**: **Instant Thruster Vaporization** (System 11) already cuts the compound shape recalculation loop at the root by vaporizing obstructing blocks on first contact.
 
 ### 🪦 2. Blanket Subgrid Collision Disabling
-* **The Pitch**: Turn off all Havok collision pairs between parent chassis and connected mechanical subgrids (rotors, hinges, pistons) to stop subgrids from scraping and vibrating.
+* **The Pitch**: Turn off all Havok collision pairs between parent chassis and mechanical subgrids.
 * **Why Rejected**:
-  1. **The "Phantom Hull" Exploit**: A player could place a rotor inside their ship, mount a duplicate 2,000-block heavy armor shell on the rotor head, and rotate it so both grids occupy the exact same physical coordinates. Result: double HP pool with zero added exterior volume.
-  2. **The "Invulnerable Retracting Weapon" Exploit**: Players could mount railguns or rocket turrets on pistons, retract them completely *inside* solid, airtight heavy armor during reload or incoming fire, and extend them only to shoot—without needing hatches or physical clearance.
-* **The Approved Solution**: Strictly restrict collision filtering to **tiny utility/aesthetic subgrids** ($\le 10$ blocks, $\le 5\text{m}$ AABB) with an absolute blacklist on weapons, turrets, tools, drills, and warheads.
+  1. **The Phantom Hull Exploit**: Players mount duplicate armor shells on rotors aligned inside the main hull, doubling HP pool with zero added exterior volume.
+  2. **The Invulnerable Retracting Weapon Exploit**: Turrets retracted completely inside solid airtight heavy armor shoot through the hull without needing hatches.
+* **Approved Solution**: Restrict collision masking strictly to **tiny utility/aesthetic subgrids** (<= 10 blocks) with an absolute blacklist on weapons, tools, and warheads (System 4).
 
-### 🪦 3. 1D "Toothpick" Single-Ray Clearance on Large Thrusters
-* **The Pitch**: Test thruster flame clearance using a single 1-dimensional ray down the dead center of all thrusters.
+### 🪦 3. 1D Single-Ray Clearance on Large Thrusters
+* **The Pitch**: Test thruster flame clearance using a single center ray for all thrusters.
 * **Why Rejected**:
-  * **The "Needle-Hole / Aperture" Exploit**: Large Grid Large Thrusters have a 3x3 (7.5-meter-wide) exhaust bell. A single 0-width center ray allows players to armor over 95% of the nozzle face with heavy armor, doors, or passages, leaving a tiny 0.5m hole in the dead center. The ray passes through the hole, granting 100% thrust from a fully protected armor bunker.
-* **The Approved Solution**: 1 ray for 1x1 small thrusters; a **5-ray crosshair** (center + 4 cardinal rays at $0.65 \times R_{\text{vanilla}}$) for 3x3 large thrusters.
+  * **The Needle-Hole Bunker Exploit**: Large Grid Large Thrusters have a 7.5m nozzle bell. A single 0-width center ray allows players to armor over 95% of the nozzle face, leaving a tiny 0.5m hole in the center for 100% thrust from an invulnerable armor bunker.
+* **Approved Solution**: Tiered raycasting (System 11): 1 center ray for small nozzles (<= 1.5m diameter), a **5-ray crosshair** (center + 4 cardinal rays at 0.7R) for medium nozzles, and a **9-ray radial fan** (cardinals at 0.75R + diagonals) for giant nozzles.
 
-### 🪦 4. Local-Grid Only Thruster Clearance (Ignoring Subgrids)
-* **The Pitch**: Only check if an obstructed block is on `this.CubeGrid`, treating all connected subgrids as immune external grids.
+### 🪦 4. Blanket Discrete Collision on Low-Altitude / Ground Grids
+* **The Pitch**: Force discrete collision (`Debris`) on all cruising grids regardless of altitude.
 * **Why Rejected**:
-  * **The "Buried Rotor Thruster" Exploit**: A player places a rotor inside their hull and mounts 10 thrusters on the rotor head pointing at the ship's interior armor walls. Because the outer hull belongs to the main grid (an "external grid" relative to the rotor), the thrusters deal 0 damage to the hull, allowing completely buried, invulnerable internal thrusters.
-* **The Approved Solution**: Fast-path check: `if (targetGrid == this.CubeGrid)` followed by `HasSameGroup(targetGrid, this.CubeGrid)`.
+  1. **Rover Phasing & Clang Launches**: Two 2,000-block rovers ramming at 40 m/s penetrate deep before discrete detection catches them, triggering catastrophic Havok depenetration impulse launches into orbit.
+  2. **Impulse Calculation Corruption**: Deep penetrations corrupt contact point velocities used by kinetic collision dampeners.
+* **Approved Solution**: Strict safety gating (System 6): discrete collision only with reversions at 50m altitude and a 500m dynamic grid proximity bubble.
 
-### 🪦 5. Blanket Discrete Collision on Low-Altitude / Ground Grids
-* **The Pitch**: Force discrete collision (`HkCollidableQualityType.Debris`) on all cruising grids regardless of altitude to cut continuous TOI pairs.
-* **Why Rejected**:
-  1. **Rover Combat Phasing & Clang Launches**: Two 2,000-block rovers ramming at 40 m/s with grinders can penetrate 1m deep in a single frame before discrete collision detects them. Havok's depenetration impulse can launch rovers into orbit or trap them inside Pertam's dunes.
-  2. **Interference with `GridDefender`**: Deep discrete penetrations corrupt contact point velocities and impulse calculations used by GridDefender to suppress low-speed collision damage.
-* **The Approved Solution**: Strictly altitude-gate discrete collision to $> 300\text{m}$ with a $500\text{m}$ grid-proximity safety bubble.
-
-### 🪦 6. Keen's Native "Selective Physics Updates" (`EnableSelectivePhysicsUpdates`)
-* **The Pitch**: Enable Keen's native Dedicated Server setting (`<EnableSelectivePhysicsUpdates>true</EnableSelectivePhysicsUpdates>`) to freeze physics simulation in unobserved world regions.
+### 🪦 5. Keen's Native "Selective Physics Updates" (`EnableSelectivePhysicsUpdates`)
+* **The Pitch**: Enable Keen's native server setting (`<EnableSelectivePhysicsUpdates>true</EnableSelectivePhysicsUpdates>`) to freeze physics in unobserved clusters.
 * **Why It Must Remain OFF (The NPC & Torpedo Freeze Trap)**:
-  1. **NPC / Drone Cluster Freezing**: In `MyWorldObserver.cs`, Keen divides the universe into spatial clusters (`MyClusterTree`). If a cluster contains no human players or player-replicated entities, Havok completely stops stepping physics for that entire zone. When automated NPC convoys, Gaalsien raiders, or cargo ships fly across cluster boundaries, their physics freezes mid-air. When a player eventually approaches, the cluster abruptly wakes up, causing the NPC to violently rubberband, plummet into terrain, or get permanently stuck in place.
-  2. **Frozen Player-Made Torpedoes (PMWs)**: If a player fires a long-range cruise missile or kinetic torpedo toward an outpost in an unobserved cluster, the missile freezes in mid-flight the moment it crosses the cluster boundary, hanging stationary in space until a player enters the area.
-  3. **Kills Native Havok Optimizers**: In `MyPhysics.cs` (line 2511), Keen explicitly hardcoded:
+  1. **NPC Drone Freezing**: Keen's `MyWorldObserver` stops stepping physics for unobserved clusters. NPC convoys and Gaalsien raiders crossing cluster boundaries freeze mid-air, then rubberband violently or slam into the ground when players approach.
+  2. **Frozen Torpedoes (PMWs)**: Long-range cruise missiles freeze stationary in space the moment they cross into an unobserved cluster.
+  3. **Disables Native Havok Optimizers**: In `MyPhysics.cs`, Keen hardcoded:
      ```csharp
      if (Game.IsDedicated && MySession.Static.Settings.EnableSelectivePhysicsUpdates) return;
      ```
      Enabling this setting permanently disables Keen's own Havok step optimizers on dedicated servers.
-* **The Approved Solution**: Keep `EnableSelectivePhysicsUpdates` **FALSE** in `Sandbox.sbc` / Dedicated Server settings. Rely on **Module 2 (Rigid Body Sleep Manager)** instead, which puts motionless, parked grids to sleep on an individual entity level (`rigidBody.Deactivate()`) with instant microsecond wakeups on cockpit entry, thrusters, or damage—saving massive CPU time without breaking world clusters or freezing moving drones.
+* **Approved Solution**: Keep `EnableSelectivePhysicsUpdates` **FALSE** in dedicated server settings. Rely on **System 2 (Rigid Body Sleep Manager)** to deactivate idle grids individually (`rigidBody.Deactivate()`) with zero-latency wakeups, and far-field Concealment for logic pauses (see Design Notes).
+
+---
+
+## 10. Design Notes
+
+### Compatibility: `se-performance-improvements` (viktor-ferenczi)
+
+Audited against the plugin's full patch surface (all 13 targets, Section 4). Verified **zero method-level overlap** with their targets:
+
+* Their physics layer is transpilers only: `MyPhysics.LoadData` (Havok thread count, .NET Framework only), `MyPhysicsBody.RigidBody` getter, `MyClusterTree.ReorderClusters` - none of these are patched by us.
+* Their wheel patch is a client-side `MyWheel.CheckTrail` fix; our suspension patches (`CreateConstraint`, `CubeGrid_OnPhysicsChanged`, `Update`) do not collide.
+* Their grid patches hit `MyCubeGrid.MergeGridInternal` / `PasteBlocksServer`; we patch `CreateSplit`. Different methods.
+* Their voxel patch is `IMyStorageExtensions.GetMaterialAt` pooling; our explosion/voxel patches hit `MyExplosion.ApplyExplosionOnVoxel` / `CutOutVoxelMap` and `MyGridPhysics` contact callbacks. No interplay.
+
+**Hard rule**: never patch the methods listed above. Their patches carry `EnsureCode` original-IL hash verification - if another patcher touches those methods first, their patch fails closed with a logged error at their startup. Also avoid stripping `GC.Collect` call sites they transpile (`MyPlanetTextureMapProvider.*`, `HkBaseSystem.Quit`, `MySession.Unload`/ctor, `MySimpleProfiler.LogPerformanceTestResults`).
+
+**Runtime tripwire**: `PatchConflictAudit` runs once on the first session tick (after all plugins have registered) and checks **both patch engines** for overlap on every method we register:
+
+1. **Torch PatchManager** (our engine - its own MSIL rewriter, *not* Harmony): enumerates the rewrite pattern of each target and warns if any detour comes from an assembly other than ours. This catches other Torch plugins stepping on our targets.
+2. **Raw Harmony** (their engine): if a `HarmonyLib` runtime is present in the process (i.e. a raw-Harmony plugin is installed), it reads Harmony patch ownership for our targets and warns on any hit, plus logs a one-line inventory of all loaded Harmony patchers.
+
+**Why both engines matter**: Torch PatchManager and raw Harmony are two *independent* IL rewriting stacks. Both targeting the same method means two rewriters fighting over one JIT'd method - undefined territory, not a clean prefix/postfix stack. The tripwire names the method, the detour, and the owning assembly so the overlap is visible in the boot log immediately - no manual diffing required.
+
+---
+
+### Compatibility: Concealment (TorchAPI / Bishbash777)
+
+Audited against the plugin's full source (Bishbash777's repo verified byte-identical to upstream `TorchAPI/Concealment` master, including the SE 207 `MyEntityComponentUpdater` fix, PR #35). Verified **zero patch overlap and zero state-domain overlap**:
+
+* **Engine**: pure Torch PatchManager in its own context, and **no Harmony** (`packages.config` = NLog only; no `0Harmony` reference in the csproj). No two-rewriter scenario exists.
+* **Their patch surface**: a single update-skip prefix, `PrefixUpdate(MyEntity __instance)`, registered on the per-entity update dispatch path (`MyEntityComponentUpdater.*` / `MyEntity` update family). Its signature cannot bind to any of our 13 targets, and none of our targets could serve their purpose.
+* **Their conceal mechanism is update-registration surgery, not physics surgery**: `Conceal()` invokes `MyEntityComponentUpdater.OnEntityClosing` via reflection, calls `MyEntities.UnregisterForUpdate`, unregisters game-logic updates, sets one `EntityFlags` bit, and disables active projectors; `Reveal()` reverses all of it. They never touch `grid.Physics`, rigid bodies, collision filters, or Havok worlds. Havok keeps stepping concealed grids (gravity, collisions, and damage remain live) - only per-block logic pauses.
+* **System interplay**:
+  * **Rigid Body Sleep (System 2)**: synergy. They pause far-field block logic; we sleep the leftover Havok bodies. They never read body activity, we never read their state.
+  * **Adaptive TOI (System 6)**: they never read `rb.Quality`; our inactive-body guard already skips slept bodies.
+  * **Wheel / Subgrid filters** (`HavokCollisionSystemID`, velocity sync): untouched by them.
+  * **Ore merge (System 3)**: they never conceal `MyFloatingObject` (grid groups + characters only), so our `Close()` has nothing to race.
+  * **`MyEntities.OnEntityAdd/Remove`** (our tracker eviction) never fires on conceal/reveal - concealment only flips update registration, so our trackers stay valid for the grid's full life.
+
+**Known composed behaviors (support triage, not bugs)**:
+
+1. *"My base was frozen when I came back"*: if the Sleep Manager deactivated a body while Concealment had the grid hidden, `Reveal()` does not wake Havok bodies (correct Keen/Havok semantics). Wake paths: physical contact, any damage (`GridDamageWakePatch` fires even beyond reveal distance, e.g. SRBM bombardment), cockpit input (`CockpitInputWakePatch`), gear-lock changes.
+2. **Concealed NPC convoys pause far from players** - Concealment's intended far-field design, same category as the `EnableSelectivePhysicsUpdates` graveyard entry above. Keep `EnableSelectivePhysicsUpdates` FALSE; Concealment (far-field logic pause) + our Sleep Manager (near-field body sleep) achieve the CPU win without Keen's broken implementation.
+
+**Hard rules** (keep this audit true):
+
+* Never patch `MyEntityComponentUpdater.*` or the `MyEntity` update-dispatch family (`BeforeUpdate`/`AfterUpdate`/`UpdateBeforeSimulation`/`UpdateAfterSimulation`) - Concealment's home turf, and Keen actively reworks it (SE 207).
+* Never patch `MyEntityComponentUpdater.OnEntityClosing` / `AddEntityComponents` and never toggle `MyProjectorBase.Enabled` from patch code - their reflection spine and state.
+* `PatchConflictAudit` logs a boot line when the `Concealment` assembly is detected - re-audit if either plugin updates.
 
 ---
 
 ## 11. License & Credits
 
-* **Author**: GVK Modding Team
-* **Target Server**: GV - Deserts of Kharak (GVK)
-* **License**: MIT
-
+* **Authors**: GVK Modding & Engineering Team
+* **Target Server**: [GV: Deserts of Kharak (GVK)](https://steamcommunity.com/sharedfiles/filedetails/?id=2781522559)
+* **License**: AGPL-3.0 (see [LICENSE.txt](LICENSE.txt))

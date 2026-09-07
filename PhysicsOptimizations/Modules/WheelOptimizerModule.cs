@@ -9,16 +9,16 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
 using VRage.Game.Entity;
 using VRageMath;
-using GVK.PhysicsOptimizations.Config;
+using PhysicsOptimizations.Config;
 
-namespace GVK.PhysicsOptimizations.Modules
+namespace PhysicsOptimizations.Modules
 {
     public class WheelOptimizerModule : IPhysicsModule
     {
         private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Wheels");
 
         public string Name => "Wheel & Suspension Optimizer";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableWheelOptimization;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableWheelOptimization;
 
         private PhysicsOptimizerPlugin _plugin;
 

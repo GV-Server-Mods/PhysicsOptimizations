@@ -6,16 +6,16 @@ using Sandbox.Game.Multiplayer;
 using VRage;
 using VRage.Game.Entity;
 using VRageMath;
-using GVK.PhysicsOptimizations.Config;
+using PhysicsOptimizations.Config;
 
-namespace GVK.PhysicsOptimizations.Modules
+namespace PhysicsOptimizations.Modules
 {
     public class FloatingObjectModule : IPhysicsModule
     {
         private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Ore");
 
         public string Name => "Floating Object & Ore Optimizer";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableFloatingObjectOptimizer;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableFloatingObjectOptimizer;
 
         private PhysicsOptimizerPlugin _plugin;
 

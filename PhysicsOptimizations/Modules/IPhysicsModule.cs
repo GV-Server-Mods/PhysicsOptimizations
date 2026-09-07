@@ -1,7 +1,7 @@
-using GVK.PhysicsOptimizations.Config;
+using PhysicsOptimizations.Config;
 using VRage.Game.Entity;
 
-namespace GVK.PhysicsOptimizations.Modules
+namespace PhysicsOptimizations.Modules
 {
     public interface IPhysicsModule
     {

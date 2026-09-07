@@ -3,9 +3,10 @@ using System.Reflection;
 using NLog;
 using Sandbox.Game.Entities.Cube;
 using Torch.Managers.PatchManager;
-using GVK.PhysicsOptimizations.Modules;
+using PhysicsOptimizations.Modules;
+using PhysicsOptimizations.Utils;
 
-namespace GVK.PhysicsOptimizations.Patches
+namespace PhysicsOptimizations.Patches
 {
     /// <summary>
     /// Torch PatchManager patches for <see cref="MyMotorSuspension"/> to filter internal subgrid wheel collisions
@@ -28,6 +29,7 @@ namespace GVK.PhysicsOptimizations.Patches
                 {
                     var postfixMethod = typeof(MotorSuspensionPatch).GetMethod(nameof(CreateConstraintPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     ctx.GetPattern(createConstraintMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(createConstraintMethod);
                     Log.Info("[MotorSuspensionPatch] Registered CreateConstraint patch.");
                 }
 
@@ -36,6 +38,7 @@ namespace GVK.PhysicsOptimizations.Patches
                 {
                     var postfixMethod = typeof(MotorSuspensionPatch).GetMethod(nameof(PhysicsChangedPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     ctx.GetPattern(physicsChangedMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(physicsChangedMethod);
                     Log.Info("[MotorSuspensionPatch] Registered CubeGrid_OnPhysicsChanged patch.");
                 }
 
@@ -44,6 +47,7 @@ namespace GVK.PhysicsOptimizations.Patches
                 {
                     var prefixMethod = typeof(MotorSuspensionPatch).GetMethod(nameof(UpdatePrefix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     ctx.GetPattern(updateMethod).Prefixes.Add(prefixMethod);
+                    PatchConflictAudit.RegisterTarget(updateMethod);
                     Log.Info("[MotorSuspensionPatch] Registered Update prefix patch (Parked Suspension Sleeping).");
                 }
             }
@@ -101,4 +105,3 @@ namespace GVK.PhysicsOptimizations.Patches
         }
     }
 }
-

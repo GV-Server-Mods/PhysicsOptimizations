@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 
-namespace GVK.PhysicsOptimizations.Views
+namespace PhysicsOptimizations.Views
 {
     public partial class PhysicsOptimizerControl : UserControl
     {
@@ -21,6 +21,7 @@ namespace GVK.PhysicsOptimizations.Views
             _telemetryTimer.Tick += (s, e) =>
             {
                 Plugin?.Telemetry?.NotifyAllPropertiesChanged();
+                Plugin?.DefenseStats?.NotifyAll();
             };
 
             Loaded += (s, e) => _telemetryTimer.Start();
@@ -38,12 +39,18 @@ namespace GVK.PhysicsOptimizations.Views
             try
             {
                 Plugin?.SaveConfig();
-                MessageBox.Show("GVK Physics Optimizer configuration saved successfully!", "Physics Optimizer", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("Physics Optimizer configuration saved successfully!", "Physics Optimizer", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to save configuration: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void ResetCountersButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            Plugin?.Telemetry?.ResetLiveCounters();
+            Plugin?.DefenseStats?.Reset();
         }
 
         private void SleepAllButton_OnClick(object sender, RoutedEventArgs e)
@@ -98,9 +105,25 @@ namespace GVK.PhysicsOptimizations.Views
             }
         }
 
-        private void ResetCountersButton_OnClick(object sender, RoutedEventArgs e)
+        private void CopyDiagnosticsButton_OnClick(object sender, RoutedEventArgs e)
         {
-            Plugin?.Telemetry?.ResetLiveCounters();
+            try
+            {
+                if (Plugin?.Telemetry != null)
+                {
+                    string summary = Plugin.Telemetry.GetDiagnosticSummary();
+                    if (Plugin?.DefenseStats != null)
+                    {
+                        summary += "\n\n=== COLLISION DEFENSE TELEMETRY ===\n" + Plugin.DefenseStats.GetDiagnosticSummary();
+                    }
+                    Clipboard.SetText(summary);
+                    MessageBox.Show("Diagnostic summary copied to clipboard.", "Diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to copy diagnostics: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
     }
 }

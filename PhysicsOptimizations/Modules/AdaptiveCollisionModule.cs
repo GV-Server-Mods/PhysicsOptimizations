@@ -6,16 +6,18 @@ using NLog;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
 using VRage.Game.Entity;
-using GVK.PhysicsOptimizations.Config;
+using PhysicsOptimizations.Config;
+using VRageMath;
+using Sandbox.Game.Entities.Planet;
 
-namespace GVK.PhysicsOptimizations.Modules
+namespace PhysicsOptimizations.Modules
 {
     public class AdaptiveCollisionModule : IPhysicsModule
     {
-        private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.AdaptiveTOI");
+        private static readonly ILogger Log = LogManager.GetLogger("PhysicsOptimizer.AdaptiveTOI");
 
         public string Name => "Adaptive TOI & Collision Pruner";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableAdaptiveTOI;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAdaptiveTOI;
 
         private PhysicsOptimizerPlugin _plugin;
 
@@ -29,6 +31,7 @@ namespace GVK.PhysicsOptimizations.Modules
 
         private readonly ConcurrentDictionary<long, GridQualityState> _trackedQualities = new();
         private readonly List<long> _cleanupBuffer = [];
+        private readonly List<MyEntity> _nearbyBuffer = [];
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
@@ -55,97 +58,171 @@ namespace GVK.PhysicsOptimizations.Modules
 
         private void EvaluateGridCollisions(ulong frameCounter)
         {
-            try
+            if (_plugin?.Config == null) return;
+            var config = _plugin.Config;
+            float discreteThreshSq = config.DiscreteCollisionSpeedThreshold * config.DiscreteCollisionSpeedThreshold;
+            float continuousThreshSq = config.ContinuousCollisionSpeedThreshold * config.ContinuousCollisionSpeedThreshold;
+
+            int discreteCount = 0;
+            _cleanupBuffer.Clear();
+
+            var entities = MyEntities.GetEntities();
+            foreach (var entity in entities)
             {
-                var config = _plugin.Config;
-                float discreteThreshSq = config.DiscreteCollisionSpeedThreshold * config.DiscreteCollisionSpeedThreshold;
-                float continuousThreshSq = config.ContinuousCollisionSpeedThreshold * config.ContinuousCollisionSpeedThreshold;
-
-                int discreteCount = 0;
-                _cleanupBuffer.Clear();
-
-                var entities = MyEntities.GetEntities();
-                foreach (var entity in entities)
+                if (entity is MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && !grid.Closed && grid.Physics?.RigidBody != null)
                 {
-                    if (entity is MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && !grid.Closed && grid.Physics?.RigidBody != null)
+                    var rb = grid.Physics.RigidBody;
+                    
+                    if (!rb.IsActive)
                     {
-                        var rb = grid.Physics.RigidBody;
-                        float speedSq = (float)grid.Physics.LinearVelocity.LengthSquared();
+                        continue; // Zero-Touch Sleep Guard
+                    }
 
-                        if (!_trackedQualities.TryGetValue(grid.EntityId, out var state))
+                    float speedSq = (float)grid.Physics.LinearVelocity.LengthSquared();
+
+                    if (!_trackedQualities.TryGetValue(grid.EntityId, out var state))
+                    {
+                        state = new GridQualityState
                         {
-                            state = new()
-                            {
-                                GridEntityId = grid.EntityId,
-                                GridRef = new(grid),
-                                OriginalQuality = rb.Quality,
-                                IsDiscrete = false
-                            };
-                            _trackedQualities[grid.EntityId] = state;
+                            GridEntityId = grid.EntityId,
+                            GridRef = new WeakReference<MyCubeGrid>(grid),
+                            OriginalQuality = rb.Quality,
+                            IsDiscrete = false
+                        };
+                        _trackedQualities[grid.EntityId] = state;
+                    }
+
+                    float speed = (float)Math.Sqrt(speedSq);
+                    bool isMissile = _plugin.Engine != null && _plugin.Config.AllowMissileDamage && _plugin.Engine.IsMissile(grid, speed);
+
+                    // Grid-Size Discrete Architecture Override (PMW missiles always bypass this to retain Continuous TOI)
+                    bool forceDiscrete = false;
+                    if (!isMissile)
+                    {
+                        if (grid.GridSizeEnum == VRage.Game.MyCubeSize.Large && config.EnforceDiscreteLargeGrids && grid.BlocksCount >= config.DiscreteLargeGridMinBlocks)
+                        {
+                            forceDiscrete = true;
                         }
-
-                        // Slow grid: switch to Debris (discrete) quality
-                        if (speedSq <= discreteThreshSq)
+                        else if (grid.GridSizeEnum == VRage.Game.MyCubeSize.Small && config.EnforceDiscreteSmallGrids && grid.BlocksCount >= config.DiscreteSmallGridMinBlocks)
                         {
-                            if (!state.IsDiscrete && rb.Quality != HkCollidableQualityType.Debris)
-                            {
-                                state.OriginalQuality = rb.Quality;
-                                rb.Quality = HkCollidableQualityType.Debris;
-                                state.IsDiscrete = true;
+                            forceDiscrete = true;
+                        }
+                    }
 
-                                if (config.EnableDebugLogging)
+                    if (forceDiscrete)
+                    {
+                        if (!state.IsDiscrete && rb.Quality != HkCollidableQualityType.Debris)
+                        {
+                            state.OriginalQuality = rb.Quality;
+                            rb.Quality = HkCollidableQualityType.Debris;
+                            state.IsDiscrete = true;
+                        }
+                    }
+                    else
+                    {
+                        bool forceContinuous = isMissile;
+                        
+                        if (!forceContinuous && config.EnableSpeedThresholds)
+                        {
+                            // 1. High-Speed Threshold:
+                            if (speedSq >= continuousThreshSq)
+                            {
+                                forceContinuous = true;
+                            }
+                            // 2. Planetary Terrain Altitude Safety Override:
+                            else if (config.EnableAltitudeTOIReversion)
+                            {
+                                var pos = grid.PositionComp.GetPosition();
+                                var planet = MyGamePruningStructure.GetClosestPlanet(pos);
+                                if (planet != null)
                                 {
-                                    Log.Info($"[AdaptiveTOI] Set grid '{grid.DisplayName}' to DISCRETE collision quality (Speed: {Math.Sqrt(speedSq):F1} m/s).");
+                                    var surfacePoint = planet.GetClosestSurfacePointGlobal(pos);
+                                    if (Vector3D.DistanceSquared(pos, surfacePoint) < config.ContinuousAltitudeThreshold * config.ContinuousAltitudeThreshold)
+                                    {
+                                        forceContinuous = true;
+                                    }
                                 }
                             }
+
+                            // 3. Dynamic Grid Proximity Safety Override:
+                            if (!forceContinuous && config.RevertNearOtherDynamicGrids)
+                            {
+                                double proxDist = config.DynamicGridProximityRevertDistanceMeters;
+                                var sphere = new BoundingSphereD(grid.PositionComp.GetPosition(), proxDist);
+                                _nearbyBuffer.Clear();
+                                MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref sphere, _nearbyBuffer, MyEntityQueryType.Both);
+                                foreach (var near in _nearbyBuffer)
+                                {
+                                    if (near is MyCubeGrid other && other != grid && !other.IsStatic && !other.Closed)
+                                    {
+                                        forceContinuous = true;
+                                        break;
+                                    }
+                                }
+                                _nearbyBuffer.Clear();
+                            }
+
+                            // 4. Small Grid / Torpedo Safety: Small crafts (<= 40 blocks) retain Continuous TOI when speed thresholds are active
+                            if (!forceContinuous && grid.BlocksCount <= 40)
+                            {
+                                forceContinuous = true;
+                            }
                         }
-                        // Fast grid or missile: restore full continuous Moving/Critical TOI
-                        else if (speedSq >= continuousThreshSq)
+
+                        if (!forceContinuous)
+                        {
+                            if (config.EnableSpeedThresholds)
+                            {
+                                if (speedSq <= discreteThreshSq && !state.IsDiscrete && rb.Quality != HkCollidableQualityType.Debris)
+                                {
+                                    state.OriginalQuality = rb.Quality;
+                                    rb.Quality = HkCollidableQualityType.Debris;
+                                    state.IsDiscrete = true;
+                                }
+                            }
+                            else if (state.IsDiscrete)
+                            {
+                                // Speed thresholds disabled and not covered by forced discrete: restore original quality
+                                rb.Quality = state.OriginalQuality != HkCollidableQualityType.Invalid ? state.OriginalQuality : HkCollidableQualityType.Moving;
+                                state.IsDiscrete = false;
+                            }
+                        }
+                        else
                         {
                             if (state.IsDiscrete)
                             {
                                 rb.Quality = state.OriginalQuality != HkCollidableQualityType.Invalid ? state.OriginalQuality : HkCollidableQualityType.Moving;
                                 state.IsDiscrete = false;
-
-                                if (config.EnableDebugLogging)
-                                {
-                                    Log.Info($"[AdaptiveTOI] Restored grid '{grid.DisplayName}' to CONTINUOUS TOI collision quality (Speed: {Math.Sqrt(speedSq):F1} m/s).");
-                                }
                             }
                         }
+                    }
 
-                        if (state.IsDiscrete)
-                        {
-                            discreteCount++;
-                        }
+                    if (state.IsDiscrete)
+                    {
+                        discreteCount++;
                     }
                 }
-
-                // Cold-path cleanup of stale trackers (entity eviction handles immediate removals)
-                if (frameCounter % 300 == 0)
-                {
-                    foreach (var kvp in _trackedQualities)
-                    {
-                        if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed)
-                        {
-                            _cleanupBuffer.Add(kvp.Key);
-                        }
-                    }
-
-                    for (int i = 0; i < _cleanupBuffer.Count; i++)
-                    {
-                        _trackedQualities.TryRemove(_cleanupBuffer[i], out _);
-                    }
-                    _cleanupBuffer.Clear();
-                }
-
-                int totalTracked = _trackedQualities.Count;
-                _plugin?.Telemetry?.UpdateTOITelemetry(totalTracked, discreteCount, Math.Max(0, totalTracked - discreteCount));
             }
-            catch (Exception ex)
+
+            if (frameCounter % 300 == 0)
             {
-                Log.Error(ex, "[AdaptiveCollisionModule] Error during adaptive TOI evaluation!");
+                foreach (var kvp in _trackedQualities)
+                {
+                    if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed)
+                    {
+                        _cleanupBuffer.Add(kvp.Key);
+                    }
+                }
+
+                for (int i = 0; i < _cleanupBuffer.Count; i++)
+                {
+                    _trackedQualities.TryRemove(_cleanupBuffer[i], out _);
+                }
+                _cleanupBuffer.Clear();
             }
+
+            int totalTracked = _trackedQualities.Count;
+            _plugin?.Telemetry?.UpdateTOITelemetry(totalTracked, discreteCount, Math.Max(0, totalTracked - discreteCount));
         }
 
         public void OnEntityAdded(MyEntity entity)
@@ -191,4 +268,3 @@ namespace GVK.PhysicsOptimizations.Modules
         }
     }
 }
-

@@ -4,8 +4,9 @@ using NLog;
 using Sandbox.Game.Entities;
 using Torch.Managers.PatchManager;
 using VRageMath;
+using PhysicsOptimizations.Utils;
 
-namespace GVK.PhysicsOptimizations.Patches
+namespace PhysicsOptimizations.Patches
 {
     /// <summary>
     /// Torch PatchManager patch for <see cref="MyShipController.MoveAndRotate(Vector3, Vector2, float)"/>
@@ -28,6 +29,7 @@ namespace GVK.PhysicsOptimizations.Patches
                 {
                     var postfixMethod = typeof(CockpitInputWakePatch).GetMethod(nameof(MoveAndRotatePostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     ctx.GetPattern(moveMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(moveMethod);
                     Log.Info("[CockpitInputWakePatch] Registered MyShipController.MoveAndRotate patch.");
                 }
             }
@@ -53,7 +55,7 @@ namespace GVK.PhysicsOptimizations.Patches
             if (moveIndicator == Vector3.Zero && rotationIndicator == Vector2.Zero && Math.Abs(rollIndicator) <= 0.001f) return;
 
             var plugin = PhysicsOptimizerPlugin.Instance;
-            if (plugin == null || plugin.Config == null || !plugin.Config.Enabled) return;
+            if (plugin == null || plugin.Config == null || !plugin.Config.Enabled || !plugin.Config.EnablePhysicsOptimizations) return;
 
             long gridId = __instance.CubeGrid.EntityId;
 
@@ -69,5 +71,4 @@ namespace GVK.PhysicsOptimizations.Patches
         }
     }
 }
-
 

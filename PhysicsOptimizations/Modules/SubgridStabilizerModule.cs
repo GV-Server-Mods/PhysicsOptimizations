@@ -1,22 +1,24 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Havok;
 using NLog;
+using Sandbox.Engine.Physics;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.ModAPI;
 using VRage.Game.Entity;
-using GVK.PhysicsOptimizations.Config;
+using PhysicsOptimizations.Config;
 
-namespace GVK.PhysicsOptimizations.Modules
+namespace PhysicsOptimizations.Modules
 {
     public class SubgridStabilizerModule : IPhysicsModule
     {
         private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Subgrids");
 
         public string Name => "Subgrid Constraint Stabilizer";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableSubgridStabilization;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableSubgridConstraintOptimizer;
 
         private PhysicsOptimizerPlugin _plugin;
 
@@ -77,6 +79,20 @@ namespace GVK.PhysicsOptimizations.Modules
                                 continue;
                             }
 
+                            var topGrid = mechBlock.TopGrid;
+                            if (config.MaskSmallUtilitySubgrids && topGrid?.Physics?.RigidBody != null && grid.Physics?.RigidBody != null)
+                            {
+                                if (topGrid.BlocksCount <= config.MaskSmallUtilitySubgridMaxBlocks)
+                                {
+                                    TryApplySubgridCollisionMask(grid, topGrid, config.EnableDebugLogging);
+                                }
+                            }
+
+                            if (!config.EnableSubgridStabilization)
+                            {
+                                continue;
+                            }
+
                             if (!_trackedJoints.TryGetValue(mechBlock.EntityId, out var state))
                             {
                                 state = new()
@@ -123,7 +139,6 @@ namespace GVK.PhysicsOptimizations.Modules
                                 // Active Havok Constraint Micro-Dampening:
                                 // Synchronize the subgrid velocities to the base grid to eliminate
                                 // constraint solver micro-oscillations and Clang vibration loops.
-                                var topGrid = mechBlock.TopGrid;
                                 if (topGrid?.Physics?.RigidBody != null && grid.Physics?.RigidBody != null)
                                 {
                                     var angDiff = topGrid.Physics.AngularVelocity - grid.Physics.AngularVelocity;
@@ -212,6 +227,47 @@ namespace GVK.PhysicsOptimizations.Modules
             {
                 state.IsStabilized = false;
                 state.RestFrames = 0;
+            }
+        }
+
+        private static bool HasBlacklistedBlocks(MyCubeGrid topGrid)
+        {
+            foreach (var fat in topGrid.GetFatBlocks())
+            {
+                if (fat is Sandbox.ModAPI.IMyUserControllableGun ||
+                    fat is Sandbox.ModAPI.IMyShipToolBase ||
+                    fat is Sandbox.ModAPI.IMyWarhead)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void TryApplySubgridCollisionMask(MyCubeGrid baseGrid, MyCubeGrid subGrid, bool debugLogging)
+        {
+            try
+            {
+                var subBody = subGrid.Physics?.RigidBody;
+                if (subBody == null || HasBlacklistedBlocks(subGrid)) return;
+
+                int systemId = baseGrid.Physics.HavokCollisionSystemID;
+                if (systemId == 0) return;
+
+                uint maskFilter = HkGroupFilter.CalcFilterInfo(subBody.Layer, systemId, 1, 3);
+                if (subBody.GetCollisionFilterInfo() != maskFilter)
+                {
+                    subBody.SetCollisionFilterInfo(maskFilter);
+                    MyPhysics.RefreshCollisionFilter(subGrid.Physics);
+                    if (debugLogging)
+                    {
+                        Log.Info($"[SubgridStabilizer] Applied collision mask to small utility subgrid '{subGrid.DisplayName}' ({subGrid.BlocksCount} blocks <= {_plugin.Config.MaskSmallUtilitySubgridMaxBlocks}) on '{baseGrid.DisplayName}'.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(ex, "[SubgridStabilizer] Error applying subgrid collision mask.");
             }
         }
 

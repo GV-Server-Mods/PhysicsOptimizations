@@ -6,8 +6,9 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
 using Torch.Managers.PatchManager;
 using VRage.Game.ModAPI;
+using PhysicsOptimizations.Utils;
 
-namespace GVK.PhysicsOptimizations.Patches
+namespace PhysicsOptimizations.Patches
 {
     /// <summary>
     /// Torch PatchManager patch for <see cref="MyDamageSystem.RaiseAfterDamageApplied(object, MyDamageInformation)"/>
@@ -40,6 +41,7 @@ namespace GVK.PhysicsOptimizations.Patches
                         BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
 
                     ctx.GetPattern(damageMethod).Suffixes.Add(postfixMethod);
+                    PatchConflictAudit.RegisterTarget(damageMethod);
                     Log.Info("[GridDamageWakePatch] Registered MyDamageSystem.RaiseAfterDamageApplied patch.");
                 }
                 else
@@ -68,7 +70,7 @@ namespace GVK.PhysicsOptimizations.Patches
             if (grid == null || grid.MarkedForClose || grid.Closed) return;
 
             var plugin = PhysicsOptimizerPlugin.Instance;
-            if (plugin != null)
+            if (plugin?.Config != null && plugin.Config.Enabled && plugin.Config.EnablePhysicsOptimizations)
             {
                 plugin.WheelOptimizer?.WakeRover(grid.EntityId, "Grid took damage");
                 plugin.SleepManager?.WakeGrid(grid, "Grid took damage");
@@ -76,5 +78,4 @@ namespace GVK.PhysicsOptimizations.Patches
         }
     }
 }
-
 

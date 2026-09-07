@@ -6,16 +6,16 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
-using GVK.PhysicsOptimizations.Config;
+using PhysicsOptimizations.Config;
 
-namespace GVK.PhysicsOptimizations.Modules
+namespace PhysicsOptimizations.Modules
 {
     public class RigidBodySleepModule : IPhysicsModule
     {
         private static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer.Sleep");
 
         public string Name => "Rigid Body Sleep Manager";
-        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableAggressiveSleeping;
+        public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAggressiveSleeping;
 
         private PhysicsOptimizerPlugin _plugin;
 
