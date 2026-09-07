@@ -18,7 +18,7 @@ namespace PhysicsOptimizer.Modules
     /// Also owns the cross-feature wake hooks (cockpit input, grid damage) that wake both this
     /// feature and WheelOptimizer suspension sleep.
     /// </summary>
-    public class RigidBodySleep : IPhysicsModule
+    public class RigidBodySleep : IPhysicsOptimizer
     {
         private const string LogSource = "RigidBodySleep";
 
@@ -375,9 +375,9 @@ namespace PhysicsOptimizer.Modules
                 plugin.WheelOptimizer.WakeRover(gridId, "Cockpit movement input");
             }
 
-            if (plugin.Sleep != null && plugin.Sleep.IsGridSleeping(gridId))
+            if (plugin.RigidBodySleep != null && plugin.RigidBodySleep.IsGridSleeping(gridId))
             {
-                plugin.Sleep.WakeGrid(__instance.CubeGrid, "Cockpit movement input");
+                plugin.RigidBodySleep.WakeGrid(__instance.CubeGrid, "Cockpit movement input");
             }
         }
 
@@ -398,7 +398,7 @@ namespace PhysicsOptimizer.Modules
             {
                 // Cross-feature wake: rover suspension sleep lives in WheelOptimizer
                 plugin.WheelOptimizer?.WakeRover(grid.EntityId, "Grid took damage");
-                plugin.Sleep?.WakeGrid(grid, "Grid took damage");
+                plugin.RigidBodySleep?.WakeGrid(grid, "Grid took damage");
             }
         }
     }

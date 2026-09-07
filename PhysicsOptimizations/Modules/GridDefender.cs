@@ -28,7 +28,7 @@ namespace PhysicsOptimizer.Modules
     /// tracking, anti-clang damping, push-apart separation, voxel cut-out suppression, layered armor
     /// occlusion, and thruster clearance optimization.
     /// </summary>
-    public class GridDefender : IPhysicsModule
+    public class GridDefender : IPhysicsOptimizer
     {
         private const string LogSource = "GridDefender";
 

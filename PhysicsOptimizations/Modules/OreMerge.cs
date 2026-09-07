@@ -14,7 +14,7 @@ namespace PhysicsOptimizer.Modules
     /// Ore merge: spatial-hash proximity merging of floating ore/item stacks to shrink the
     /// floating-entity count on the server.
     /// </summary>
-    public class OreMerge : IPhysicsModule
+    public class OreMerge : IPhysicsOptimizer
     {
         private const string LogSource = "OreMerge";
 

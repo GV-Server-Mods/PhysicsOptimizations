@@ -57,7 +57,7 @@ namespace PhysicsOptimizer.Views
         {
             try
             {
-                int slept = Plugin?.Sleep?.ForceSleepAllIdleGrids() ?? 0;
+                int slept = Plugin?.RigidBodySleep?.ForceSleepAllIdleGrids() ?? 0;
                 MessageBox.Show($"Successfully forced {slept} idle dynamic grids into Havok SLEEP mode.", "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -78,7 +78,7 @@ namespace PhysicsOptimizer.Views
                     {
                         if (!grid.Physics.RigidBody.IsActive)
                         {
-                            Plugin?.Sleep?.WakeGrid(grid, "UI Wake All button");
+                            Plugin?.RigidBodySleep?.WakeGrid(grid, "UI Wake All button");
                             Plugin?.WheelOptimizer?.WakeRover(grid.EntityId, "UI Wake All button");
                             count++;
                         }

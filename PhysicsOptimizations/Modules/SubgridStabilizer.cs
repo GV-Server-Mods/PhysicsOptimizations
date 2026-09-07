@@ -19,7 +19,7 @@ namespace PhysicsOptimizer.Modules
     /// Subgrid stabilizer: micro-dampens constraint solver oscillations on resting mechanical joints
     /// and masks small utility subgrids. Owns the mechanical detach/split broadphase-reset detours.
     /// </summary>
-    public class SubgridStabilizer : IPhysicsModule
+    public class SubgridStabilizer : IPhysicsOptimizer
     {
         private const string LogSource = "SubgridStabilizer";
 

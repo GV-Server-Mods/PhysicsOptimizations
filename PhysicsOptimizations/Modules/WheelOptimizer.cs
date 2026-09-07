@@ -19,7 +19,7 @@ namespace PhysicsOptimizer.Modules
     /// Wheel &amp; suspension optimizer: trims redundant wheel/chassis collision queries and parks
     /// suspension updates (skipped via the Update prefix) on stationary rovers.
     /// </summary>
-    public class WheelOptimizer : IPhysicsModule
+    public class WheelOptimizer : IPhysicsOptimizer
     {
         private const string LogSource = "WheelOptimizer";
 

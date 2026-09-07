@@ -3,7 +3,7 @@ using VRage.Game.Entity;
 
 namespace PhysicsOptimizer.Modules
 {
-    public interface IPhysicsModule
+    public interface IPhysicsOptimizer
     {
         string Name { get; }
         bool IsEnabled { get; }

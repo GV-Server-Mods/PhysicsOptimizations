@@ -15,7 +15,7 @@ namespace PhysicsOptimizer.Modules
     /// Adaptive collision pruner: flips dynamic grids between Continuous and Discrete (Debris)
     /// Havok quality based on speed, grid size, terrain altitude, and nearby-grid safety overrides.
     /// </summary>
-    public class AdaptiveCollision : IPhysicsModule
+    public class AdaptiveCollision : IPhysicsOptimizer
     {
         private const string LogSource = "AdaptiveCollision";
 

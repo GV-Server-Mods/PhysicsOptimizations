@@ -57,7 +57,6 @@ namespace PhysicsOptimizer.Config
         private int _subgridRestFramesThreshold = 60;
         private bool _maskSmallUtilitySubgrids = true;
         private int _maskSmallUtilitySubgridMaxBlocks = 10;
-        private bool _subgridDetachBroadphaseReset = true;
 
         // --- Module 5: Adaptive TOI / Collision Detection ---
         private bool _enableAdaptiveCollision = true;
@@ -76,8 +75,6 @@ namespace PhysicsOptimizer.Config
         // --- Thruster Clearance Optimizer ---
         private bool _enableThrusterClearance = true;
         private ThrusterDamageMode _thrusterDamageMode = ThrusterDamageMode.Optimized;
-        private bool _landingPadImmunity = true;
-        private bool _instantOwnConstructVaporization = true;
 
         // --- Ship, Rover & Station Protection ---
         private bool _enableGridDefender = true;
@@ -137,8 +134,6 @@ namespace PhysicsOptimizer.Config
         public bool LogVoxelNormals { get => _logVoxelNormals; set => SetValue(ref _logVoxelNormals, value); }
 
         public bool EnableWheelOptimizer { get => _enableWheelOptimizer; set => SetValue(ref _enableWheelOptimizer, value); }
-        [XmlIgnore]
-        public bool EnableWheelOptimization { get => EnableWheelOptimizer; set => EnableWheelOptimizer = value; }
         public bool EnableWheelCollisionFilter { get => _enableWheelCollisionFilter; set => SetValue(ref _enableWheelCollisionFilter, value); }
         public bool SleepParkedRovers { get => _sleepParkedRovers; set => SetValue(ref _sleepParkedRovers, value); }
         public float RoverSleepDelaySeconds { get => _roverSleepDelaySeconds; set => SetValue(ref _roverSleepDelaySeconds, value); }
@@ -155,15 +150,11 @@ namespace PhysicsOptimizer.Config
         public int MaxSectorFloatingObjects { get => _maxSectorFloatingObjects; set => SetValue(ref _maxSectorFloatingObjects, value); }
 
         public bool EnableSubgridStabilizer { get => _enableSubgridStabilizer; set => SetValue(ref _enableSubgridStabilizer, value); }
-        [XmlIgnore]
-        public bool EnableSubgridConstraintStabilization { get => _enableSubgridStabilization; set => SetValue(ref _enableSubgridStabilization, value); }
         public bool EnableSubgridStabilization { get => _enableSubgridStabilization; set => SetValue(ref _enableSubgridStabilization, value); }
         public float SubgridRestVelocityThreshold { get => _subgridRestVelocityThreshold; set => SetValue(ref _subgridRestVelocityThreshold, value); }
         public int SubgridRestFramesThreshold { get => _subgridRestFramesThreshold; set => SetValue(ref _subgridRestFramesThreshold, value); }
         public bool MaskSmallUtilitySubgrids { get => _maskSmallUtilitySubgrids; set => SetValue(ref _maskSmallUtilitySubgrids, value); }
         public int MaskSmallUtilitySubgridMaxBlocks { get => _maskSmallUtilitySubgridMaxBlocks; set => SetValue(ref _maskSmallUtilitySubgridMaxBlocks, Math.Max(1, value)); }
-        public int SmallUtilitySubgridMaxBlocks { get => _maskSmallUtilitySubgridMaxBlocks; set => MaskSmallUtilitySubgridMaxBlocks = value; }
-        public bool SubgridDetachBroadphaseReset { get => _subgridDetachBroadphaseReset; set => SetValue(ref _subgridDetachBroadphaseReset, value); }
 
         public bool EnableAdaptiveCollision { get => _enableAdaptiveCollision; set => SetValue(ref _enableAdaptiveCollision, value); }
         public bool EnableSpeedThresholds { get => _enableSpeedThresholds; set => SetValue(ref _enableSpeedThresholds, value); }
@@ -186,10 +177,6 @@ namespace PhysicsOptimizer.Config
             set
             {
                 SetValue(ref _thrusterDamageMode, value);
-                _landingPadImmunity = (value == ThrusterDamageMode.Optimized);
-                _instantOwnConstructVaporization = (value == ThrusterDamageMode.Optimized);
-                OnPropertyChanged(nameof(LandingPadImmunity));
-                OnPropertyChanged(nameof(InstantOwnConstructVaporization));
                 OnPropertyChanged(nameof(IsThrusterModeOptimized));
                 OnPropertyChanged(nameof(IsThrusterModeVanillaLike));
             }
@@ -209,35 +196,7 @@ namespace PhysicsOptimizer.Config
             set { if (value) ThrusterDamageMode = ThrusterDamageMode.VanillaLike; }
         }
 
-        public bool LandingPadImmunity
-        {
-            get => _landingPadImmunity;
-            set
-            {
-                SetValue(ref _landingPadImmunity, value);
-                if (!value && _thrusterDamageMode == ThrusterDamageMode.Optimized)
-                    ThrusterDamageMode = ThrusterDamageMode.VanillaLike;
-                else if (value && _instantOwnConstructVaporization && _thrusterDamageMode == ThrusterDamageMode.VanillaLike)
-                    ThrusterDamageMode = ThrusterDamageMode.Optimized;
-            }
-        }
-
-        public bool InstantOwnConstructVaporization
-        {
-            get => _instantOwnConstructVaporization;
-            set
-            {
-                SetValue(ref _instantOwnConstructVaporization, value);
-                if (!value && _thrusterDamageMode == ThrusterDamageMode.Optimized)
-                    ThrusterDamageMode = ThrusterDamageMode.VanillaLike;
-                else if (value && _landingPadImmunity && _thrusterDamageMode == ThrusterDamageMode.VanillaLike)
-                    ThrusterDamageMode = ThrusterDamageMode.Optimized;
-            }
-        }
-
         public bool EnableGridDefender { get => _enableGridDefender; set => SetValue(ref _enableGridDefender, value); }
-        [XmlIgnore]
-        public bool EnableCollisionDamageDefense { get => EnableGridDefender; set => EnableGridDefender = value; }
         public float MaxDeformationVelocity { get => _collisionSpeedThreshold; set => SetValue(ref _collisionSpeedThreshold, Math.Max(0.0f, value)); }
         public bool ProtectShipsAgainstRamming
         {

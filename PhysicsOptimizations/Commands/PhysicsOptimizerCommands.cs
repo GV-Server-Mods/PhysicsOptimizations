@@ -122,13 +122,13 @@ namespace PhysicsOptimizer.Commands
         [Permission(MyPromoteLevel.Admin)]
         public void SleepAll()
         {
-            if (Plugin?.Sleep == null)
+            if (Plugin?.RigidBodySleep == null)
             {
-                Context.Respond("Sleep Manager is not initialized.");
+                Context.Respond("Rigid Body Sleep is not initialized.");
                 return;
             }
 
-            int count = Plugin.Sleep.ForceSleepAllIdleGrids();
+            int count = Plugin.RigidBodySleep.ForceSleepAllIdleGrids();
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Force-slept {0} idle dynamic grids.", count));
         }
 
@@ -292,7 +292,7 @@ namespace PhysicsOptimizer.Commands
                     {
                         if (!grid.Physics.RigidBody.IsActive)
                         {
-                            Plugin?.Sleep?.WakeGrid(grid, "Admin wakeall command");
+                            Plugin?.RigidBodySleep?.WakeGrid(grid, "Admin wakeall command");
                             Plugin?.WheelOptimizer?.WakeRover(grid.EntityId, "Admin wakeall command");
                             count++;
                         }

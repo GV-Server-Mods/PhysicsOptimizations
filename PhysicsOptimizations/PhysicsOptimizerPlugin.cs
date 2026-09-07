@@ -35,13 +35,12 @@ namespace PhysicsOptimizer
 
         public WheelOptimizer WheelOptimizer { get; private set; }
         public RigidBodySleep RigidBodySleep { get; private set; }
-        public RigidBodySleep Sleep => RigidBodySleep;
         public OreMerge OreMerge { get; private set; }
         public SubgridStabilizer SubgridStabilizer { get; private set; }
         public AdaptiveCollision AdaptiveCollision { get; private set; }
         public GridDefender GridDefender { get; private set; }
 
-        private readonly List<IPhysicsModule> _modules = [];
+        private readonly List<IPhysicsOptimizer> _optimizers = [];
 
         public override void Init(ITorchBase torch)
         {
@@ -52,7 +51,7 @@ namespace PhysicsOptimizer
             Telemetry = new OptimizationTelemetry();
             DefenseStats = new DefenseStatistics();
 
-            InitializeModules();
+            InitializeOptimizers();
 
             RegisterPatches();
 
@@ -62,7 +61,7 @@ namespace PhysicsOptimizer
             Log.Info(LogSource, "Plugin v2.0.0 initialized successfully. Unified Havok engine is ACTIVE.");
         }
 
-        private void InitializeModules()
+        private void InitializeOptimizers()
         {
             WheelOptimizer = new WheelOptimizer();
             RigidBodySleep = new RigidBodySleep();
@@ -71,16 +70,16 @@ namespace PhysicsOptimizer
             AdaptiveCollision = new AdaptiveCollision();
             GridDefender = new GridDefender();
 
-            _modules.Add(WheelOptimizer);
-            _modules.Add(RigidBodySleep);
-            _modules.Add(OreMerge);
-            _modules.Add(SubgridStabilizer);
-            _modules.Add(AdaptiveCollision);
-            _modules.Add(GridDefender);
+            _optimizers.Add(WheelOptimizer);
+            _optimizers.Add(RigidBodySleep);
+            _optimizers.Add(OreMerge);
+            _optimizers.Add(SubgridStabilizer);
+            _optimizers.Add(AdaptiveCollision);
+            _optimizers.Add(GridDefender);
 
-            foreach (var module in _modules)
+            foreach (var optimizer in _optimizers)
             {
-                module.Init(this);
+                optimizer.Init(this);
             }
         }
 
@@ -114,17 +113,17 @@ namespace PhysicsOptimizer
 
         private void OnEntityAdded(MyEntity entity)
         {
-            foreach (var module in _modules)
+            foreach (var optimizer in _optimizers)
             {
-                module.OnEntityAdded(entity);
+                optimizer.OnEntityAdded(entity);
             }
         }
 
         private void OnEntityRemoved(MyEntity entity)
         {
-            foreach (var module in _modules)
+            foreach (var optimizer in _optimizers)
             {
-                module.OnEntityRemoved(entity);
+                optimizer.OnEntityRemoved(entity);
             }
         }
 
@@ -144,7 +143,7 @@ namespace PhysicsOptimizer
             if (Config.EnablePhysicsOptimizations)
             {
                 WheelOptimizer?.Update(_frameCounter);
-                Sleep?.Update(_frameCounter);
+                RigidBodySleep?.Update(_frameCounter);
                 OreMerge?.Update(_frameCounter);
                 SubgridStabilizer?.Update(_frameCounter);
                 AdaptiveCollision?.Update(_frameCounter);
@@ -186,11 +185,11 @@ namespace PhysicsOptimizer
             MyEntities.OnEntityAdd -= OnEntityAdded;
             MyEntities.OnEntityRemove -= OnEntityRemoved;
 
-            foreach (var module in _modules)
+            foreach (var optimizer in _optimizers)
             {
-                module.Dispose();
+                optimizer.Dispose();
             }
-            _modules.Clear();
+            _optimizers.Clear();
 
             base.Dispose();
         }
@@ -224,9 +223,9 @@ namespace PhysicsOptimizer
                     _config.Save();
                 }
 
-                foreach (var module in _modules)
+                foreach (var optimizer in _optimizers)
                 {
-                    module.UpdateConfig(Config);
+                    optimizer.UpdateConfig(Config);
                 }
 
                 Log.Info(LogSource, "Configuration saved successfully.");
