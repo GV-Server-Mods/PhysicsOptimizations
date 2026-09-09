@@ -27,6 +27,7 @@ namespace PhysicsOptimizer
         private Persistent<PhysicsOptimizerConfig> _config;
         private PhysicsOptimizerControl _control;
         private ulong _frameCounter;
+        private ulong _logTickCounter;
         private readonly object _configLock = new();
 
         public PhysicsOptimizerConfig Config => _config?.Data;
@@ -96,6 +97,7 @@ namespace PhysicsOptimizer
                     RigidBodySleep.RegisterPatches(ctx);
                     SubgridStabilizer.RegisterPatches(ctx);
                     GridDefender.RegisterPatches(ctx);
+                    ThrusterClearance.RegisterPatches(ctx);
 
                     patchManager.Commit();
                     Log.Info(LogSource, "All patches successfully registered with Torch PatchManager.");
@@ -131,6 +133,11 @@ namespace PhysicsOptimizer
         {
             base.Update();
             PatchConflictAudit.RunOnce();
+
+            // Flush coalesced repeat summaries every 10s, even when optimizations are disabled.
+            _logTickCounter++;
+            if (_logTickCounter % 600UL == 0UL) Log.FlushRepeats();
+
             if (Config == null || !Config.Enabled) return;
 
             _frameCounter++;
@@ -184,6 +191,7 @@ namespace PhysicsOptimizer
         {
             MyEntities.OnEntityAdd -= OnEntityAdded;
             MyEntities.OnEntityRemove -= OnEntityRemoved;
+            Log.FlushRepeats();
 
             foreach (var optimizer in _optimizers)
             {

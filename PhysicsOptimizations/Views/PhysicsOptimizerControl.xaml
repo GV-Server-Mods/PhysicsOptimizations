@@ -69,8 +69,6 @@
                     <TextBlock Text="⚡ Physics Optimizer v2.0.0" FontSize="18" FontWeight="Bold" Foreground="#4CAF50" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <CheckBox Content="Enable Plugin" IsChecked="{Binding Config.Enabled}" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0"
                               ToolTip="Master switch for the entire Physics Optimizer plugin. Disabling suspends all background optimization loops, patches, and collision defenses."/>
-                    <CheckBox Content="Enable Physics Optimizations" IsChecked="{Binding Config.EnablePhysicsOptimizations}" FontWeight="Bold" VerticalAlignment="Center" Margin="16,0,0,0"
-                              ToolTip="Master switch for physics optimizations (Tabs 1-5). Disabling pauses all background Havok optimization loops while leaving Grid Defender active."/>
                 </WrapPanel>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,0,4">
@@ -80,18 +78,18 @@
             </WrapPanel>
         </Border>
 
-        <!-- Main Tab Control (7 Tabs) -->
+        <!-- Main Tab Control (3 Tabs) -->
         <TabControl Grid.Row="1" Background="#252526" BorderBrush="#333333">
 
-            <!-- TAB 1: WHEEL OPTIMIZER -->
-            <TabItem Header="Wheel Optimizer">
+            <!-- TAB 1: PHYSICS OPTIMIZATIONS (all optimizer modules merged) -->
+            <TabItem Header="Physics Optimizations">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
                     <StackPanel IsEnabled="{Binding Config.EnablePhysicsOptimizations}">
-                        <!-- Overview Banner -->
+                        <!-- Suite Summary -->
                         <Border Background="#1F2937" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="🏎️ Wheel &amp; Suspension Optimizer Overview:" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,4"/>
-                                <TextBlock Text="Sleeps 60Hz raycasts on parked rovers and masks wheel well armor to eliminate compound shape collision checks against its own chassis." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                <TextBlock Text="⚙️ Physics Optimization Suite:" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,4"/>
+                                <TextBlock Text="Six cooperative Havok load reducers, each with its own master toggle below: Wheel Optimizer parks suspension raycasts on idle rovers, Rigid Body Sleep puts motionless grids into Havok sleep, Ore Merge consolidates floating ore stacks, Subgrid Stabilizer dampens resting mechanical joints, Adaptive Collision demotes cruising grids to Discrete collision, and Thruster Clearance replaces flame shape-casts with multi-nozzle raycasts. Disabling the suite master switch pauses all six while leaving Grid Defender fully active." Foreground="#D1D5DB" FontSize="11" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
 
@@ -101,7 +99,7 @@
                                 <CheckBox Content="Enable Wheel Optimizer" IsChecked="{Binding Config.EnableWheelOptimizer}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for wheel and suspension optimizations. Controls parked rover suspension sleep and symmetrical wheel well collision filtering."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableWheelOptimizer}">
-                                    <TextBlock Text="Sleeps 60Hz raycasts on parked rovers and masks wheel well armor to eliminate compound shape collision checks." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                    <TextBlock Text="Sleeps 60Hz raycasts on parked rovers and masks wheel well armor to eliminate compound shape collision checks." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                     <CheckBox Content="Enable Symmetrical Wheel Well Collision Masking" IsChecked="{Binding Config.EnableWheelCollisionFilter}" Margin="16,2,0,2"
                                               ToolTip="Applies Havok collision bitmasks to prevent wheels from performing compound shape collision checks against their own chassis wheel well armor blocks."/>
                                     <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
@@ -115,21 +113,8 @@
                                 </StackPanel>
                             </StackPanel>
                         </GroupBox>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
 
-            <!-- TAB 2: RIGID BODY SLEEP -->
-            <TabItem Header="Rigid Body Sleep">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
-                    <StackPanel IsEnabled="{Binding Config.EnablePhysicsOptimizations}">
-                        <!-- Overview Banner -->
-                        <Border Background="#1F2937" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="💤 Rigid Body Sleep Manager Overview:" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,4"/>
-                                <TextBlock Text="Deactivates motionless unpiloted dynamic grids into Havok sleep mode, waking instantly on cockpit input, damage, or movement." Foreground="#D1D5DB" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+
 
                         <!-- Rigid Body Sleeping -->
                         <GroupBox Header="💤 Rigid Body Sleep">
@@ -137,7 +122,7 @@
                                 <CheckBox Content="Enable Rigid Body Sleep" IsChecked="{Binding Config.EnableRigidBodySleep}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Actively deactivates Havok rigid bodies on idle, unpiloted, and supported dynamic grids into Havok sleep mode to eliminate solver CPU overhead."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableRigidBodySleep}">
-                                    <TextBlock Text="Deactivates motionless unpiloted dynamic grids into Havok sleep mode, waking instantly on cockpit input, damage, or movement." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                    <TextBlock Text="Deactivates motionless unpiloted dynamic grids into Havok sleep mode, waking instantly on cockpit input, damage, or movement." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
 
                                     <StackPanel Margin="16,2,0,2">
                                         <WrapPanel Margin="0,2,0,2" VerticalAlignment="Center">
@@ -162,21 +147,8 @@
                                 </StackPanel>
                             </StackPanel>
                         </GroupBox>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
 
-            <!-- TAB 3: ORE MERGE -->
-            <TabItem Header="Ore Merge">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
-                    <StackPanel IsEnabled="{Binding Config.EnablePhysicsOptimizations}">
-                        <!-- Overview Banner -->
-                        <Border Background="#1F2937" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="⛏️ Floating Object &amp; Ore Optimizer Overview:" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,4"/>
-                                <TextBlock Text="Merges nearby floating ore rocks and items into single larger stacks to slash rigid body counts and accelerate sector cleanup." Foreground="#D1D5DB" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+
 
                         <!-- Floating Objects & Ore -->
                         <GroupBox Header="⛏️ Ore Merge">
@@ -184,7 +156,7 @@
                                 <CheckBox Content="Enable Ore Merge" IsChecked="{Binding Config.EnableOreMerge}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for floating objects and ore optimizations. Merges nearby floating ores and dropped item entities."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableOreMerge}">
-                                    <TextBlock Text="Merges nearby floating ore rocks and items into single larger stacks to slash rigid body counts and accelerate sector cleanup." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                    <TextBlock Text="Merges nearby floating ore rocks and items into single larger stacks to slash rigid body counts and accelerate sector cleanup." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                     
                                     <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
                                         <CheckBox Content="Auto-Merge Nearby Floating Ore &amp; Items within" IsChecked="{Binding Config.AutoMergeNearbyOre}" VerticalAlignment="Center"/>
@@ -207,29 +179,18 @@
                                 </StackPanel>
                             </StackPanel>
                         </GroupBox>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
 
-            <!-- TAB 4: SUBGRID STABILIZER -->
-            <TabItem Header="Subgrid Stabilizer">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
-                    <StackPanel IsEnabled="{Binding Config.EnablePhysicsOptimizations}">
-                        <!-- Overview Banner -->
-                        <Border Background="#1F2937" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="🦾 Subgrid Constraint Stabilizer Overview:" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,4"/>
-                                <TextBlock Text="Micro-dampens constraint tension on resting mechanical joints (rotors, hinges, pistons) and masks small utility subgrids to stop Clang loops." Foreground="#D1D5DB" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+
 
                         <!-- Subgrid Constraints -->
                         <GroupBox Header="🦾 Subgrid Stabilizer">
                             <StackPanel>
                                 <CheckBox Content="Enable Subgrid Stabilizer" IsChecked="{Binding Config.EnableSubgridStabilizer}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for subgrid constraint stabilization. Micro-dampens velocity drift between resting subgrids and parent grids and masks small utility subgrids to eliminate Clang oscillation loops."/>
+                                <CheckBox Content="Exclude Suspension Wheel Subgrids from Stabilization" IsChecked="{Binding Config.ExcludeWheelSubgridsFromSubgridStabilizer}" Margin="16,2,0,2"
+                                          ToolTip="Suspension wheels are separate physics bodies; stabilizing their joint can fight the suspension solver and create driving lag. When enabled, wheel joints are skipped."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableSubgridStabilizer}">
-                                    <TextBlock Text="Micro-dampens constraint tension on resting mechanical joints (rotors, hinges, pistons) and masks small utility subgrids to stop Clang loops." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                    <TextBlock Text="Micro-dampens constraint tension on resting mechanical joints (rotors, hinges, pistons) and masks small utility subgrids to stop Clang loops." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
 
                                     <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
                                         <CheckBox Content="Stabilize all mechanical joints when Velocity is below" IsChecked="{Binding Config.EnableSubgridStabilization}" VerticalAlignment="Center"/>
@@ -253,21 +214,8 @@
                                 </StackPanel>
                             </StackPanel>
                         </GroupBox>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
 
-            <!-- TAB 5: ADAPTIVE COLLISION -->
-            <TabItem Header="Adaptive Collision">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
-                    <StackPanel IsEnabled="{Binding Config.EnablePhysicsOptimizations}">
-                        <!-- Overview Banner -->
-                        <Border Background="#1F2937" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="🚀 Adaptive TOI &amp; Collision Pruning Overview:" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,4"/>
-                                <TextBlock Text="Demotes cruising and large grids to Discrete collision to slash broadphase CPU load while preserving Continuous TOI for missiles and hazards." Foreground="#D1D5DB" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+
 
                         <!-- Adaptive TOI / Collision Detection -->
                         <GroupBox Header="🚀 Adaptive Collision">
@@ -275,7 +223,7 @@
                                 <CheckBox Content="Enable Adaptive Collision" IsChecked="{Binding Config.EnableAdaptiveCollision}" FontWeight="SemiBold" Margin="0,0,0,6"
                                           ToolTip="Master toggle for dynamic Discrete/Continuous collision quality optimization. Demotes slow, isolated grids to Discrete to save CPU while enforcing Continuous near hazards and high speeds."/>
                                 <StackPanel IsEnabled="{Binding Config.EnableAdaptiveCollision}">
-                                    <TextBlock Text="Demotes cruising and large grids to Discrete collision to slash broadphase CPU load while preserving Continuous TOI for missiles and hazards." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,4"/>
+                                    <TextBlock Text="Demotes cruising and large grids to Discrete collision to slash broadphase CPU load while preserving Continuous TOI for missiles and hazards." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,4" TextWrapping="Wrap"/>
                                     <TextBlock Margin="16,0,0,8" FontSize="11" Foreground="#9CA3AF" TextWrapping="Wrap">
                                         <Run Text="• Discrete:" FontWeight="SemiBold" Foreground="#E0E0E0"/>
                                         <Run Text=" Checks contacts per tick (slashes CPU load, best for rovers &amp; large grids)."/>
@@ -285,7 +233,7 @@
                                     </TextBlock>
 
                                     <!-- Section A: Grid-Size Discrete Architecture Overrides -->
-                                    <TextBlock Text="Grid-Size Discrete Overrides (Architecture Mode)" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="16,6,0,3"
+                                    <TextBlock Text="Permanent Discrete: Thresholds" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="16,6,0,3"
                                                ToolTip="Forces specified grid sizes into Discrete physics to drastically reduce physics solver load. Works with GridDefender Push-Apart &amp; Anti-Clang for repulsion."/>
 
                                     <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
@@ -305,10 +253,10 @@
                                     </WrapPanel>
 
                                     <TextBlock Text="🚀 Note: Active PMW missiles (Grid Defender tab) always retain Continuous TOI." Foreground="#9CA3AF" FontSize="10" Margin="16,3,0,6"
-                                               ToolTip="Valid player-made missiles configured in Grid Defender always bypass discrete overrides to guarantee impact detection and kinetic penetration."/>
+                                               ToolTip="Valid player-made missiles configured in Grid Defender always bypass discrete overrides to guarantee impact detection and kinetic penetration." TextWrapping="Wrap"/>
 
                                     <!-- Section B: Speed Thresholds & Hysteresis -->
-                                    <TextBlock Text="Speed Thresholds (Dynamic Fallback)" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="16,6,0,3"
+                                    <TextBlock Text="Dynamic Discrete: Thresholds" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="16,6,0,3"
                                                ToolTip="Fallback rules for grids not covered by the discrete overrides above."/>
 
                                     <StackPanel Margin="16,2,0,2">
@@ -319,7 +267,7 @@
                                                      ToolTip="Demotion ceiling: Grids cruising below this speed switch to Discrete collision to eliminate expensive broadphase queries. Default: 15 m/s."/>
                                             <TextBlock Text="m/s" Foreground="#CCCCCC" VerticalAlignment="Center"/>
                                         </WrapPanel>
-                                        <WrapPanel Margin="19,2,0,2" VerticalAlignment="Center" IsEnabled="{Binding Config.EnableSpeedThresholds}">
+                                        <WrapPanel Margin="0,2,0,2" VerticalAlignment="Center" IsEnabled="{Binding Config.EnableSpeedThresholds}">
                                             <TextBlock Text="and promote to Continuous above" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                             <TextBox Text="{Binding Config.ContinuousCollisionSpeedThreshold, StringFormat={}{0:F1}}" Width="60" HorizontalContentAlignment="Center" Margin="0,0,5,0" VerticalAlignment="Center"
                                                      ToolTip="Promotion floor: Grids accelerating above this speed are immediately restored to Continuous TOI to prevent tunneling. Default: 40 m/s."/>
@@ -329,11 +277,11 @@
 
                                     <!-- Section C: Safety Overrides (For Non-Overridden Grids) -->
                                     <StackPanel IsEnabled="{Binding Config.EnableSpeedThresholds}">
-                                        <TextBlock Text="Safety Reversions (Continuous Overrides)" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="16,6,0,3"
+                                        <TextBlock Text="Dynamic Discrete: Safety Overrides" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="16,6,0,3"
                                                    ToolTip="Safety overrides for dynamic speed thresholds: Keeps slow grids in Continuous TOI when near terrain or other craft to prevent clipping. Active only when Speed Thresholds are enabled."/>
 
                                         <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
-                                            <CheckBox Content="Force Continuous Near Other Dynamic Grids within" IsChecked="{Binding Config.RevertNearOtherDynamicGrids}" VerticalAlignment="Center"/>
+                                            <CheckBox Content="Promote to Continuous Near Other Dynamic Grids within" IsChecked="{Binding Config.RevertNearOtherDynamicGrids}" VerticalAlignment="Center"/>
                                             <TextBox Text="{Binding Config.DynamicGridProximityRevertDistanceMeters, StringFormat={}{0:F0}}" Width="65" HorizontalContentAlignment="Center" Margin="5,0" VerticalAlignment="Center"
                                                      IsEnabled="{Binding Config.RevertNearOtherDynamicGrids}"
                                                      ToolTip="Distance threshold around dynamic grids within which Continuous TOI is strictly enforced. Default: 500m."/>
@@ -341,7 +289,7 @@
                                         </WrapPanel>
 
                                         <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
-                                            <CheckBox Content="Force Continuous Near Planetary Terrain below" IsChecked="{Binding Config.EnableAltitudeTOIReversion}" VerticalAlignment="Center"/>
+                                            <CheckBox Content="Promote to Continuous Near Planetary Terrain below" IsChecked="{Binding Config.EnableAltitudeTOIReversion}" VerticalAlignment="Center"/>
                                             <TextBox Text="{Binding Config.ContinuousAltitudeThreshold, StringFormat={}{0:F0}}" Width="65" HorizontalContentAlignment="Center" Margin="5,0" VerticalAlignment="Center"
                                                      IsEnabled="{Binding Config.EnableAltitudeTOIReversion}"
                                                      ToolTip="Planetary surface distance below which Continuous TOI is strictly enforced. Default: 50m."/>
@@ -350,7 +298,25 @@
                                     </StackPanel>
 
                                     <!-- Priority note -->
-                                    <TextBlock Text="💡 Priority: PMW Missiles (Continuous) &gt; Grid-Size Discrete &gt; Terrain/Grid Proximity &gt; Speed Thresholds" Foreground="#9CA3AF" FontSize="10" Margin="16,8,0,2"/>
+                                    <TextBlock Text="💡 Priority: PMW Missiles (Continuous) &gt; Grid-Size Discrete &gt; Terrain/Grid Proximity &gt; Speed Thresholds" Foreground="#9CA3AF" FontSize="10" Margin="16,8,0,2" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </GroupBox>
+
+
+
+                        <GroupBox Header="🔥 Thruster Clearance Optimizer">
+                            <StackPanel>
+                                <CheckBox Content="Enable Thruster Clearance Optimizer" IsChecked="{Binding Config.EnableThrusterClearance}" FontWeight="SemiBold" Margin="0,0,0,6"
+                                          ToolTip="Master toggle for raycast-based thruster damage optimizations, multi-nozzle dummy iteration, and radial coverage for large/modded thrusters."/>
+                                <StackPanel IsEnabled="{Binding Config.EnableThrusterClearance}" Margin="16,0,0,0">
+                                    <TextBlock Text="Damage Mode:" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="0,6,0,3"/>
+                                    <RadioButton Content="Optimized Damage (Anti-Exploit Only)" IsChecked="{Binding Config.IsThrusterModeOptimized}" Foreground="#EEEEEE" Margin="0,2,0,2"
+                                                  ToolTip="Maximum performance mode. Raycast clearance checks local construct only: instantly vaporizes illegal internal blocks built directly inside exhaust plumes. External grids (carrier decks, landing pads) are 100% immune (0 damage, 0 Havok phantoms)."/>
+                                    <RadioButton Content="Vanilla-Like Damage (Authentic Rate &amp; External Grids)" IsChecked="{Binding Config.IsThrusterModeVanillaLike}" Foreground="#EEEEEE" Margin="0,2,0,2"
+                                                  ToolTip="Uses multi-nozzle raycasts to apply gradual, authentic vanilla-rate thermal damage (MyDamageType.Thruster) to both own construct and external grids (landing pads, carrier decks, enemy hulls)."/>
+
+                                    <TextBlock Text="💡 Optimized mode grants 100% immunity to landing pads and carrier decks. Vanilla-Like mode applies realistic gradual thermal damage across all grids." Foreground="#9CA3AF" FontSize="10" Margin="0,4,0,2" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </StackPanel>
                         </GroupBox>
@@ -358,7 +324,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB 6: GRID DEFENDER -->
+            <!-- TAB 2: GRID DEFENDER -->
             <TabItem Header="Grid Defender">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
                     <StackPanel>
@@ -377,7 +343,7 @@
                                           ToolTip="Master switch for Grid Defender collision protection, anti-clang damping, and grid separation."/>
 
                                 <StackPanel IsEnabled="{Binding Config.EnableGridDefender}">
-                                    <TextBlock Text="Master switch for collision defense and kinetic damage interception. Intercepts Keen's deformation solver to suppress crash damage, scale impact multipliers, and separate grids." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                    <TextBlock Text="Master switch for collision defense and kinetic damage interception. Intercepts Keen's deformation solver to suppress crash damage, scale impact multipliers, and separate grids." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                     <Grid Margin="16,2,0,2">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="260"/>
@@ -403,29 +369,10 @@
                         <!-- Collision Damage Defense Container -->
                         <StackPanel IsEnabled="{Binding Config.EnableGridDefender}">
 
-                            <!-- Thruster Clearance Optimizer (Sub-feature of Grid Defender) -->
-                            <GroupBox Header="🔥 Thruster Clearance Optimizer">
-                                <StackPanel>
-                                    <CheckBox Content="Enable Thruster Clearance Optimizer" IsChecked="{Binding Config.EnableThrusterClearance}" FontWeight="SemiBold" Margin="0,0,0,6"
-                                              ToolTip="Master toggle for raycast-based thruster damage optimizations, multi-nozzle dummy iteration, and radial coverage for large/modded thrusters."/>
-                                    <StackPanel IsEnabled="{Binding Config.EnableThrusterClearance}">
-                                        <TextBlock Text="Replaces 3D Havok capsule shape-casts with multi-nozzle raycasts, eliminating internal phantom damage while immunizing carrier decks." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
-                                        
-                                        <TextBlock Text="Damage Mode:" FontWeight="SemiBold" Foreground="#E0E0E0" Margin="16,6,0,3"/>
-                                        <RadioButton Content="Optimized Damage (Anti-Exploit Only)" IsChecked="{Binding Config.IsThrusterModeOptimized}" Foreground="#EEEEEE" Margin="16,2,0,2"
-                                                      ToolTip="Maximum performance mode. Raycast clearance checks local construct only: instantly vaporizes illegal internal blocks built directly inside exhaust plumes. External grids (carrier decks, landing pads) are 100% immune (0 damage, 0 Havok phantoms)."/>
-                                        <RadioButton Content="Vanilla-Like Damage (Authentic Rate &amp; External Grids)" IsChecked="{Binding Config.IsThrusterModeVanillaLike}" Foreground="#EEEEEE" Margin="16,2,0,2"
-                                                      ToolTip="Uses multi-nozzle raycasts to apply gradual, authentic vanilla-rate thermal damage (MyDamageType.Thruster) to both own construct and external grids (landing pads, carrier decks, enemy hulls)."/>
-                                        
-                                        <TextBlock Text="💡 Optimized mode grants 100% immunity to landing pads and carrier decks. Vanilla-Like mode applies realistic gradual thermal damage across all grids." Foreground="#9CA3AF" FontSize="10" Margin="16,4,0,2"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </GroupBox>
-
                             <!-- Ship, Rover & Station Protection -->
                             <GroupBox Header="🚀 Ship, Rover &amp; Station Protection">
                                 <StackPanel>
-                                    <TextBlock Text="Protects non-missile ships, rovers, stations, and subgrids against collision deformation from ramming, terrain crashes, Clang, and debris." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                    <TextBlock Text="Protects non-missile ships, rovers, stations, and subgrids against collision deformation from ramming, terrain crashes, Clang, and debris." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                     <CheckBox Content="Protect Ships From Ship-on-Ship Ramming" IsChecked="{Binding Config.ProtectShipsAgainstRamming}" Margin="16,2,0,2"
                                               ToolTip="Blocks impact damage when full-sized ships or rovers collide with each other, preventing grief ramming and accidental dock collisions."/>
                                     <CheckBox Content="Protect Ships &amp; Rovers From Voxel (Planet/Asteroid) Crashes" IsChecked="{Binding Config.ProtectShipsAgainstVoxels}" Margin="16,2,0,2"
@@ -436,6 +383,8 @@
                                               ToolTip="Suppresses impact damage from floating ores, dropped items, and detached debris hitting hulls."/>
                                     <CheckBox Content="Protect Subgrids / Mechanicals (Pistons, Rotors, Hinges) from Clang" IsChecked="{Binding Config.ProtectSubgrids}" Margin="16,2,0,2"
                                               ToolTip="Suppresses self-collision impact damage between connected subgrids (rotors, hinges, pistons) to stop Clang chain reactions."/>
+                                    <CheckBox Content="Enable Voxel Normal Force Arbitrator" IsChecked="{Binding Config.EnableVoxelNormalArbitrator}" Margin="16,2,0,2"
+                                              ToolTip="Inverts bogus downward contact normals at the Havok solver level when rovers are pinched into voxels, so the physics solver stops shoving grids into the terrain. Fully independent of Push-Apart: the escape-direction logic caches raw contact normals for itself, so either feature can be toggled alone."/>
 
                                     <!-- Fallback Velocity Gates & Damage Rate Limits -->
                                     <Border Background="#1E293B" BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="8" Margin="16,8,0,6">
@@ -471,7 +420,7 @@
                                     <CheckBox Content="Allow Player-Made Missile (PMW) Impact Damage" IsChecked="{Binding Config.AllowMissileDamage}" FontWeight="SemiBold" Margin="0,0,0,6"
                                               ToolTip="Allows recognized player-made missiles and kinetic torpedoes to deal full impact deformation damage when striking targets."/>
                                     <StackPanel IsEnabled="{Binding Config.AllowMissileDamage}">
-                                        <TextBlock Text="Allows recognized high-speed player-made missiles and torpedoes within configured block limits to deal full impact deformation damage." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                        <TextBlock Text="Allows recognized high-speed player-made missiles and torpedoes within configured block limits to deal full impact deformation damage." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                         <CheckBox Content="Piloted Buggy Exemption (Piloted craft never treated as missiles)" IsChecked="{Binding Config.ExemptPilotedFromMissileStatus}" Margin="16,2,0,2"
                                                   ToolTip="Exempts any craft with an active pilot or cockpit control from ever being classified as a missile, protecting small rovers and fighters."/>
 
@@ -511,9 +460,9 @@
                                     <CheckBox Content="Enable Layered Armor Occlusion" IsChecked="{Binding Config.EnableLayeredArmorOcclusion}" FontWeight="SemiBold" Margin="0,0,0,6"
                                               ToolTip="Intercepts explosion and collision deformation rays to ensure external armor absorbs damage before interior blocks take hits."/>
                                     <StackPanel IsEnabled="{Binding Config.EnableLayeredArmorOcclusion}">
-                                        <TextBlock Text="Simulates ballistic line-of-sight so intact external armor layers absorb and occlude deformation before interior blocks take damage." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
-                                        <CheckBox Content="Enforce Structural Armor Check" IsChecked="{Binding Config.EnforceStructuralArmorCheck}" Margin="16,2,0,2"
-                                                  ToolTip="Verifies that external armor has actually suffered structural failure before damage propagates into interior functional compartments."/>
+                                        <TextBlock Text="Simulates ballistic line-of-sight so intact external armor layers absorb and occlude deformation before interior blocks take damage. Physics-less blocks (interior lights, decorative blocks) never occlude damage." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
+                                        <CheckBox Content="Armor-Only Occlusion (Strict)" IsChecked="{Binding Config.ArmorOnlyOcclusion}" Margin="16,2,0,2"
+                                                  ToolTip="Strict mode: ONLY pure armor blocks occlude damage, and only while less than 50% deformed - machinery and physics-less blocks (interior lights, decorative) never shield anything behind them. Off = any intact neighbor block counts as armor, however crushed."/>
                                     </StackPanel>
                                 </StackPanel>
                             </GroupBox>
@@ -523,12 +472,13 @@
                                 <StackPanel>
                                     <CheckBox Content="Enable Anti-Clang &amp; Kinetic Absorption System" IsChecked="{Binding Config.EnableAntiClang}" FontWeight="SemiBold" Margin="0,0,0,6"
                                               ToolTip="Absorbs excess kinetic energy on non-damaging collisions to prevent voxel phasing, rubberbanding, and Havok physics loops."/>
+                                    <CheckBox Content="Exclude Suspension Wheel Subgrids from Anti-Clang Damping" IsChecked="{Binding Config.ExcludeWheelSubgridsFromAntiClang}" Margin="16,2,0,2"
+                                              ToolTip="Suspension wheels are separate physics bodies; damping their spin mid-drive creates false positives. When enabled, wheel-terrain contacts are ignored by anti-clang."/>
                                     <StackPanel IsEnabled="{Binding Config.EnableAntiClang}">
-                                        <TextBlock Text="Absorbs excess kinetic energy on non-damaging collisions, arrests rotational death spins, and resolves opposing normal forces in voxels." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                        <TextBlock Text="Absorbs excess kinetic energy on non-damaging collisions, arrests rotational death spins, and resolves opposing normal forces in voxels." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                         <CheckBox Content="Stop Clang Death Spins (Zero out extreme rotational velocity)" IsChecked="{Binding Config.StopClangSpinning}" Margin="16,2,0,2"
                                                   ToolTip="Instantly zeros out extreme rotational spin (&gt; 4 rad/s) caused by Havok subgrid glitches before grids rip apart."/>
-                                        <CheckBox Content="Enable Voxel Normal Force Arbitrator" IsChecked="{Binding Config.EnableVoxelNormalArbitrator}" Margin="16,2,0,2"
-                                                  ToolTip="Inverts opposing normal clamp forces when rovers are pinched into voxels, releasing them cleanly without explosive phantom force spikes."/>
+
                                         
                                         <Grid Margin="16,2,0,2">
                                             <Grid.ColumnDefinitions>
@@ -564,12 +514,21 @@
                                 <StackPanel>
                                     <CheckBox Content="Enable Active Push-Apart Separation" IsChecked="{Binding Config.EnablePushApart}" FontWeight="SemiBold" Margin="0,0,0,6"
                                               ToolTip="Gently translates grids apart if they remain stuck or phased together in continuous contact."/>
+                                    <CheckBox Content="Exclude Suspension Wheel Subgrids from Push-Apart" IsChecked="{Binding Config.ExcludeWheelSubgridsFromPushApart}" Margin="16,2,0,2"
+                                              ToolTip="Wheel-terrain contacts fire every frame while driving. Excluding wheel subgrids prevents the plugin from treating normal rover driving as stuck-in-voxel and micro-teleporting the wheels."/>
                                     <StackPanel IsEnabled="{Binding Config.EnablePushApart}">
-                                        <TextBlock Text="Gently nudges stuck or overlapping grids apart along the contact normal or gravity vector after continuous contact." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                        <TextBlock Text="Gently nudges stuck or overlapping grids apart along the contact normal or gravity vector after continuous contact." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                         <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
                                             <TextBlock Text="Nudge stuck overlapping grids apart by" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                             <TextBox Text="{Binding Config.PushApartDistance, StringFormat={}{0:F2}}" Width="55" HorizontalContentAlignment="Center" Margin="0,0,5,0" VerticalAlignment="Center"
-                                                     ToolTip="Distance in meters (0.1 to 5.0m) to gently nudge stuck grids apart along the contact normal or gravity up-vector. Default: 0.5m."/>
+                                                     ToolTip="Base distance in meters (0.1 to 5.0m) for the first nudge. Re-triggers within 5s escalate 1x, 2x, 3x up to the max nudge distance. Default: 0.5m."/>
+                                            <TextBlock Text="Meters (base)" Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+
+                                        <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
+                                            <TextBlock Text="Max nudge distance (escalation cap):" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <TextBox Text="{Binding Config.PushApartMaxNudgeDistance, StringFormat={}{0:F2}}" Width="55" HorizontalContentAlignment="Center" Margin="0,0,5,0" VerticalAlignment="Center"
+                                                     ToolTip="Ceiling for repeated nudges within the same 5-second stuck window. The first nudge uses the base distance, then 2x, 3x, up to this cap. Default: 2.0m."/>
                                             <TextBlock Text="Meters" Foreground="#CCCCCC" VerticalAlignment="Center"/>
                                         </WrapPanel>
 
@@ -578,6 +537,33 @@
                                             <TextBox Text="{Binding Config.PushApartThreshold}" Width="55" HorizontalContentAlignment="Center" Margin="0,0,5,0" VerticalAlignment="Center"
                                                      ToolTip="Consecutive collision frames (~25 frames = 0.4s) required before triggering separation. Default: 25 frames."/>
                                             <TextBlock Text="Frames (~0.4s)." Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+
+                                        <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
+                                            <TextBlock Text="Give up after" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <TextBox Text="{Binding Config.PushApartMaxAttempts}" Width="55" HorizontalContentAlignment="Center" Margin="0,0,5,0" VerticalAlignment="Center"
+                                                     ToolTip="Consecutive separation pushes allowed while a grid remains stuck in voxels (0 = never give up, up to 1000). Prevents grids from staircasing hundreds of meters up cliff faces when pushes cannot free them. The attempt budget refunds once the grid loses voxel contact. Default: 3."/>
+                                            <TextBlock Text="failed pushes (0 = never give up). Default: 3." Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+
+                                        <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
+                                            <TextBlock Text="Min impact speed for pushes:" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <TextBox Text="{Binding Config.PushApartMinImpactSpeed, StringFormat={}{0:F1}}" Width="55" HorizontalContentAlignment="Center" VerticalAlignment="Center"
+                                                     ToolTip="Pushes only trigger from contacts at or above this impact speed in m/s (0 = no gate). Keeps grids resting on the ground or docked against other grids from being nudged; driving and clang oscillation far exceed it. Default: 1.0 m/s."/>
+                                            <TextBlock Text="Max drift while stuck:" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="12,0,5,0"/>
+                                            <TextBox Text="{Binding Config.PushApartMaxDrift, StringFormat={}{0:F1}}" Width="55" HorizontalContentAlignment="Center" VerticalAlignment="Center"
+                                                     ToolTip="A grid that moved more than this many meters (0 = no gate) during the contact window is driving, not stuck, and never gets pushed. Wheel-terrain contacts fire every frame of normal driving, so without this gate the plugin micro-teleports moving rovers. Wedged grids drift near zero. Default: 1.5m."/>
+                                        </WrapPanel>
+
+                                        <CheckBox Content="Enable Push-Apart Debug GPS Markers" IsChecked="{Binding Config.EnablePushApartDebugDraw}" Margin="16,2,0,2"
+                                                  ToolTip="Spawns a bright GPS marker pair at each applied push origin and end (5m apart): magenta = voxel push, yellow = grid push. Auto-expires after 10 seconds. Debug tool - leave off in normal play."/>
+                                        <CheckBox Content="Enable Burial Probe (Experimental)" IsChecked="{Binding Config.EnableBurialProbe}" Margin="16,4,0,2"
+                                                  ToolTip="Cold-path probe (once per ~10s) for grids stationary 20s+: if voxel material confines the grid on 3+ horizontal sides, it is pushed out along the gravity up-vector. Covers fully buried grids where Havok emits no contact callbacks (e.g. underground station converted to ship, rover spawned embedded)."/>
+                                        <WrapPanel Margin="16,2,0,2" IsEnabled="{Binding Config.EnableBurialProbe}" VerticalAlignment="Center">
+                                            <TextBlock Text="Burial probe clearance margin:" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <TextBox Text="{Binding Config.BurialProbeRadius, StringFormat={}{0:F1}}" Width="55" HorizontalContentAlignment="Center" VerticalAlignment="Center"
+                                                     ToolTip="Extra meters of clearance around the grid's bounding sphere (1-10m) before the probe considers the grid buried. Lower = fewer false positives near terrain. Default: 2.0m."/>
+                                            <TextBlock Text="Meters" Foreground="#CCCCCC" VerticalAlignment="Center"/>
                                         </WrapPanel>
                                     </StackPanel>
                                 </StackPanel>
@@ -589,7 +575,7 @@
                                     <CheckBox Content="Suppress Explosion &amp; Crash Voxel Cutouts" IsChecked="{Binding Config.SuppressAllVoxelExplosionDamage}" FontWeight="SemiBold" Margin="0,0,0,6"
                                               ToolTip="Disables voxel crater cutouts from explosions, warheads, weapons, and crashes. Drill mining (hand &amp; ship drills) remains 100% operational!"/>
                                     <StackPanel IsEnabled="{Binding Config.SuppressAllVoxelExplosionDamage}">
-                                        <TextBlock Text="Disables voxel crater cutouts from crashes, warheads, and weapons to preserve roads and terrain while leaving drill mining operational." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8"/>
+                                        <TextBlock Text="Disables voxel crater cutouts from crashes, warheads, and weapons to preserve roads and terrain while leaving drill mining operational." Foreground="#9CA3AF" FontSize="11" Margin="16,0,0,8" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </StackPanel>
                             </GroupBox>
@@ -598,8 +584,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB 7: LIVE TELEMETRY & ACTIONS -->
-            <TabItem Header="Live Telemetry &amp; Actions">
+            <!-- TAB 3: LIVE TELEMETRY -->
+            <TabItem Header="Live Telemetry">
                 <Grid Margin="15">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -613,7 +599,7 @@
                     <!-- Global Diagnostics & Console Telemetry Strip (Folded in here from Header) -->
                     <Border Grid.Row="1" Background="#252526" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="3" Padding="8,5" Margin="0,0,0,12" IsEnabled="{Binding Config.Enabled}">
                         <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="Global Diagnostics:" FontWeight="SemiBold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                            <TextBlock Text="Global Diagnostics:" FontWeight="SemiBold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,14,0" TextWrapping="Wrap"/>
                             <CheckBox Content="Enable Debug Logging" IsChecked="{Binding Config.EnableDebugLogging}" VerticalAlignment="Center" Margin="0,0,16,0"
                                       ToolTip="Outputs real-time event logs (sleep/wake transitions, ore merges, subgrid dampening, TOI changes, missile impacts) to the Torch console and torch.log at INFO level."/>
                             <WrapPanel VerticalAlignment="Center">

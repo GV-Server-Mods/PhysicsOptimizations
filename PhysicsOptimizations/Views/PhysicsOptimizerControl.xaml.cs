@@ -57,7 +57,21 @@ namespace PhysicsOptimizer.Views
         {
             try
             {
-                int slept = Plugin?.RigidBodySleep?.ForceSleepAllIdleGrids() ?? 0;
+                if (Plugin?.RigidBodySleep == null)
+                {
+                    MessageBox.Show("Rigid Body Sleep is not initialized.", "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                if (!Plugin.RigidBodySleep.IsEnabled)
+                {
+                    MessageBox.Show(
+                        "Rigid Body Sleep is currently disabled.\n\nEnable it from the toggle panel (Enable Rigid Body Sleep) or console (!phys toggle sleep), then click Sleep All Grids again.",
+                        "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                int slept = Plugin.RigidBodySleep.ForceSleepAllIdleGrids();
                 MessageBox.Show($"Successfully forced {slept} idle dynamic grids into Havok SLEEP mode.", "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)

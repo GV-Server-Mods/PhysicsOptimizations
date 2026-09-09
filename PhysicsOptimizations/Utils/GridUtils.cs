@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Sandbox.Game.Entities;
 using VRage.Game;
 using VRage.Game.ModAPI;
@@ -61,6 +62,32 @@ namespace PhysicsOptimizer.Utils
                 return MyCubeGridGroups.Static?.Logical?.HasSameGroup(concreteA, concreteB) ?? false;
             }
             return false;
+        }
+
+        /// <summary>
+        /// Fills results with every grid in the grid's mechanical group (wheels, rotor subgrids),
+        /// including the grid itself. Reuses the caller's list to avoid cold-path allocations.
+        /// </summary>
+        public static void GetMechanicalGroupMembers(MyCubeGrid grid, List<MyCubeGrid> results)
+        {
+            results.Clear();
+            if (grid == null || grid.MarkedForClose || grid.Closed) return;
+
+            var group = MyCubeGridGroups.Static?.Mechanical?.GetGroup(grid);
+            if (group?.Nodes == null)
+            {
+                results.Add(grid);
+                return;
+            }
+
+            foreach (var node in group.Nodes)
+            {
+                var g = node?.NodeData;
+                if (g != null && !g.MarkedForClose && !g.Closed)
+                {
+                    results.Add(g);
+                }
+            }
         }
     }
 }

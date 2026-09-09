@@ -15,7 +15,7 @@ In Space Engineers, Havok physics calculations consume up to 60-70% of server CP
 
 **`PhysicsOptimizer` (v2.0)** is a unified server-side physics overhaul. It permanently fuses high-performance suspension and rigid body deactivation routines with the battle-tested structural collision defenses formerly housed in `GridDefender`. The engine delivers a locked **60 TPS server sim-speed** while actively preventing Clang kraken events, phantom forces, and voxel tunneling.
 
-The plugin is built from exactly **13 Torch PatchManager patch targets** across 8 patch files, **5 stepped simulation modules**, and **1 event-driven collision defense engine**. All 13 targets are enumerated in Section 4; every feature system that consumes them is documented in Section 5.
+The plugin is built from exactly **13 Torch PatchManager patch targets** across 8 patch files, **5 stepped simulation modules**, **1 event-driven collision defense engine**, and **1 event-driven thruster clearance engine**. All 13 targets are enumerated in Section 4; every feature system that consumes them is documented in Section 5.
 
 ### Key Performance & Defense Pillars:
 * 🏎️ **Consolidated Wheel & Suspension Physics**: Eliminates wheel-well armor compound queries via symmetrical broadphase collision masks, discovers world rovers on server cold-start, and sleeps 60Hz raycasts on parked rovers with a ~1ns short-circuit flag.
@@ -25,7 +25,7 @@ The plugin is built from exactly **13 Torch PatchManager patch targets** across 
 * 🚀 **Adaptive TOI & Heightmap Reversion**: Dynamically assigns discrete collision quality to cruising grids to cut continuous TOI pairs, while reverting to Continuous TOI near planetary surfaces, near other dynamic grids, for small craft, and always for PMW missiles.
 * 🎯 **Deformation Defense Engine (8-Stage Pipeline)**: A single gate on `MyGridPhysics.PerformDeformation` that classifies every collision - subgrid contacts, floating debris, PMW missiles, docking bumps, station strikes, terrain crashes, ship ramming - and suppresses or scales deformation damage accordingly.
 * 🛡️ **Layered Armor Occlusion**: A `MyDamageSystem` before-damage handler that shields interior components behind true structural armor blocks from spherical deformation damage bleed.
-* 🔥 **Instant Thruster Clearance & Vaporization**: Replaces expensive volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. External grids (landing pads) receive immunity in Optimized mode, while illegally buried thrusters instantly vaporize their own obstructing blocks.
+* 🔥 **Instant Thruster Clearance & Vaporization** (own module, `ThrusterClearance`): Replaces expensive volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. External grids (landing pads) receive immunity in Optimized mode, while illegally buried thrusters instantly vaporize their own obstructing blocks.
 * ⛰️ **Voxel Normal Arbitrator & Cutout Suppression**: Eliminates "Voxel-Vice" terrain trapping by detecting inverted downward contact normals against voxels and correcting them, and suppresses explosive voxel carving to preserve planetary terrain.
 * 🎪 **Anti-Clang Vibration Arrest & Push-Apart**: Detects grids stuck in consecutive-contact feedback loops, dampens their velocities, and physically nudges them out of terrain or overlapping grids along the gravity up-vector.
 * ⚡ **Zero Hot-Path Allocations**: Zero memory allocations in simulation loops with stepped evaluation intervals (30-120 frames), atomic telemetry updates, pooled collections, and deterministic entity eviction on despawn.
@@ -41,9 +41,9 @@ graph TD
     Plugin[PhysicsOptimizerPlugin<br/>Torch lifecycle + 60Hz frame dispatcher] --> Tel[Live Telemetry + Defense Statistics]
     Plugin --> Audit[PatchConflictAudit<br/>first-tick conflict scan of all 13 targets]
 
-    Plugin --> Modules[6 Self-Contained Feature Modules<br/>1. WheelOptimizer - 30 frame interval<br/>2. RigidBodySleep - 60 frame interval<br/>3. OreMerge - 120 tick interval<br/>4. SubgridStabilizer - 30 frame interval<br/>5. AdaptiveCollision - 30 frame interval<br/>6. GridDefender - event-driven + tick queue]
+    Plugin --> Modules[7 Self-Contained Feature Modules<br/>1. WheelOptimizer - 30 frame interval<br/>2. RigidBodySleep - 60 frame interval<br/>3. OreMerge - 120 tick interval<br/>4. SubgridStabilizer - 30 frame interval<br/>5. AdaptiveCollision - 30 frame interval<br/>6. GridDefender - event-driven + tick queue<br/>7. ThrusterClearance - event-driven]
 
-    Modules --> Patches[13 Torch PatchManager Targets Embedded in Modules<br/>WheelOptimizer: MotorSuspension x3<br/>RigidBodySleep: ShipController x1, DamageSystem x1<br/>SubgridStabilizer: Detach x1, CreateSplit x1<br/>GridDefender: GridPhysics x2, Explosion x2, Occlusion x1, ThrusterDamage x1]
+    Modules --> Patches[13 Torch PatchManager Targets Embedded in Modules<br/>WheelOptimizer: MotorSuspension x3<br/>RigidBodySleep: ShipController x1, DamageSystem x1<br/>SubgridStabilizer: Detach x1, CreateSplit x1<br/>GridDefender: GridPhysics x2, Explosion x2, Occlusion x1<br/>ThrusterClearance: ThrustDamage x1]
 
     Patches --> Game[SE Game Code<br/>MyMotorSuspension - MyShipController - MyDamageSystem<br/>MyGridPhysics - MyExplosion - MyThrust<br/>MyMechanicalConnectionBlockBase - MyCubeGrid]
 ```
@@ -64,12 +64,13 @@ All patches are registered through **Torch PatchManager** (`PatchContext.GetPatt
 | **Module 3: Ore Merge** | [`Modules/OreMerge.cs`](PhysicsOptimizations/Modules/OreMerge.cs) | $O(N)$ spatial grid cell bucketing merging nearby matching ore and dropped item stacks with pooled collections. |
 | **Module 4: Subgrid Stabilizer** | [`Modules/SubgridStabilizer.cs`](PhysicsOptimizations/Modules/SubgridStabilizer.cs) | Havok micro-velocity synchronization across resting mechanical subgrids, collision masking of tiny utility subgrids, and broadphase ID resets on detach and split. |
 | **Module 5: Adaptive Collision** | [`Modules/AdaptiveCollision.cs`](PhysicsOptimizations/Modules/AdaptiveCollision.cs) | Switches slow cruising grids to discrete collision quality while preserving Continuous TOI via a 4-level safety priority chain. |
-| **Module 6: Grid Defender** | [`Modules/GridDefender.cs`](PhysicsOptimizations/Modules/GridDefender.cs) | Zero-cost collision defense: 8-stage deformation pipeline, PMW engagement tracking, anti-clang vibration arrest, push-apart queue, layered armor occlusion, and radial raycast thruster clearance. Owns 7 detours. |
+| **Module 6: Grid Defender** | [`Modules/GridDefender.cs`](PhysicsOptimizations/Modules/GridDefender.cs) | Zero-cost collision defense: 8-stage deformation pipeline, PMW engagement tracking, anti-clang vibration arrest, push-apart queue, and layered armor occlusion. Owns 6 detours. |
+| **Module 7: Thruster Clearance** | [`Modules/ThrusterClearance.cs`](PhysicsOptimizations/Modules/ThrusterClearance.cs) | Replaces Keen's volumetric thruster flame shape-casts with tiered 1/5/9-ray nozzle raycasts; own-construct obstructions vaporize in Optimized mode, external grids immune. Owns 1 `MyThrust` detour. |
 | **Logging Facade** | [`Utils/Log.cs`](PhysicsOptimizations/Utils/Log.cs) | Centralized logging facade with standard `[{tag}] message` formatting. |
 | **Patch Conflict Audit** | [`Utils/PatchConflictAudit.cs`](PhysicsOptimizations/Utils/PatchConflictAudit.cs) | One-shot first-tick audit of all 13 targets: checks Torch PatchManager rewrite patterns for foreign detours and raw-Harmony patch ownership. |
 | **Grid Utilities** | [`Utils/GridUtils.cs`](PhysicsOptimizations/Utils/GridUtils.cs) | High-performance grid size queries, linear speed calculations, and mechanical/logical grouping checks. |
 | **Admin Commands** | [`Commands/PhysicsOptimizerCommands.cs`](PhysicsOptimizations/Commands/PhysicsOptimizerCommands.cs) | In-game and Torch console admin commands under the `!phys` prefix using culture-invariant parsing and plain ASCII. |
-| **WPF GUI Control** | [`Views/PhysicsOptimizerControl.xaml`](PhysicsOptimizations/Views/PhysicsOptimizerControl.xaml) | 7-tab WPF interface: **Wheel Optimizer**, **Rigid Body Sleep**, **Ore Merge**, **Subgrid Stabilizer**, **Adaptive Collision**, **Grid Defender**, and **Live Telemetry & Actions**. |
+| **WPF GUI Control** | [`Views/PhysicsOptimizerControl.xaml`](PhysicsOptimizations/Views/PhysicsOptimizerControl.xaml) | 3-tab WPF interface: **Physics Optimizations** (Wheel Optimizer, Rigid Body Sleep, Ore Merge, Subgrid Stabilizer, Adaptive Collision, and Thruster Clearance sections), **Grid Defender**, and **Live Telemetry**. |
 
 ---
 
@@ -80,11 +81,12 @@ All modules are driven off the plugin's shared frame counter, run server-authori
 | # | Module | Interval | Purpose |
 | :- | :--- | :--- | :--- |
 | 1 | `WheelOptimizer` | 30 frames (0.5s) | Rover discovery/tracking, symmetrical wheel broadphase masking, parked suspension sleep. |
-| 2 | `RigidBodySleep` | 60 frames (1s) | Forced Havok deactivation of idle unpiloted dynamic grids + universal wake paths. |
+| 2 | `RigidBodySleep` | 60 frames (1s) | Forced Havok deactivation of idle unpiloted dynamic grids + gated wake paths. |
 | 3 | `OreMerge` | `OreMergeIntervalTicks` (min 30, default 120) | Spatial-hash proximity merge of floating ore/items (server only). |
 | 4 | `SubgridStabilizer` | 30 frames (0.5s) | Micro-velocity sync of resting mechanical joints + small utility subgrid masking + detach broadphase refresh. |
 | 5 | `AdaptiveCollision` | 30 frames (0.5s) | Dynamic Discrete/Continuous TOI collision quality management. |
-| 6 | `GridDefender` | 60Hz + event-driven | Zero-cost collision defense, anti-clang damping, push-apart, layered armor occlusion, thruster clearance. |
+| 6 | `GridDefender` | 60Hz + event-driven | Zero-cost collision defense, anti-clang damping, push-apart, layered armor occlusion. |
+| 7 | `ThrusterClearance` | Event-driven (static) | Tiered nozzle raycast thruster clearance. |
 
 ---
 
@@ -104,7 +106,7 @@ Every game method this plugin patches, in registration order. All targets are re
 | 8 | `MyExplosion.ApplyExplosionOnVoxel` | Prefix | `GridDefender.cs` | System 13 (Voxel Cutout Suppression) |
 | 9 | `MyExplosion.CutOutVoxelMap` | Prefix | `GridDefender.cs` | System 13 (Voxel Cutout Suppression) |
 | 10 | `MyDamageSystem.LoadData` (fallback `Init`) | Suffix | `GridDefender.cs` | System 10 (Layered Armor Occlusion handler registration) |
-| 11 | `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) | Prefix | `GridDefender.cs` | System 11 (Thruster Clearance) |
+| 11 | `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) | Prefix | `ThrusterClearance.cs` | System 11 (Thruster Clearance) |
 | 12 | `MyMechanicalConnectionBlockBase.Detach(MyCubeGrid, bool)` | Suffix | `SubgridStabilizer.cs` | System 5 (Detach Broadphase Reset) |
 | 13 | `MyCubeGrid.CreateSplit` (static) | Suffix | `SubgridStabilizer.cs` | System 5 (Grid Split Broadphase Reset) |
 
@@ -126,15 +128,16 @@ Every game method this plugin patches, in registration order. All targets are re
 *File: `Modules/RigidBodySleep.cs` (targets 4-5)*
 
 * **Stepped Scan**: Every 60 frames, sweeps all entities for dynamic grids (static grids skipped) without hot-path allocations.
-* **Sleep Conditions**: An unpiloted dynamic grid sustaining linear velocity < 0.05 m/s and angular velocity < 0.01 rad/s for `IdleSecondsBeforeSleep` (default 3s) is deactivated with `grid.Physics.RigidBody.Deactivate()`.
+* **Sleep Conditions**: An unpiloted dynamic grid sustaining linear velocity < 0.05 m/s and angular velocity < 0.01 rad/s for `IdleSecondsBeforeSleep` (default 3s) is deactivated with `grid.Physics.RigidBody.Deactivate()`. Grids with a voxel contact in the last 30 sim frames are never force-slept - sleeping bodies emit no contact callbacks, so terrain-grinding grids must stay awake for push-apart to rescue them.
 * **Gravity Support Guard** (`IsGridSafelySupportedOrNotInGravity`):
   * Grids outside significant gravity sleep freely.
   * Grids in gravity must be supported: wheels with handbrake engaged, landing gear / magnetic feet locked (`LandingSystem.IsParked` or gear lock All/Mixed), or be an unpowered wreck at rest on terrain.
   * Grids with thrusters actively fighting gravity (`IsWorking` and `ThrustForceLength > 0.01` or `ThrustOverride > 0`) are never frozen mid-air.
 * **Pilot Guard**: Grids with seated pilots never sleep; `ForceSleepAllIdleGrids` (admin command) also skips piloted grids.
-* **Instant Wake Paths**:
-  1. **Pilot input**: the `MyShipController.MoveAndRotate` suffix detects any non-zero move/rotation/roll input and wakes both the grid body and its parked suspensions.
-  2. **Damage**: the `MyDamageSystem.RaiseAfterDamageApplied` suffix wakes the owning grid on any damage event with `Amount > 0` - catches vanilla ballistics/missiles, WeaponCore projectiles and energy beams, grinder ticks, explosions, and physical impacts. The handler accepts both `MySlimBlock` and `MyCubeGrid` targets.
+* **Instant Wake Paths** (each gated by its owning feature toggle):
+  1. **Pilot input**: the `MyShipController.MoveAndRotate` suffix detects any non-zero move/rotation/roll input. It wakes parked rover suspensions (`WheelOptimizer`) and, only when `EnableRigidBodySleep` is true, wakes the grid rigid body (`RigidBodySleep`).
+  2. **Damage**: the `MyDamageSystem.RaiseAfterDamageApplied` suffix wakes the owning grid on any damage event with `Amount > 0` - catches vanilla ballistics/missiles, WeaponCore projectiles and energy beams, grinder ticks, explosions, and physical impacts. The handler accepts both `MySlimBlock` and `MyCubeGrid` targets. Rigid-body wake only fires while `EnableRigidBodySleep` is true; suspension wake is controlled by `EnableWheelOptimizer`.
+* **Disable behavior**: When `EnableRigidBodySleep` is turned off, all forced-sleep trackers are cleared on the next update so previously sleeping grids cannot be woken by this system.
 
 ### ⛏️ System 3: Floating Object & Ore Optimizer
 *File: `Modules/OreMerge.cs`*
@@ -200,8 +203,9 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 *File: `Modules/GridDefender.cs`*
 
 * **Contact Frame Tracking**: Consecutive-frame contact counts are tracked per grid (reset when frames skip).
-* **Phase 1 - Vibration Arrest** (`AntiClangVibrationThreshold`, default 8 contact frames): linear velocity *= 0.75, angular velocity *= 0.2; runaway death-spins (|w|^2 > 16) are zeroed entirely when `StopClangSpinning` is on.
-* **Phase 2 - Push-Apart** (`PushApartThreshold`, default 25 contact frames): Separation is queued (never applied inline on the physics thread path) and drained on the plugin's cache sweep. Grid-on-grid pushes fire along the center-to-center direction; grid-on-voxel pushes fire along the local gravity up-vector (`-normalize(gravity)`), nudging trapped rovers out of the dirt by `PushApartDistance` (default 0.5m) with a small 0.8 m/s separation velocity and zeroed angular velocity. Mechanically/logically connected subgrids and static grids are excluded.
+* **Phase 1 - Vibration Arrest** (`AntiClangVibrationThreshold`, default 8 contact frames): linear velocity *= 0.75, angular velocity *= 0.2; runaway death-spins (|w|^2 > 16) are zeroed entirely when `StopClangSpinning` is on. Suspension wheel subgrids are skipped when `ExcludeWheelSubgridsFromAntiClang` is enabled so wheel spin is not damped mid-drive.
+* **Phase 2 - Push-Apart** (`PushApartThreshold`, default 25 contact frames): Separation is queued (never applied inline on the physics thread path) and drained on the plugin's cache sweep. Grid-on-grid pushes fire along the center-to-center direction; grid-on-voxel pushes pick an escape direction in two tiers: on **unmodified voxel regions** (per-region RangeChanged tracking reports them pristine) it is a zero-raycast fast path - the cached contact normal is accepted directly, with any gravity-downward normal reversed as pointing into the planet core (same correction rule as the Normal Force Arbitrator), falling back to the gravity up-vector. On **modified voxel regions** (tracked per carve operation via `MyVoxelBase.RangeChanged` into coarse 32m buckets, so a drilled planet only pays raycasts near actual carving; drilled caves/cutouts have real ceilings) every candidate is raycast-confirmed: contact normal, then gravity-up, then 4 world horizontals - so grids wedged against cliff faces escape sideways instead of staircasing skyward. Each push moves the group by `PushApartDistance` (default 0.5m) with a small 0.8 m/s separation velocity and zeroed angular velocity. Escape direction is sanity-checked against the contact-to-grid-center vector (normals pointing into terrain are flipped), direction is locked across repeated failed rescues with distance escalating 1x to 3x up to `PushApartMaxNudgeDistance` (default 2.0m) to dig out submerged wheels, and gravity-up is the unconditional final fallback - a stuck grid always receives an escape direction and is never pushed downward. An escape-attempt cap (`PushApartMaxAttempts`, default 3, 0 = disabled) stands down pushes on grids that stay voxel-embedded after repeated attempts (budget refunds once voxel contact is lost). Suspension wheel subgrids are skipped when `ExcludeWheelSubgridsFromPushApart` is enabled to prevent normal driving from being treated as stuck. Mechanically/logically connected subgrids and static grids are excluded. Each push is applied to the **entire mechanical group** (wheels are separate physics bodies - moving only the main grid leaves wheels buried), wakes every member's rigid body before applying velocity, and resets the group's contact counters so wheels do not re-clang.
+* **Burial Probe** (Experimental, `EnableBurialProbe`): Cold-path check (once per ~10s) for grids stationary ~20s+ confined by voxel material (physics raycasts within `BurialProbeRadius`, default 2m, beyond the bounding sphere): 3+ of 4 horizontal sides for silent burials, relaxed to 2 sides when voxel contact was seen within ~60s (cliff wedges). Fully buried grids emit no contact callbacks, so contact-driven push-apart can never fire for them - the probe queues a rescue push along the gravity up-vector instead. Covers embedded spawns, cliff-wedged rovers, and underground stations converted to ship.
 * **Memory Hygiene**: All frame trackers and missile engagements are evicted via `MyEntities.OnEntityRemove` plus a cold-path sweep every 600 frames.
 
 ### 🚀 System 9: PMW Kinetic Manager & Piloted Exemption
@@ -221,12 +225,12 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 * **Registration**: A priority-100 `RegisterBeforeDamageHandler` is attached via a suffix on `MyDamageSystem.LoadData` (fallback `Init`), with a direct-registration fallback if the session damage system already exists at patch time.
 * **Impact Context**: The contact callback (target 7) records the last global impact position per grid; the handler transforms it into local grid coordinates.
 * **$O(1)$ Directional Occlusion**: For `Deformation` damage only, the handler computes the direction from the impact point to the target block's center, rounds it to a single grid-space step, and inspects exactly one neighbor block:
-  * If that neighbor is a true structural armor block (`FatBlock == null`) - or any block with `DeformationRatio < 0.5f` when `EnforceStructuralArmorCheck` is relaxed - and it is not destroyed, it absorbs the blow: `info.Amount = 0f`.
+  * If that neighbor is a true structural armor block (`FatBlock == null`) - plus, with `ArmorOnlyOcclusion` relaxed, any other intact block with physics (functional blocks have no deformation skeleton, so their `DeformationRatio` is always 0) - and it is not destroyed, it absorbs the blow: `info.Amount = 0f`. Physics-less fat blocks (interior lights, decorative) never occlude.
   * No impact context (e.g. deformation from a source that never produced a contact point) passes through untouched.
 * **Counter**: Occlusions increment `ArmorHitsOccluded` for telemetry.
 
 ### 🔥 System 11: Instant Thruster Clearance & Vaporization
-*File: `Modules/GridDefender.cs` (target 11)*
+*File: `Modules/ThrusterClearance.cs` (target 11)*
 
 * **The Problem**: Vanilla thruster flame damage uses expensive volumetric Havok shape casts. When players bury thrusters inside hulls, the continuous flame recalculates compound physics shapes every frame, severely lagging the server.
 * **The Fix**: The `MyThrust.ThrustDamageAsync` prefix (fallback `DamageGrid`) replaces vanilla's volumetric cast with per-flame-dummy 1D raycasts of length `Radius * FlameDamageLengthScale * 2.5` (min 2.5m), tiered by nozzle radius to kill every bunker exploit:
@@ -247,8 +251,8 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 * **The Problem (Voxel-Vice)**: When high-speed rovers compress terrain meshes, Havok frequently calculates inverted contact normals pointing *downward* into the planet core. This pulls the vehicle into the ground, trapping it in continuous solver feedback loops that drop sim-speed to 0.20.
 * **The Fix**: The `RigidBody_ContactPointCallbackImpl` prefix inspects every contact event where either body is a voxel and the grid is in gravity:
   1. Computes the gravity up-vector and measures the contact normal against it.
-  2. If the normal points downward against the up-vector (`dot < 0`), a 1.5m ray is cast into the up-vector direction against the voxel collision layer (thread-static hit list, zero allocation).
-  3. If open air is found, the contact normal is inverted, lifting the rover out of the ground before the solver can act on the bogus contact.
+  2. If the normal points downward against the up-vector (`dot < 0`) in a pristine voxel region (per the RangeChanged 32m-bucket modification tracking), it can only be a Keen compression artifact pointing into the planet core and is inverted directly - no raycast.
+  3. In carved voxel regions (where downward normals can be real cave ceilings), a 1.5m ray is cast into the up-vector direction against the voxel collision layer (thread-static hit list, zero allocation); if open air is found, the contact normal is inverted, lifting the rover out of the ground before the solver can act on the bogus contact.
 * **Dual Duty**: The same prefix feeds the global impact-position tracker consumed by Layered Armor Occlusion (System 10).
 * **Counter**: Inversions increment `VoxelNormalsInverted`.
 
@@ -293,13 +297,17 @@ All commands require `Admin` permission level (`MyPromoteLevel.Admin`) and work 
 | `discretesmall` (`smalldiscrete`) | Forced discrete collision for qualifying small grids. |
 | `pmw` | PMW missile damage allowance. |
 | `armor` | Layered armor occlusion. |
-| `anticlang` | Anti-clang system (arrest + push-apart). |
+| `anticlang` | Anti-clang vibration arrest. |
+| `pushapart` / `push` | Active Push-Apart master toggle (independent of `anticlang`). |
 | `normal` (`voxelarbitrator`) | Voxel Normal Arbitrator. |
 | `thruster` | Thruster Clearance Engine. |
 | `thrustermode` | Cycles `ThrusterDamageMode` between `Optimized` and `VanillaLike`. |
 | `cutout` | Voxel cutout explosion suppression. |
 | `debug` | Verbose debug logging. |
 | `telemetry` (`telem`) | Periodic console telemetry heartbeat. |
+| `wheelanticlang` | Exclude suspension wheel subgrids from Anti-Clang damping. |
+| `wheelpushapart` | Exclude suspension wheel subgrids from Active Push-Apart. |
+| `wheelstabilizer` | Exclude suspension wheel subgrids from Subgrid Stabilizer. |
 
 ---
 
@@ -393,12 +401,21 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `DeformationCooldownFrames` | `int` | `30` | Rate-limiting frame window between deformation events on the same grid. |
 | `ImpactVelocityDamping` | `float` | `0.5` | Linear velocity damping applied to absorbed collisions (0.0-1.0). |
 | `DeformationMultiplier` | `float` | `1.0` | Global scaling of allowed deformation separating velocity (0.0-1.0; 0 disables deformation). |
-| `EnableAntiClang` | `bool` | `true` | Master toggle for vibration arrest and push-apart. |
+| `EnableAntiClang` | `bool` | `true` | Master toggle for vibration arrest only. Push-apart is independent (`EnablePushApart`). |
 | `StopClangSpinning` | `bool` | `true` | Zeroes runaway angular velocity (|w|^2 > 16) on caught grids. |
 | `AntiClangVibrationThreshold` | `int` | `8` | Consecutive contact frames before velocity dampening activates. |
 | `EnablePushApart` | `bool` | `true` | Nudges grids apart when physics bodies stay in sustained contact. |
 | `PushApartThreshold` | `int` | `25` | Consecutive contact frames before push-apart triggers. |
-| `PushApartDistance` | `float` | `0.5` | Push distance (meters, 0.1-5.0); grid-on-voxel pushes follow the gravity up-vector. |
+| `PushApartDistance` | `float` | `0.5` | Push distance (meters, 0.1-5.0); grid-on-voxel pushes use the first raycast-confirmed clear direction (contact normal, gravity-up, horizontals). Pushes apply to the whole mechanical group and wake sleeping bodies. |
+| `PushApartMaxAttempts` | `int` | `3` | Max consecutive voxel-escape pushes before standing down (0 = never give up, max 1000); budget refunds when the grid loses voxel contact. |
+| `EnablePushApartDebugDraw` | `bool` | `false` | Spawns a bright GPS marker pair (magenta = voxel push, yellow = grid push) at each applied push origin and end; auto-expires after 10s. |
+| `PushApartMaxNudgeDistance` | `float` | `2.0` | Ceiling for repeated positional nudges within the same ~5-second stuck window. First nudge uses `PushApartDistance`, then 2x, 3x, up to this cap. |
+| `ExcludeWheelSubgridsFromAntiClang` | `bool` | `true` | Suspension wheel subgrids are separate physics bodies; when enabled, wheel-terrain contacts are ignored by anti-clang damping. |
+| `ExcludeWheelSubgridsFromPushApart` | `bool` | `true` | When enabled, wheel-terrain contacts do not count toward Active Push-Apart, preventing rovers from being micro-teleported while driving. |
+| `ExcludeWheelSubgridsFromSubgridStabilizer` | `bool` | `true` | When enabled, suspension wheel joints are not stabilized, leaving the suspension solver alone during driving. |
+| `PushApartMinImpactSpeed` | `float` | `1.0` | Pushes only trigger from contacts at or above this impact speed in m/s (0 = no gate); keeps resting/docked grids from being nudged. |
+| `EnableBurialProbe` | `bool` | `true` | Experimental cold-path probe that rescues fully buried grids with no contact callbacks. |
+| `BurialProbeRadius` | `float` | `2.0` | Extra clearance meters (1-10) beyond the grid's bounding sphere before the probe considers it buried. |
 | `AllowMissileDamage` | `bool` | `true` | Allows qualified kinetic torpedoes to inflict deformation damage. |
 | `ExemptPilotedFromMissileStatus` | `bool` | `true` | Actively piloted vehicles (`IsControlled`) are never treated as PMWs. |
 | `SmallGridMissileMinBlocks` | `int` | `4` | Minimum blocks to qualify as a small grid PMW. |
@@ -407,7 +424,7 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `LargeGridMissileMaxBlocks` | `int` | `50` | Maximum blocks to qualify as a large grid PMW. |
 | `MissileMinVelocity` | `float` | `20.0` | Minimum velocity (m/s) for a PMW to deliver kinetic damage. |
 | `EnableLayeredArmorOcclusion` | `bool` | `true` | Enables $O(1)$ directional structural armor shielding against deformation. |
-| `EnforceStructuralArmorCheck` | `bool` | `true` | Requires occluding blocks to be structural armor (`FatBlock == null`) or low deformation ratio (< 0.5). |
+| `ArmorOnlyOcclusion` | `bool` | `true` | Strict mode: ONLY pure armor blocks occlude, and only while less than 50% deformed. Off = any intact neighbor block with physics counts as armor. Physics-less blocks never occlude. |
 | `EnableVoxelNormalArbitrator` | `bool` | `true` | Corrects phantom downward contact normals to eliminate Voxel-Vice terrain trapping. |
 | `EnableThrusterClearance` | `bool` | `true` | Replaces volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. |
 | `ThrusterDamageMode` | `enum` | `Optimized` | `Optimized` (anti-exploit: own-construct instant vaporization, landing pads immune) or `VanillaLike` (gradual thermal damage on own construct and external grids). |
@@ -434,7 +451,7 @@ Joint angular velocity threshold and motionless frame window for constraint stab
 Speed thresholds (discrete demotion / continuous promotion), grid-size discrete overrides, terrain altitude floor, and dynamic grid proximity safety bubbles.
 
 ### Tab 6: Grid Defender
-Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, voxel cutout suppression, and thruster clearance optimization.
+Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, Burial Probe (Experimental), and voxel cutout suppression. Thruster clearance controls live on their own **Thruster Clearance** tab.
 
 ### Tab 7: Telemetry & Actions
 Real-time gauges updating at 2Hz across 4 operational cards (Havok Simulation Health, Rover & Subgrid Status, Collision Defense & PMWs, Armor & Voxel Protection) plus manual admin action buttons (**Sleep All Grids**, **Wake All Grids**, **Merge Ore Now**, **Reset Gauges**).

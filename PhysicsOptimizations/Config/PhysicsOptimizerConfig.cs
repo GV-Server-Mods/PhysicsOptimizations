@@ -97,7 +97,7 @@ namespace PhysicsOptimizer.Config
 
         // --- Layered Armor Occlusion ---
         private bool _enableLayeredArmorOcclusion = true;
-        private bool _enforceStructuralArmorCheck = true;
+        private bool _armorOnlyOcclusion = true;
         private float _voxelDeformationScale = 1.0f;
 
         // --- Group 4: Anti-Clang, Separation & Voxel Arbitrator ---
@@ -109,6 +109,17 @@ namespace PhysicsOptimizer.Config
         private int _antiClangVibrationThreshold = 8;
         private int _pushApartThreshold = 25;
         private float _pushApartDistance = 0.5f;
+        private int _pushApartMaxAttempts = 3;
+        private bool _enableBurialProbe = true;
+        private bool _enablePushApartDebugDraw = false;
+        private float _pushApartMinImpactSpeed = 1.0f;
+        private float _pushApartMaxDrift = 1.5f;
+        private float _pushApartMaxNudgeDistance = 2.0f;
+        private float _burialProbeRadius = 2.0f;
+
+        private bool _excludeWheelSubgridsFromAntiClang = true;
+        private bool _excludeWheelSubgridsFromPushApart = true;
+        private bool _excludeWheelSubgridsFromSubgridStabilizer = true;
 
         // --- Speed Gates & Rate Limits (Fallback) ---
         private float _minDrivingVelocity = 10.0f;
@@ -268,7 +279,7 @@ namespace PhysicsOptimizer.Config
         public float MissileMinVelocity { get => _pmwMinVelocity; set => SetValue(ref _pmwMinVelocity, Math.Max(0.0f, value)); }
 
         public bool EnableLayeredArmorOcclusion { get => _enableLayeredArmorOcclusion; set => SetValue(ref _enableLayeredArmorOcclusion, value); }
-        public bool EnforceStructuralArmorCheck { get => _enforceStructuralArmorCheck; set => SetValue(ref _enforceStructuralArmorCheck, value); }
+        public bool ArmorOnlyOcclusion { get => _armorOnlyOcclusion; set => SetValue(ref _armorOnlyOcclusion, value); }
         public float DeformationMultiplier
         {
             get => _voxelDeformationScale;
@@ -298,6 +309,36 @@ namespace PhysicsOptimizer.Config
         {
             get => _pushApartDistance;
             set => SetValue(ref _pushApartDistance, Math.Max(0.1f, Math.Min(5.0f, value)));
+        }
+        public int PushApartMaxAttempts
+        {
+            get => _pushApartMaxAttempts;
+            set => SetValue(ref _pushApartMaxAttempts, Math.Max(0, Math.Min(1000, value)));
+        }
+        public bool EnableBurialProbe { get => _enableBurialProbe; set => SetValue(ref _enableBurialProbe, value); }
+        public bool EnablePushApartDebugDraw { get => _enablePushApartDebugDraw; set => SetValue(ref _enablePushApartDebugDraw, value); }
+        public float PushApartMinImpactSpeed
+        {
+            get => _pushApartMinImpactSpeed;
+            set => SetValue(ref _pushApartMinImpactSpeed, Math.Max(0f, Math.Min(50f, value)));
+        }
+        public float PushApartMaxDrift
+        {
+            get => _pushApartMaxDrift;
+            set => SetValue(ref _pushApartMaxDrift, Math.Max(0f, Math.Min(20f, value)));
+        }
+        public float PushApartMaxNudgeDistance
+        {
+            get => _pushApartMaxNudgeDistance;
+            set => SetValue(ref _pushApartMaxNudgeDistance, Math.Max(0.1f, Math.Min(10f, value)));
+        }
+        public bool ExcludeWheelSubgridsFromAntiClang { get => _excludeWheelSubgridsFromAntiClang; set => SetValue(ref _excludeWheelSubgridsFromAntiClang, value); }
+        public bool ExcludeWheelSubgridsFromPushApart { get => _excludeWheelSubgridsFromPushApart; set => SetValue(ref _excludeWheelSubgridsFromPushApart, value); }
+        public bool ExcludeWheelSubgridsFromSubgridStabilizer { get => _excludeWheelSubgridsFromSubgridStabilizer; set => SetValue(ref _excludeWheelSubgridsFromSubgridStabilizer, value); }
+        public float BurialProbeRadius
+        {
+            get => _burialProbeRadius;
+            set => SetValue(ref _burialProbeRadius, Math.Max(1f, Math.Min(10f, value)));
         }
 
         public float MinDrivingVelocity

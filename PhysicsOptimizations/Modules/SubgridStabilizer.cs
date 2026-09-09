@@ -86,6 +86,13 @@ namespace PhysicsOptimizer.Modules
                             }
 
                             var topGrid = mechBlock.TopGrid;
+
+                            // Do not stabilize suspension wheel subgrids - damping their physics mid-drive ruins handling.
+                            if (config.ExcludeWheelSubgridsFromSubgridStabilizer && IsWheelSubgrid(topGrid))
+                            {
+                                continue;
+                            }
+
                             if (config.MaskSmallUtilitySubgrids && topGrid?.Physics?.RigidBody != null && grid.Physics?.RigidBody != null)
                             {
                                 if (topGrid.BlocksCount <= config.MaskSmallUtilitySubgridMaxBlocks)
@@ -194,6 +201,17 @@ namespace PhysicsOptimizer.Modules
         {
             if (entity == null) return;
             _trackedJoints.TryRemove(entity.EntityId, out _);
+        }
+
+        /// <summary>True when the top grid hosts a suspension wheel block. Wheels are single-block subgrids.</summary>
+        private static bool IsWheelSubgrid(MyCubeGrid grid)
+        {
+            if (grid == null || grid.MarkedForClose || grid.Closed) return false;
+            foreach (var fat in grid.GetFatBlocks())
+            {
+                if (fat is MyMotorRotor rotor && rotor.Stator is MyMotorSuspension) return true;
+            }
+            return false;
         }
 
         private bool IsJointCommanded(MyMechanicalConnectionBlockBase mechBlock)

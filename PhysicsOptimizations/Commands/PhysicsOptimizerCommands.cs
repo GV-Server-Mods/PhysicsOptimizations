@@ -58,16 +58,17 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Allowed Multiplier: {1:F2})", cfg.EnableGridDefender, cfg.DeformationMultiplier));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Ship Ramming: {0} | Voxel Crash: {1} | Stations: {2} | Subgrids: {3} | Debris: {4}", cfg.ProtectShipsAgainstRamming, cfg.ProtectShipsAgainstVoxels, cfg.ProtectStaticGrids, cfg.ProtectSubgrids, cfg.ProtectAgainstFloatingObjects));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Fallback Gates (Applicable={0}): Safe Harbor < {1:F1} m/s | Max Deform < {2:F1} m/s | Cooldown: {3} frames", cfg.IsSpeedGatesApplicable, cfg.MinDrivingVelocity, cfg.MaxDeformationVelocity, cfg.DeformationCooldownFrames));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Push-Apart: {0} (Base: {1:F2}m, Max: {2:F2}m, Threshold: {3} frames, Max Attempts: {4}, Debug GPS: {5}, Min Impact: {6:F1} m/s, Exclude Wheels: {7})", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartMaxNudgeDistance, cfg.PushApartThreshold, cfg.PushApartMaxAttempts, cfg.EnablePushApartDebugDraw, cfg.PushApartMinImpactSpeed, cfg.ExcludeWheelSubgridsFromPushApart));
             sb.AppendLine();
             sb.AppendLine("* Player-Made Missiles (PMWs):");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - PMW Damage Allowed: {0} (Piloted Buggy Exemption: {1})", cfg.AllowMissileDamage, cfg.ExemptPilotedFromMissileStatus));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Small Grid PMW: {0}-{1} blks | Large Grid PMW: {2}-{3} blks | Min Vel: {4:F1} m/s", cfg.SmallGridMissileMinBlocks, cfg.SmallGridMissileMaxBlocks, cfg.LargeGridMissileMinBlocks, cfg.LargeGridMissileMaxBlocks, cfg.MissileMinVelocity));
             sb.AppendLine();
             sb.AppendLine("* Layered Armor Occlusion:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Structural Check: {1})", cfg.EnableLayeredArmorOcclusion, cfg.EnforceStructuralArmorCheck));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Armor-Only Occlusion: {1})", cfg.EnableLayeredArmorOcclusion, cfg.ArmorOnlyOcclusion));
             sb.AppendLine();
             sb.AppendLine("* Anti-Clang & Kinetic Absorption System:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Stop Spins: {1} | Arbitrator: {2})", cfg.EnableAntiClang, cfg.StopClangSpinning, cfg.EnableVoxelNormalArbitrator));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Stop Spins: {1} | Arbitrator: {2} | Exclude Wheels: {3})", cfg.EnableAntiClang, cfg.StopClangSpinning, cfg.EnableVoxelNormalArbitrator, cfg.ExcludeWheelSubgridsFromAntiClang));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Impact Velocity Damping: {0:F2} | Vibration Threshold: {1} frames", cfg.ImpactVelocityDamping, cfg.AntiClangVibrationThreshold));
             sb.AppendLine();
             sb.AppendLine("* Active Push-Apart Separation:");
@@ -128,6 +129,13 @@ namespace PhysicsOptimizer.Commands
                 return;
             }
 
+            var cfg = Plugin.Config;
+            if (!cfg.EnableRigidBodySleep)
+            {
+                Context.Respond("Rigid Body Sleep is disabled. Enable it with '!phys toggle sleep' before using !phys sleepall.");
+                return;
+            }
+
             int count = Plugin.RigidBodySleep.ForceSleepAllIdleGrids();
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Force-slept {0} idle dynamic grids.", count));
         }
@@ -146,7 +154,7 @@ namespace PhysicsOptimizer.Commands
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Proximity merge complete: eliminated {0} redundant floating entities.", eliminated));
         }
 
-        [Command("toggle", "Toggles an individual optimization or feature. Usage: !phys toggle <all|wheels|mask|parkedsleep|sleep|ore|subgrids|utilitymask|toi|discretelarge|discretesmall|pmw|armor|anticlang|normal|thruster|thrustermode|cutout|debug|telemetry>")]
+        [Command("toggle", "Toggles an individual optimization or feature. Usage: !phys toggle <all|wheels|mask|parkedsleep|sleep|ore|subgrids|utilitymask|toi|discretelarge|discretesmall|pmw|armor|anticlang|pushapart|normal|thruster|thrustermode|cutout|debug|telemetry|wheelanticlang|wheelpushapart|wheelstabilizer>")]
         [Permission(MyPromoteLevel.Admin)]
         public void Toggle(string featureName)
         {
@@ -235,6 +243,11 @@ namespace PhysicsOptimizer.Commands
                     cfg.EnableAntiClang = !cfg.EnableAntiClang;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Anti-Clang System is now {0}.", cfg.EnableAntiClang ? "ENABLED" : "DISABLED");
                     break;
+                case "pushapart":
+                case "push":
+                    cfg.EnablePushApart = !cfg.EnablePushApart;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Active Push-Apart is now {0}.", cfg.EnablePushApart ? "ENABLED" : "DISABLED");
+                    break;
                 case "voxelarbitrator":
                 case "normal":
                     cfg.EnableVoxelNormalArbitrator = !cfg.EnableVoxelNormalArbitrator;
@@ -269,8 +282,23 @@ namespace PhysicsOptimizer.Commands
                     cfg.SuppressAllVoxelExplosionDamage = !cfg.SuppressAllVoxelExplosionDamage;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Voxel Cutout Explosion Suppression is now {0}.", cfg.SuppressAllVoxelExplosionDamage ? "ENABLED" : "DISABLED");
                     break;
+                case "wheelanticlang":
+                case "excludewheelanticlang":
+                    cfg.ExcludeWheelSubgridsFromAntiClang = !cfg.ExcludeWheelSubgridsFromAntiClang;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel subgrid exclusion from Anti-Clang is now {0}.", cfg.ExcludeWheelSubgridsFromAntiClang ? "ENABLED" : "DISABLED");
+                    break;
+                case "wheelpushapart":
+                case "excludewheelpushapart":
+                    cfg.ExcludeWheelSubgridsFromPushApart = !cfg.ExcludeWheelSubgridsFromPushApart;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel subgrid exclusion from Push-Apart is now {0}.", cfg.ExcludeWheelSubgridsFromPushApart ? "ENABLED" : "DISABLED");
+                    break;
+                case "wheelstabilizer":
+                case "excludewheelstabilizer":
+                    cfg.ExcludeWheelSubgridsFromSubgridStabilizer = !cfg.ExcludeWheelSubgridsFromSubgridStabilizer;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel subgrid exclusion from Subgrid Stabilizer is now {0}.", cfg.ExcludeWheelSubgridsFromSubgridStabilizer ? "ENABLED" : "DISABLED");
+                    break;
                 default:
-                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, normal, thruster, thrustermode, cutout, debug, telemetry.", featureName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, pushapart, normal, thruster, thrustermode, cutout, debug, telemetry.", featureName));
                     return;
             }
 

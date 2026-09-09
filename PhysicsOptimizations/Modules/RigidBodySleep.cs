@@ -37,6 +37,7 @@ namespace PhysicsOptimizer.Modules
 
         private readonly ConcurrentDictionary<long, GridIdleTracker> _trackers = new();
         private readonly List<long> _cleanupBuffer = [];
+        private bool _wasEnabled;
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
@@ -47,10 +48,19 @@ namespace PhysicsOptimizer.Modules
 
         public void Update(ulong frameCounter)
         {
-            if (!IsEnabled || _plugin?.Config == null)
+            bool enabled = IsEnabled && _plugin?.Config != null;
+            if (!enabled)
             {
+                // Feature disabled: drop any forced-sleep state so stale trackers cannot wake grids.
+                if (_wasEnabled)
+                {
+                    _trackers.Clear();
+                    _wasEnabled = false;
+                }
                 return;
             }
+
+            _wasEnabled = true;
 
             // Run evaluation every 60 frames (1 second)
             if (frameCounter % 60 != 0)
@@ -116,7 +126,8 @@ namespace PhysicsOptimizer.Modules
                             _trackers[grid.EntityId] = tracker;
                         }
 
-                        if (!isPiloted && isSupported && linSq <= linThreshSq && angSq <= angThreshSq)
+                        if (!isPiloted && isSupported && linSq <= linThreshSq && angSq <= angThreshSq
+                            && !GridDefender.HadRecentVoxelContact(grid.EntityId)) // GridDefender: sleeping bodies emit no contact callbacks - keep grinding grids awake so push-apart can rescue them
                         {
                             tracker.IdleSeconds++;
                             if (tracker.IdleSeconds >= requiredSeconds && isActive)
@@ -246,6 +257,8 @@ namespace PhysicsOptimizer.Modules
 
         public void WakeGrid(MyCubeGrid grid, string reason = "External event")
         {
+            // Feature disabled: we must not wake grids; WheelOptimizer has its own wake path.
+            if (!IsEnabled) return;
             if (grid?.Physics?.RigidBody == null || grid.MarkedForClose || grid.Closed) return;
 
             if (!grid.Physics.RigidBody.IsActive)
@@ -266,6 +279,9 @@ namespace PhysicsOptimizer.Modules
 
         public int ForceSleepAllIdleGrids()
         {
+            // Feature disabled: do not force-sleep grids; the UI/admin button should be a no-op.
+            if (!IsEnabled) return 0;
+
             int sleptCount = 0;
             try
             {
@@ -274,7 +290,7 @@ namespace PhysicsOptimizer.Modules
                 {
                     if (entity is MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && grid.Physics?.RigidBody != null)
                     {
-                        if (!IsGridPiloted(grid) && grid.Physics.RigidBody.IsActive)
+                        if (!IsGridPiloted(grid) && !GridDefender.HadRecentVoxelContact(grid.EntityId) && grid.Physics.RigidBody.IsActive)
                         {
                             grid.Physics.RigidBody.Deactivate();
                             sleptCount++;
@@ -369,13 +385,14 @@ namespace PhysicsOptimizer.Modules
 
             long gridId = __instance.CubeGrid.EntityId;
 
-            // Cross-feature wake: rover suspension sleep lives in WheelOptimizer
+            // Cross-feature wake: rover suspension sleep lives in WheelOptimizer (independent toggle)
             if (plugin.WheelOptimizer != null && plugin.WheelOptimizer.IsGridSuspensionAsleep(gridId))
             {
                 plugin.WheelOptimizer.WakeRover(gridId, "Cockpit movement input");
             }
 
-            if (plugin.RigidBodySleep != null && plugin.RigidBodySleep.IsGridSleeping(gridId))
+            // Rigid-body wake is gated by this feature's own toggle
+            if (plugin.RigidBodySleep != null && plugin.RigidBodySleep.IsEnabled && plugin.RigidBodySleep.IsGridSleeping(gridId))
             {
                 plugin.RigidBodySleep.WakeGrid(__instance.CubeGrid, "Cockpit movement input");
             }
@@ -396,9 +413,14 @@ namespace PhysicsOptimizer.Modules
             var plugin = PhysicsOptimizerPlugin.Instance;
             if (plugin?.Config != null && plugin.Config.Enabled && plugin.Config.EnablePhysicsOptimizations)
             {
-                // Cross-feature wake: rover suspension sleep lives in WheelOptimizer
+                // Cross-feature wake: rover suspension sleep lives in WheelOptimizer (independent toggle)
                 plugin.WheelOptimizer?.WakeRover(grid.EntityId, "Grid took damage");
-                plugin.RigidBodySleep?.WakeGrid(grid, "Grid took damage");
+
+                // Rigid-body wake is gated by this feature's own toggle
+                if (plugin.RigidBodySleep != null && plugin.RigidBodySleep.IsEnabled)
+                {
+                    plugin.RigidBodySleep.WakeGrid(grid, "Grid took damage");
+                }
             }
         }
     }
