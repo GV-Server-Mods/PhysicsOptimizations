@@ -116,6 +116,7 @@ namespace PhysicsOptimizer.Config
         private float _pushApartMaxDrift = 1.5f;
         private float _pushApartMaxNudgeDistance = 2.0f;
         private float _burialProbeRadius = 2.0f;
+        private bool _enableVoxelNormalArbitratorDebugDraw = false;
 
         private bool _excludeWheelSubgridsFromAntiClang = true;
         private bool _excludeWheelSubgridsFromPushApart = true;
@@ -340,6 +341,7 @@ namespace PhysicsOptimizer.Config
             get => _burialProbeRadius;
             set => SetValue(ref _burialProbeRadius, Math.Max(1f, Math.Min(10f, value)));
         }
+        public bool EnableVoxelNormalArbitratorDebugDraw { get => _enableVoxelNormalArbitratorDebugDraw; set => SetValue(ref _enableVoxelNormalArbitratorDebugDraw, value); }
 
         public float MinDrivingVelocity
         {

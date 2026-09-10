@@ -20,6 +20,9 @@ using VRageMath;
 using PhysicsOptimizer.Config;
 using PhysicsOptimizer.Services;
 using PhysicsOptimizer.Utils;
+using Sandbox.Game.Entities.Blocks;
+using Sandbox.Game.World;
+using VRage.Collections;
 
 namespace PhysicsOptimizer.Modules
 {
@@ -154,7 +157,7 @@ namespace PhysicsOptimizer.Modules
 
         private static void MarkVoxelRange(MyVoxelBase voxel, Vector3I min, Vector3I max)
         {
-            var buckets = _modifiedVoxelRegions.GetOrAdd(voxel.EntityId, _ => new ConcurrentDictionary<long, byte>());
+            ConcurrentDictionary<long, byte> buckets = _modifiedVoxelRegions.GetOrAdd(voxel.EntityId, _ => new ConcurrentDictionary<long, byte>());
             int bMinX = min.X >> VoxelRegionBucketShift, bMinY = min.Y >> VoxelRegionBucketShift, bMinZ = min.Z >> VoxelRegionBucketShift;
             int bMaxX = max.X >> VoxelRegionBucketShift, bMaxY = max.Y >> VoxelRegionBucketShift, bMaxZ = max.Z >> VoxelRegionBucketShift;
             long cellCount = (long)(bMaxX - bMinX + 1) * (bMaxY - bMinY + 1) * (bMaxZ - bMinZ + 1);
@@ -184,7 +187,7 @@ namespace PhysicsOptimizer.Modules
         /// <summary>True if the 32m region around worldPos was carved/drilled at some point (per RangeChanged tracking).</summary>
         private static bool IsVoxelRegionModified(MyVoxelBase voxel, Vector3D worldPos)
         {
-            if (!_modifiedVoxelRegions.TryGetValue(voxel.EntityId, out var buckets) || buckets.IsEmpty) return false;
+            if (!_modifiedVoxelRegions.TryGetValue(voxel.EntityId, out ConcurrentDictionary<long, byte> buckets) || buckets.IsEmpty) return false;
             if (buckets.ContainsKey(-1L)) return true;
             Vector3D local = (worldPos - voxel.PositionLeftBottomCorner) / voxel.VoxelSize;
             int cx = (int)Math.Floor(local.X), cy = (int)Math.Floor(local.Y), cz = (int)Math.Floor(local.Z);
@@ -251,7 +254,7 @@ namespace PhysicsOptimizer.Modules
         public bool IsMissile(MyCubeGrid testGrid, float speed)
         {
             if (_plugin?.Config == null) return false;
-            var config = _plugin.Config;
+            PhysicsOptimizerConfig config = _plugin.Config;
 
             if (testGrid == null || testGrid.MarkedForClose || testGrid.Closed || testGrid.IsStatic) return false;
             if (speed < config.MissileMinVelocity) return false;
@@ -286,8 +289,8 @@ namespace PhysicsOptimizer.Modules
         public bool ShouldAllowDeformation(MyGridPhysics physics, MyEntity otherEntity, ref float separatingVelocity)
         {
             if (_plugin?.Config == null || !_plugin.Config.Enabled || !_plugin.Config.EnableGridDefender) return true;
-            var config = _plugin.Config;
-            var stats = _plugin.DefenseStats;
+            PhysicsOptimizerConfig config = _plugin.Config;
+            DefenseStatistics stats = _plugin.DefenseStats;
 
             if (physics?.Entity is not MyCubeGrid grid || grid.MarkedForClose || grid.Closed) return true;
             if (otherEntity == null || otherEntity.MarkedForClose || otherEntity.Closed) return true;
@@ -328,8 +331,8 @@ namespace PhysicsOptimizer.Modules
             // 4. Missile (PMW) Evaluation & Engagement Tracking (Targets grids only, never voxels)
             if (otherEntity is MyCubeGrid targetGrid)
             {
-                bool gridInMissile = _activeMissiles.TryGetValue(grid.EntityId, out var gridEngage) && currentFrame <= gridEngage.ExpireFrame;
-                bool otherInMissile = _activeMissiles.TryGetValue(targetGrid.EntityId, out var otherEngage) && currentFrame <= otherEngage.ExpireFrame;
+                bool gridInMissile = _activeMissiles.TryGetValue(grid.EntityId, out MissileEngagement gridEngage) && currentFrame <= gridEngage.ExpireFrame;
+                bool otherInMissile = _activeMissiles.TryGetValue(targetGrid.EntityId, out MissileEngagement otherEngage) && currentFrame <= otherEngage.ExpireFrame;
 
                 // Friendly-fire shield: Suppress self-damage between splits of the same missile
                 if (gridInMissile && otherInMissile && gridEngage.GroupId == otherEngage.GroupId)
@@ -536,7 +539,7 @@ namespace PhysicsOptimizer.Modules
         {
             if (originalGrid == null || newGrid == null || newGrid.MarkedForClose || newGrid.Closed) return;
 
-            if (_activeMissiles.TryGetValue(originalGrid.EntityId, out var engagement))
+            if (_activeMissiles.TryGetValue(originalGrid.EntityId, out MissileEngagement engagement))
             {
                 RegisterActiveMissile(newGrid, engagement);
             }
@@ -544,7 +547,7 @@ namespace PhysicsOptimizer.Modules
 
         private void ApplyImpactDamping(MyGridPhysics physics, bool isStatic)
         {
-            var config = _plugin?.Config;
+            PhysicsOptimizerConfig config = _plugin?.Config;
             if (config == null || isStatic || physics == null || !config.EnableAntiClang || config.ImpactVelocityDamping <= 0.0f) return;
             if (physics.Entity == null || physics.Entity.MarkedForClose || physics.Entity.Closed) return;
 
@@ -575,11 +578,11 @@ namespace PhysicsOptimizer.Modules
 
         private static long TryResolveWheelBaseGrid(MyCubeGrid grid)
         {
-            foreach (var fat in grid.GetFatBlocks())
+            foreach (MyCubeBlock fat in grid.GetFatBlocks())
             {
                 if (fat is MyMotorRotor rotor && rotor.Stator is MyMotorSuspension)
                 {
-                    var stator = rotor.Stator;
+                    MyMechanicalConnectionBlockBase stator = rotor.Stator;
                     if (stator?.CubeGrid != null && !stator.CubeGrid.MarkedForClose && !stator.CubeGrid.Closed)
                     {
                         return stator.CubeGrid.EntityId;
@@ -591,10 +594,10 @@ namespace PhysicsOptimizer.Modules
             // but if the stator reference is not yet wired, pick the first non-rotor member).
             var members = new List<MyCubeGrid>();
             GridUtils.GetMechanicalGroupMembers(grid, members);
-            foreach (var member in members)
+            foreach (MyCubeGrid member in members)
             {
                 if (member == null || member.MarkedForClose || member.Closed || member.EntityId == grid.EntityId) continue;
-                foreach (var fat in member.GetFatBlocks())
+                foreach (MyCubeBlock fat in member.GetFatBlocks())
                 {
                     if (fat != null && !(fat is MyMotorRotor)) return member.EntityId;
                 }
@@ -604,7 +607,7 @@ namespace PhysicsOptimizer.Modules
 
         private void ApplyAntiClang(MyCubeGrid grid, MyGridPhysics physics, MyEntity otherEntity, float impactSpeed)
         {
-            var config = _plugin?.Config;
+            PhysicsOptimizerConfig config = _plugin?.Config;
             if (config == null || grid == null || grid.MarkedForClose || grid.Closed) return;
 
             bool isWheelVoxel = otherEntity is MyVoxelBase && IsWheelSubgrid(grid, out _);
@@ -776,7 +779,7 @@ namespace PhysicsOptimizer.Modules
             Vector3D north = Vector3D.Normalize(Vector3D.Cross(up, east));
 
             Vector3D[] candidates = { east, -east, north, -north };
-            foreach (var candidate in candidates)
+            foreach (Vector3D candidate in candidates)
             {
                 if (HasVoxelFreeLine(center, candidate, rayLength))
                 {
@@ -799,7 +802,7 @@ namespace PhysicsOptimizer.Modules
 
         private void TryPushApart(MyCubeGrid grid, MyEntity otherEntity)
         {
-            var config = _plugin?.Config;
+            PhysicsOptimizerConfig config = _plugin?.Config;
             if (config == null || grid == null || otherEntity == null || grid.MarkedForClose || grid.Closed || otherEntity.MarkedForClose || otherEntity.Closed) return;
 
             Vector3D gridPos = grid.PositionComp.GetPosition();
@@ -828,7 +831,7 @@ namespace PhysicsOptimizer.Modules
                 // reuse the previous escape direction and escalate the distance so repeated positional
                 // teleports accumulate and dig submerged wheels out, instead of re-resolving from scratch
                 double distance = config.PushApartDistance;
-                if (_lastEscapes.TryGetValue(grid.EntityId, out var esc) && currentFrame <= esc.Frame + 300)
+                if (_lastEscapes.TryGetValue(grid.EntityId, out EscapeRecord esc) && currentFrame <= esc.Frame + 300)
                 {
                     separationDir = esc.Direction;
                     esc.Level = Math.Min(esc.Level + 1, 3);
@@ -863,7 +866,7 @@ namespace PhysicsOptimizer.Modules
 
         private void EnqueuePush(MyCubeGrid grid, Vector3D separationDir, bool voxelPush, double distance)
         {
-            var config = _plugin?.Config;
+            PhysicsOptimizerConfig config = _plugin?.Config;
             if (config == null || grid == null || grid.MarkedForClose || grid.Closed) return;
 
             _pushQueue.Enqueue(new PushApartAction
@@ -885,8 +888,8 @@ namespace PhysicsOptimizer.Modules
 
         private bool AllowOrScale(long gridEntityId, ref float separatingVelocity, bool isMissile)
         {
-            var config = _plugin?.Config;
-            var stats = _plugin?.DefenseStats;
+            PhysicsOptimizerConfig config = _plugin?.Config;
+            DefenseStatistics stats = _plugin?.DefenseStats;
             if (config == null) return true;
 
             if (config.DeformationMultiplier <= 0.0f)
@@ -923,7 +926,7 @@ namespace PhysicsOptimizer.Modules
 
         private static void TrimDictionary(ConcurrentDictionary<long, ulong> dict, ulong currentFrame, ulong maxAge, ConcurrentDictionary<long, int> secondaryDict = null)
         {
-            foreach (var kvp in dict)
+            foreach (KeyValuePair<long, ulong> kvp in dict)
             {
                 if (currentFrame > kvp.Value && (currentFrame - kvp.Value) > maxAge)
                 {
@@ -954,12 +957,12 @@ namespace PhysicsOptimizer.Modules
 
         private void ProcessPushQueue()
         {
-            var config = _plugin?.Config;
-            while (_pushQueue.TryDequeue(out var action))
+            PhysicsOptimizerConfig config = _plugin?.Config;
+            while (_pushQueue.TryDequeue(out PushApartAction action))
             {
                 try
                 {
-                    if (!MyEntities.TryGetEntityById(action.GridId, out var entity) || entity is not MyCubeGrid grid)
+                    if (!MyEntities.TryGetEntityById(action.GridId, out MyEntity entity) || entity is not MyCubeGrid grid)
                     {
                         continue;
                     }
@@ -976,11 +979,11 @@ namespace PhysicsOptimizer.Modules
                     _groupMembersBuffer.Clear();
                     GridUtils.GetMechanicalGroupMembers(grid, _groupMembersBuffer);
 
-                    foreach (var member in _groupMembersBuffer)
+                    foreach (MyCubeGrid member in _groupMembersBuffer)
                     {
                         if (member == null || member.MarkedForClose || member.Closed) continue;
 
-                        var matrix = member.WorldMatrix;
+                        MatrixD matrix = member.WorldMatrix;
                         matrix.Translation += action.SeparationDir * action.Distance;
                         member.PositionComp.SetWorldMatrix(ref matrix);
 
@@ -1003,31 +1006,65 @@ namespace PhysicsOptimizer.Modules
             }
         }
 
+        // --- Capped Debug GPS Draws ---
+        // Shared by the voxel-arbitrator (physics thread) and push-apart (game thread) debug draws.
+
+        private const int MaxLiveDebugGpsMarkers = 10;
+        private const int DebugGpsTtlSeconds = 10;
+
+        private struct DebugGpsMarker
+        {
+            public string Name;
+            public DateTime ExpiresUtc;
+        }
+
+        private static readonly object _debugGpsLock = new object();
+        private static readonly List<DebugGpsMarker> _liveDebugGps = new List<DebugGpsMarker>();
+
+        /// <summary>
+        /// Capped debug GPS add visible to all players: at most MaxLiveDebugGpsMarkers live markers
+        /// globally (10s TTL), and the previous same-name marker is deleted before re-adding so a
+        /// repeatedly-inverting grid holds one marker instead of stacking duplicates.
+        /// </summary>
+        private static void AddCappedDebugGps(string name, string description, Vector3D pos, Color color)
+        {
+            DateTime now = DateTime.UtcNow;
+            lock (_debugGpsLock)
+            {
+                for (int i = _liveDebugGps.Count - 1; i >= 0; i--)
+                {
+                    if (_liveDebugGps[i].ExpiresUtc <= now || _liveDebugGps[i].Name == name)
+                        _liveDebugGps.RemoveAt(i);
+                }
+
+                if (_liveDebugGps.Count >= MaxLiveDebugGpsMarkers) return;
+                _liveDebugGps.Add(new DebugGpsMarker { Name = name, ExpiresUtc = now.AddSeconds(DebugGpsTtlSeconds) });
+            }
+
+            RemoveDebugGpsForAll(name);
+            MyVisualScriptLogicProvider.AddGPSForAll(name, description, pos, color, DebugGpsTtlSeconds);
+        }
+
         /// <summary>
         /// Bright GPS marker pair at the push origin/end so admins can watch pushes live in the HUD.
-        /// One pair per grid: the previous pair is deleted before re-adding, so a repeatedly-pushed
-        /// grid holds exactly two markers instead of flooding the GPS list. Auto-expires after 10s.
+        /// One pair per grid via the shared cap: the previous pair is deleted before re-adding, so a
+        /// repeatedly-pushed grid holds exactly two markers instead of flooding the GPS list.
         /// </summary>
         private static void DrawPushDebugGps(PushApartAction action, string gridName)
         {
-            string startName = $"PD {gridName} START";
-            string endName = $"PD {gridName} END (5m)";
-            RemoveDebugGpsForAll(startName);
-            RemoveDebugGpsForAll(endName);
-
             Color color = action.VoxelPush ? Color.Magenta : Color.Yellow;
-            MyVisualScriptLogicProvider.AddGPSForAll(startName, $"push-apart debug: [{(action.VoxelPush ? "VOXEL" : "GRID")}] push origin", action.StartPos, color, 10);
-            MyVisualScriptLogicProvider.AddGPSForAll(endName, $"push-apart debug: pushed {action.Distance:F1}m along vector", action.StartPos + action.SeparationDir * 5.0, color, 10);
+            AddCappedDebugGps($"PD {gridName} START", $"push-apart debug: [{(action.VoxelPush ? "VOXEL" : "GRID")}] push origin", action.StartPos, color);
+            AddCappedDebugGps($"PD {gridName} END (5m)", $"push-apart debug: pushed {action.Distance:F1}m along vector", action.StartPos + action.SeparationDir * 5.0, color);
         }
 
         private static void RemoveDebugGpsForAll(string name)
         {
-            var players = Sandbox.Game.World.MySession.Static?.Players?.GetOnlinePlayers();
+            ICollection<MyPlayer> players = Sandbox.Game.World.MySession.Static?.Players?.GetOnlinePlayers();
             if (players == null) return;
 
-            foreach (var player in players)
+            foreach (MyPlayer player in players)
             {
-                var gps = Sandbox.Game.World.MySession.Static.Gpss.GetGpsByName(player.Identity.IdentityId, name);
+                IMyGps gps = Sandbox.Game.World.MySession.Static.Gpss.GetGpsByName(player.Identity.IdentityId, name);
                 if (gps != null)
                 {
                     Sandbox.Game.World.MySession.Static.Gpss.SendDeleteGpsRequest(player.Identity.IdentityId, gps.Hash);
@@ -1044,20 +1081,20 @@ namespace PhysicsOptimizer.Modules
         /// </summary>
         private void RunBurialProbe(ulong currentFrame)
         {
-            var config = _plugin?.Config;
+            PhysicsOptimizerConfig config = _plugin?.Config;
             if (config == null || !config.EnableBurialProbe || !config.EnablePushApart) return;
 
-            var entities = MyEntities.GetEntities();
+            MyConcurrentHashSet<MyEntity> entities = MyEntities.GetEntities();
             try
             {
-                foreach (var entity in entities)
+                foreach (MyEntity entity in entities)
                 {
                     if (entity is not MyCubeGrid grid || grid.IsStatic || grid.MarkedForClose || grid.Closed || grid.Physics?.RigidBody == null) continue;
 
                     long id = grid.EntityId;
                     Vector3D pos = grid.PositionComp.GetPosition();
 
-                    if (!_burialProbeStates.TryGetValue(id, out var state))
+                    if (!_burialProbeStates.TryGetValue(id, out BurialProbeState state))
                     {
                         _burialProbeStates[id] = new BurialProbeState { LastPosition = pos, StationarySweeps = 0 };
                         continue;
@@ -1127,7 +1164,7 @@ namespace PhysicsOptimizer.Modules
         {
             try
             {
-                foreach (var kvp in _activeMissiles)
+                foreach (KeyValuePair<long, MissileEngagement> kvp in _activeMissiles)
                 {
                     if (currentFrame > kvp.Value.ExpireFrame + 300)
                     {
@@ -1175,19 +1212,19 @@ namespace PhysicsOptimizer.Modules
             // 1. MyGridPhysics: PerformDeformation & ContactPointCallback
             try
             {
-                var targetMethod = typeof(MyGridPhysics).GetMethod("PerformDeformation", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                MethodInfo targetMethod = typeof(MyGridPhysics).GetMethod("PerformDeformation", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
                 if (targetMethod != null)
                 {
-                    var prefixMethod = typeof(GridDefender).GetMethod(nameof(Prefix_PerformDeformation), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    MethodInfo prefixMethod = typeof(GridDefender).GetMethod(nameof(Prefix_PerformDeformation), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     ctx.GetPattern(targetMethod).Prefixes.Add(prefixMethod);
                     PatchConflictAudit.RegisterTarget(targetMethod);
                     Log.Info(LogSource, "Registered MyGridPhysics.PerformDeformation hook.");
                 }
 
-                var contactMethod = typeof(MyGridPhysics).GetMethod("RigidBody_ContactPointCallbackImpl", BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo contactMethod = typeof(MyGridPhysics).GetMethod("RigidBody_ContactPointCallbackImpl", BindingFlags.Instance | BindingFlags.NonPublic);
                 if (contactMethod != null)
                 {
-                    var contactPrefix = typeof(GridDefender).GetMethod(nameof(Prefix_RigidBody_ContactPointCallbackImpl), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    MethodInfo contactPrefix = typeof(GridDefender).GetMethod(nameof(Prefix_RigidBody_ContactPointCallbackImpl), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     ctx.GetPattern(contactMethod).Prefixes.Add(contactPrefix);
                     PatchConflictAudit.RegisterTarget(contactMethod);
                     Log.Info(LogSource, "Registered MyGridPhysics.RigidBody_ContactPointCallbackImpl hook.");
@@ -1201,21 +1238,21 @@ namespace PhysicsOptimizer.Modules
             // 2. MyExplosion: Voxel Cutouts
             try
             {
-                var explosionType = typeof(MyExplosions).Assembly.GetType("Sandbox.Game.MyExplosion");
+                Type explosionType = typeof(MyExplosions).Assembly.GetType("Sandbox.Game.MyExplosion");
                 if (explosionType != null)
                 {
-                    var applyVoxelMethod = explosionType.GetMethod("ApplyExplosionOnVoxel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                    MethodInfo applyVoxelMethod = explosionType.GetMethod("ApplyExplosionOnVoxel", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
                     if (applyVoxelMethod != null)
                     {
-                        var prefixApply = typeof(GridDefender).GetMethod(nameof(PrefixApplyExplosionOnVoxel), BindingFlags.Static | BindingFlags.NonPublic);
+                        MethodInfo prefixApply = typeof(GridDefender).GetMethod(nameof(PrefixApplyExplosionOnVoxel), BindingFlags.Static | BindingFlags.NonPublic);
                         ctx.GetPattern(applyVoxelMethod).Prefixes.Add(prefixApply);
                         PatchConflictAudit.RegisterTarget(applyVoxelMethod);
                     }
 
-                    var cutOutMethod = explosionType.GetMethod("CutOutVoxelMap", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    MethodInfo cutOutMethod = explosionType.GetMethod("CutOutVoxelMap", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     if (cutOutMethod != null)
                     {
-                        var prefixCutOut = typeof(GridDefender).GetMethod(nameof(PrefixCutOutVoxelMap), BindingFlags.Static | BindingFlags.NonPublic);
+                        MethodInfo prefixCutOut = typeof(GridDefender).GetMethod(nameof(PrefixCutOutVoxelMap), BindingFlags.Static | BindingFlags.NonPublic);
                         ctx.GetPattern(cutOutMethod).Prefixes.Add(prefixCutOut);
                         PatchConflictAudit.RegisterTarget(cutOutMethod);
                     }
@@ -1230,12 +1267,12 @@ namespace PhysicsOptimizer.Modules
             // 3. Layered Armor Occlusion via MyDamageSystem
             try
             {
-                var initMethod = typeof(MyDamageSystem).GetMethod("LoadData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                MethodInfo initMethod = typeof(MyDamageSystem).GetMethod("LoadData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                               ?? typeof(MyDamageSystem).GetMethod("Init", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
                 if (initMethod != null)
                 {
-                    var initPostfix = typeof(GridDefender).GetMethod(nameof(DamageSystemInitPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    MethodInfo initPostfix = typeof(GridDefender).GetMethod(nameof(DamageSystemInitPostfix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     ctx.GetPattern(initMethod).Suffixes.Add(initPostfix);
                     PatchConflictAudit.RegisterTarget(initMethod);
                     Log.Info(LogSource, "Registered MyDamageSystem hook for Layered Armor Occlusion.");
@@ -1256,7 +1293,7 @@ namespace PhysicsOptimizer.Modules
 
         public static bool Prefix_PerformDeformation(MyGridPhysics __instance, MyEntity otherEntity, ref float separatingVelocity)
         {
-            var plugin = PhysicsOptimizerPlugin.Instance;
+            PhysicsOptimizerPlugin plugin = PhysicsOptimizerPlugin.Instance;
             if (plugin?.GridDefender == null) return true;
 
             return plugin.GridDefender.ShouldAllowDeformation(__instance, otherEntity, ref separatingVelocity);
@@ -1266,10 +1303,10 @@ namespace PhysicsOptimizer.Modules
         {
             if (__instance.Entity is MyCubeGrid gridLocal)
             {
-                UpdateCollisionContext(gridLocal.EntityId, value.ContactPoint.Position);
+                UpdateCollisionContext(gridLocal.EntityId, __instance.ClusterToWorld(value.ContactPoint.Position));
             }
 
-            var config = PhysicsOptimizerPlugin.Instance?.Config;
+            PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
             bool arbitratorEnabled = config != null && config.EnableVoxelNormalArbitrator;
             if (config == null)
                 return true;
@@ -1277,19 +1314,19 @@ namespace PhysicsOptimizer.Modules
             if (__instance.Entity is not MyCubeGrid grid || grid.MarkedForClose || grid.Closed)
                 return true;
 
-            var rb = value.GetPhysicsBody(0);
-            var otherRb = value.GetPhysicsBody(1);
+            MyPhysicsBody rb = value.GetPhysicsBody(0);
+            MyPhysicsBody otherRb = value.GetPhysicsBody(1);
             if (rb == null || otherRb == null) return true;
 
             bool isVoxel = false;
-            var otherEnt = otherRb.Entity;
+            IMyEntity otherEnt = otherRb.Entity;
             if (otherEnt is MyVoxelBase)
             {
                 isVoxel = true;
             }
             else
             {
-                var selfEnt = rb.Entity;
+                IMyEntity selfEnt = rb.Entity;
                 if (selfEnt is MyVoxelBase)
                 {
                     isVoxel = true;
@@ -1312,32 +1349,34 @@ namespace PhysicsOptimizer.Modules
 
                 if (!arbitratorEnabled) return true;
 
-                var gravity = __instance.Gravity;
+                Vector3 gravity = __instance.Gravity;
                 if (gravity.LengthSquared() < 0.01f) return true;
 
-                var upVector = -Vector3.Normalize((Vector3)gravity);
+                Vector3 upVector = -Vector3.Normalize((Vector3)gravity);
                 float upDot = Vector3.Dot(value.ContactPoint.Normal, upVector);
 
                 if (upDot < 0f)
                 {
-                    var contactPos = value.ContactPoint.Position;
+                    // Contact positions arrive in Havok cluster space (origin-offset world); vanilla converts
+                    // every consumer via ClusterToWorld - raw values are shifted by the cluster world anchor.
+                    Vector3D contactPos = __instance.ClusterToWorld(value.ContactPoint.Position);
 
                     // Same two-tier rule as push-apart: in pristine voxel regions a gravity-downward normal can
                     // only be a Keen compression artifact pointing into the planet core, so invert it directly.
                     // Only carved regions (real cave ceilings are possible) pay for the confirmation raycast.
-                    var voxelEnt = otherEnt as MyVoxelBase ?? rb.Entity as MyVoxelBase;
+                    MyVoxelBase voxelEnt = otherEnt as MyVoxelBase ?? rb.Entity as MyVoxelBase;
                     bool hitAir = voxelEnt == null || !IsVoxelRegionModified(voxelEnt, contactPos);
                     if (!hitAir)
                     {
-                        var rayStart = contactPos;
-                        var rayEnd = rayStart + upVector * 1.5f;
+                        Vector3D rayStart = contactPos;
+                        Vector3D rayEnd = rayStart + (Vector3D)upVector * 1.5f;
 
                         _voxelHitsCache ??= [];
                         _voxelHitsCache.Clear();
                         MyPhysics.CastRay(rayStart, rayEnd, _voxelHitsCache, MyPhysics.CollisionLayers.VoxelCollisionLayer);
                         for (int i = 0; i < _voxelHitsCache.Count; i++)
                         {
-                            var hitEnt = _voxelHitsCache[i].HkHitInfo.GetHitEntity();
+                            IMyEntity hitEnt = _voxelHitsCache[i].HkHitInfo.GetHitEntity();
                             if (hitEnt is MyVoxelBase)
                             {
                                 hitAir = false;
@@ -1349,6 +1388,13 @@ namespace PhysicsOptimizer.Modules
 
                     if (hitAir)
                     {
+                        Vector3 oldNormal = value.ContactPoint.Normal;
+                        Vector3 newNormal = -oldNormal;
+
+                        // HkContactPoint wraps a native pointer - mutating the copy P/Invokes through the shared
+                        // handle and reaches the live Havok contact data the solver reads after this prefix.
+                        // ContactPoint is a readonly field, so writing the struct back is impossible (and
+                        // unnecessary); do not replace this mutation with a velocity nudge - it is the actual fix.
                         var cp = value.ContactPoint;
                         cp.Normal = -cp.Normal;
 
@@ -1357,6 +1403,22 @@ namespace PhysicsOptimizer.Modules
                         if (config.EnableDebugLogging && config.LogVoxelNormals)
                         {
                             Log.Info(LogSource, $"[Voxel Arbitrator] Inverted downward normal for grid '{grid.DisplayName}' at {contactPos}.");
+                        }
+
+                        if (config.EnableVoxelNormalArbitratorDebugDraw && grid.PositionComp != null)
+                        {
+                            Vector3D startPos = contactPos;
+                            Vector3D endPos = startPos + (Vector3D)newNormal * 5.0;
+                            AddCappedDebugGps(
+                                $"VA {grid.DisplayName} OLD",
+                                $"voxel-arb debug: pre-invert normal",
+                                startPos + (Vector3D)oldNormal * 0.5,
+                                Color.Orange);
+                            AddCappedDebugGps(
+                                $"VA {grid.DisplayName} NEW",
+                                $"voxel-arb debug: post-invert normal",
+                                endPos,
+                                Color.Cyan);
                         }
                     }
                 }
@@ -1369,7 +1431,7 @@ namespace PhysicsOptimizer.Modules
 
         private static bool PrefixApplyExplosionOnVoxel()
         {
-            var config = PhysicsOptimizerPlugin.Instance?.Config;
+            PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
             if (config != null && config.Enabled && config.SuppressAllVoxelExplosionDamage)
             {
                 PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementVoxelCutoutsPrevented();
@@ -1380,7 +1442,7 @@ namespace PhysicsOptimizer.Modules
 
         private static bool PrefixCutOutVoxelMap()
         {
-            var config = PhysicsOptimizerPlugin.Instance?.Config;
+            PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
             if (config != null && config.Enabled && config.SuppressAllVoxelExplosionDamage)
             {
                 PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementVoxelCutoutsPrevented();
@@ -1404,14 +1466,14 @@ namespace PhysicsOptimizer.Modules
         {
             if (info.Amount <= 0f || info.Type != MyDamageType.Deformation) return;
 
-            var config = PhysicsOptimizerPlugin.Instance?.Config;
+            PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
             if (config == null || !config.EnableLayeredArmorOcclusion) return;
 
             if (target is MySlimBlock slimBlock && slimBlock.CubeGrid != null)
             {
-                var grid = slimBlock.CubeGrid;
+                MyCubeGrid grid = slimBlock.CubeGrid;
 
-                if (!_lastImpactPositions.TryGetValue(grid.EntityId, out var globalHitPos))
+                if (!_lastImpactPositions.TryGetValue(grid.EntityId, out Vector3D globalHitPos))
                 {
                     return; // Can't determine direction without a collision point
                 }
@@ -1425,7 +1487,7 @@ namespace PhysicsOptimizer.Modules
                 Vector3I step = Vector3I.Round(Vector3D.Normalize(D));
                 Vector3I neighborCoord = slimBlock.Position + step;
 
-                var occluder = grid.GetCubeBlock(neighborCoord);
+                MySlimBlock occluder = grid.GetCubeBlock(neighborCoord);
 
                 if (occluder == null || ReferenceEquals(occluder, slimBlock)) return;
 

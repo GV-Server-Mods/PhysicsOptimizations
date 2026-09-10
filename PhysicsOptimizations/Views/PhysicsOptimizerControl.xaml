@@ -385,6 +385,8 @@
                                               ToolTip="Suppresses self-collision impact damage between connected subgrids (rotors, hinges, pistons) to stop Clang chain reactions."/>
                                     <CheckBox Content="Enable Voxel Normal Force Arbitrator" IsChecked="{Binding Config.EnableVoxelNormalArbitrator}" Margin="16,2,0,2"
                                               ToolTip="Inverts bogus downward contact normals at the Havok solver level when rovers are pinched into voxels, so the physics solver stops shoving grids into the terrain. Fully independent of Push-Apart: the escape-direction logic caches raw contact normals for itself, so either feature can be toggled alone."/>
+                                    <CheckBox Content="Enable Voxel Arbitrator Debug GPS Markers" IsChecked="{Binding Config.EnableVoxelNormalArbitratorDebugDraw}" Margin="16,2,0,2"
+                                              ToolTip="Spawns a GPS marker pair at each contact point where the arbitrator flips a downward normal: orange = pre-invert normal, cyan = post-invert normal. Auto-expires after 10 seconds. Capped at 10 live markers server-wide (one pair per grid - re-inversions refresh instead of stacking), so grinding grids cannot flood the GPS list. Markers are visible to all players. Debug tool - leave off in normal play."/>
 
                                     <!-- Fallback Velocity Gates & Damage Rate Limits -->
                                     <Border Background="#1E293B" BorderBrush="#475569" BorderThickness="1" CornerRadius="4" Padding="8" Margin="16,8,0,6">
@@ -556,7 +558,7 @@
                                         </WrapPanel>
 
                                         <CheckBox Content="Enable Push-Apart Debug GPS Markers" IsChecked="{Binding Config.EnablePushApartDebugDraw}" Margin="16,2,0,2"
-                                                  ToolTip="Spawns a bright GPS marker pair at each applied push origin and end (5m apart): magenta = voxel push, yellow = grid push. Auto-expires after 10 seconds. Debug tool - leave off in normal play."/>
+                                                  ToolTip="Spawns a bright GPS marker pair at each applied push origin and end (5m apart): magenta = voxel push, yellow = grid push. Auto-expires after 10 seconds. Capped at 10 live markers server-wide (one pair per grid - re-pushes refresh instead of stacking). Debug tool - leave off in normal play."/>
                                         <CheckBox Content="Enable Burial Probe (Experimental)" IsChecked="{Binding Config.EnableBurialProbe}" Margin="16,4,0,2"
                                                   ToolTip="Cold-path probe (once per ~10s) for grids stationary 20s+: if voxel material confines the grid on 3+ horizontal sides, it is pushed out along the gravity up-vector. Covers fully buried grids where Havok emits no contact callbacks (e.g. underground station converted to ship, rover spawned embedded)."/>
                                         <WrapPanel Margin="16,2,0,2" IsEnabled="{Binding Config.EnableBurialProbe}" VerticalAlignment="Center">

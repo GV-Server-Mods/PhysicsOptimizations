@@ -59,6 +59,7 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Ship Ramming: {0} | Voxel Crash: {1} | Stations: {2} | Subgrids: {3} | Debris: {4}", cfg.ProtectShipsAgainstRamming, cfg.ProtectShipsAgainstVoxels, cfg.ProtectStaticGrids, cfg.ProtectSubgrids, cfg.ProtectAgainstFloatingObjects));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Fallback Gates (Applicable={0}): Safe Harbor < {1:F1} m/s | Max Deform < {2:F1} m/s | Cooldown: {3} frames", cfg.IsSpeedGatesApplicable, cfg.MinDrivingVelocity, cfg.MaxDeformationVelocity, cfg.DeformationCooldownFrames));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Push-Apart: {0} (Base: {1:F2}m, Max: {2:F2}m, Threshold: {3} frames, Max Attempts: {4}, Debug GPS: {5}, Min Impact: {6:F1} m/s, Exclude Wheels: {7})", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartMaxNudgeDistance, cfg.PushApartThreshold, cfg.PushApartMaxAttempts, cfg.EnablePushApartDebugDraw, cfg.PushApartMinImpactSpeed, cfg.ExcludeWheelSubgridsFromPushApart));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Voxel Normal Arbitrator: {0} (Debug GPS: {1})", cfg.EnableVoxelNormalArbitrator, cfg.EnableVoxelNormalArbitratorDebugDraw));
             sb.AppendLine();
             sb.AppendLine("* Player-Made Missiles (PMWs):");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - PMW Damage Allowed: {0} (Piloted Buggy Exemption: {1})", cfg.AllowMissileDamage, cfg.ExemptPilotedFromMissileStatus));
@@ -253,6 +254,11 @@ namespace PhysicsOptimizer.Commands
                     cfg.EnableVoxelNormalArbitrator = !cfg.EnableVoxelNormalArbitrator;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Voxel Normal Force Arbitrator is now {0}.", cfg.EnableVoxelNormalArbitrator ? "ENABLED" : "DISABLED");
                     break;
+                case "voxelarbdebug":
+                case "arbdebug":
+                    cfg.EnableVoxelNormalArbitratorDebugDraw = !cfg.EnableVoxelNormalArbitratorDebugDraw;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Voxel Arbitrator debug GPS markers are now {0}.", cfg.EnableVoxelNormalArbitratorDebugDraw ? "ENABLED" : "DISABLED");
+                    break;
                 case "thruster":
                     cfg.EnableThrusterClearance = !cfg.EnableThrusterClearance;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Thruster Clearance Optimizer is now {0}.", cfg.EnableThrusterClearance ? "ENABLED" : "DISABLED");
@@ -298,7 +304,7 @@ namespace PhysicsOptimizer.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel subgrid exclusion from Subgrid Stabilizer is now {0}.", cfg.ExcludeWheelSubgridsFromSubgridStabilizer ? "ENABLED" : "DISABLED");
                     break;
                 default:
-                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, pushapart, normal, thruster, thrustermode, cutout, debug, telemetry.", featureName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, pushapart, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry.", featureName));
                     return;
             }
 

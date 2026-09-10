@@ -300,6 +300,7 @@ All commands require `Admin` permission level (`MyPromoteLevel.Admin`) and work 
 | `anticlang` | Anti-clang vibration arrest. |
 | `pushapart` / `push` | Active Push-Apart master toggle (independent of `anticlang`). |
 | `normal` (`voxelarbitrator`) | Voxel Normal Arbitrator. |
+| `voxelarbdebug` (`arbdebug`) | Voxel Arbitrator debug GPS markers (orange/cyan contact normals at each inversion). |
 | `thruster` | Thruster Clearance Engine. |
 | `thrustermode` | Cycles `ThrusterDamageMode` between `Optimized` and `VanillaLike`. |
 | `cutout` | Voxel cutout explosion suppression. |
@@ -332,6 +333,7 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `LogThrusterClearance` | `bool` | `false` | Logs thruster clearance raycasts and vaporizations. |
 | `LogMissileDefense` | `bool` | `false` | Logs kinetic PMW missile impact events. |
 | `LogVoxelNormals` | `bool` | `false` | Logs Voxel Normal Arbitrator inversions. |
+| `EnableVoxelNormalArbitratorDebugDraw` | `bool` | `false` | Spawns a GPS marker pair (orange = pre-invert normal, cyan = post-invert normal) at each contact point where the arbitrator flips a downward normal; auto-expires after 10s. Capped at 10 live markers server-wide, one pair per grid (re-inversions refresh the pair). |
 
 ### Module 1: Wheel Optimizer
 | Setting | Type | Default | Description |
@@ -408,7 +410,7 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `PushApartThreshold` | `int` | `25` | Consecutive contact frames before push-apart triggers. |
 | `PushApartDistance` | `float` | `0.5` | Push distance (meters, 0.1-5.0); grid-on-voxel pushes use the first raycast-confirmed clear direction (contact normal, gravity-up, horizontals). Pushes apply to the whole mechanical group and wake sleeping bodies. |
 | `PushApartMaxAttempts` | `int` | `3` | Max consecutive voxel-escape pushes before standing down (0 = never give up, max 1000); budget refunds when the grid loses voxel contact. |
-| `EnablePushApartDebugDraw` | `bool` | `false` | Spawns a bright GPS marker pair (magenta = voxel push, yellow = grid push) at each applied push origin and end; auto-expires after 10s. |
+| `EnablePushApartDebugDraw` | `bool` | `false` | Spawns a bright GPS marker pair (magenta = voxel push, yellow = grid push) at each applied push origin and end; auto-expires after 10s. Capped at 10 live markers server-wide, one pair per grid (re-pushes refresh the pair). |
 | `PushApartMaxNudgeDistance` | `float` | `2.0` | Ceiling for repeated positional nudges within the same ~5-second stuck window. First nudge uses `PushApartDistance`, then 2x, 3x, up to this cap. |
 | `ExcludeWheelSubgridsFromAntiClang` | `bool` | `true` | Suspension wheel subgrids are separate physics bodies; when enabled, wheel-terrain contacts are ignored by anti-clang damping. |
 | `ExcludeWheelSubgridsFromPushApart` | `bool` | `true` | When enabled, wheel-terrain contacts do not count toward Active Push-Apart, preventing rovers from being micro-teleported while driving. |
