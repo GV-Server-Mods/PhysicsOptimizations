@@ -58,7 +58,7 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Allowed Multiplier: {1:F2})", cfg.EnableGridDefender, cfg.DeformationMultiplier));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Ship Ramming: {0} | Voxel Crash: {1} | Stations: {2} | Subgrids: {3} | Debris: {4}", cfg.ProtectShipsAgainstRamming, cfg.ProtectShipsAgainstVoxels, cfg.ProtectStaticGrids, cfg.ProtectSubgrids, cfg.ProtectAgainstFloatingObjects));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Fallback Gates (Applicable={0}): Safe Harbor < {1:F1} m/s | Max Deform < {2:F1} m/s | Cooldown: {3} frames", cfg.IsSpeedGatesApplicable, cfg.MinDrivingVelocity, cfg.MaxDeformationVelocity, cfg.DeformationCooldownFrames));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Push-Apart: {0} (Base: {1:F2}m, Max: {2:F2}m, Threshold: {3} frames, Max Attempts: {4}, Debug GPS: {5}, Min Impact: {6:F1} m/s, Exclude Wheels: {7})", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartMaxNudgeDistance, cfg.PushApartThreshold, cfg.PushApartMaxAttempts, cfg.EnablePushApartDebugDraw, cfg.PushApartMinImpactSpeed, cfg.ExcludeWheelSubgridsFromPushApart));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Push-Apart: {0} (Base: {1:F2}m, Max: {2:F2}m, Threshold: {3} frames, Max Attempts: {4}, Station On Give-Up: {5}, Debug GPS: {6}, Min Impact: {7:F1} m/s, Exclude Wheels: {8})", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartMaxNudgeDistance, cfg.PushApartThreshold, cfg.PushApartMaxAttempts, cfg.ConvertToStaticOnPushApartGiveUp, cfg.EnablePushApartDebugDraw, cfg.PushApartMinImpactSpeed, cfg.ExcludeWheelSubgridsFromPushApart));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Voxel Normal Arbitrator: {0} (Debug GPS: {1})", cfg.EnableVoxelNormalArbitrator, cfg.EnableVoxelNormalArbitratorDebugDraw));
             sb.AppendLine();
             sb.AppendLine("* Player-Made Missiles (PMWs):");
@@ -303,8 +303,14 @@ namespace PhysicsOptimizer.Commands
                     cfg.ExcludeWheelSubgridsFromSubgridStabilizer = !cfg.ExcludeWheelSubgridsFromSubgridStabilizer;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel subgrid exclusion from Subgrid Stabilizer is now {0}.", cfg.ExcludeWheelSubgridsFromSubgridStabilizer ? "ENABLED" : "DISABLED");
                     break;
+                case "pushstation":
+                case "pushapartstation":
+                case "stationongiveup":
+                    cfg.ConvertToStaticOnPushApartGiveUp = !cfg.ConvertToStaticOnPushApartGiveUp;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Converting to static station on push-apart give up is now {0}.", cfg.ConvertToStaticOnPushApartGiveUp ? "ENABLED" : "DISABLED");
+                    break;
                 default:
-                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, pushapart, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry.", featureName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, pushapart, pushstation, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry.", featureName));
                     return;
             }
 

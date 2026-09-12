@@ -141,37 +141,44 @@ namespace PhysicsOptimizer.Modules
                             {
                                 forceContinuous = true;
                             }
-                            // 2. Planetary Terrain Altitude Safety Override:
-                            else if (config.EnableAltitudeTOIReversion)
+                            else if (state.IsDiscrete || (speedSq <= discreteThreshSq && grid.BlocksCount > 40))
                             {
-                                var pos = grid.PositionComp.GetPosition();
-                                var planet = MyGamePruningStructure.GetClosestPlanet(pos);
-                                if (planet != null)
-                                {
-                                    var surfacePoint = planet.GetClosestSurfacePointGlobal(pos);
-                                    if (Vector3D.DistanceSquared(pos, surfacePoint) < config.ContinuousAltitudeThreshold * config.ContinuousAltitudeThreshold)
-                                    {
-                                        forceContinuous = true;
-                                    }
-                                }
-                            }
+                                // Overrides only matter where the outcome can change: not-discrete grids above the
+                                // discrete threshold (or <= 40 blocks, force-Continuous at step 4) skip both queries -
+                                // the planet surface and sphere queries are the dominant O(N^2) cost at high grid counts.
 
-                            // 3. Dynamic Grid Proximity Safety Override:
-                            if (!forceContinuous && config.RevertNearOtherDynamicGrids)
-                            {
-                                double proxDist = config.DynamicGridProximityRevertDistanceMeters;
-                                var sphere = new BoundingSphereD(grid.PositionComp.GetPosition(), proxDist);
-                                _nearbyBuffer.Clear();
-                                MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref sphere, _nearbyBuffer, MyEntityQueryType.Both);
-                                foreach (var near in _nearbyBuffer)
+                                // 2. Planetary Terrain Altitude Safety Override:
+                                if (config.EnableAltitudeTOIReversion)
                                 {
-                                    if (near is MyCubeGrid other && other != grid && !other.IsStatic && !other.Closed)
+                                    var pos = grid.PositionComp.GetPosition();
+                                    var planet = MyGamePruningStructure.GetClosestPlanet(pos);
+                                    if (planet != null)
                                     {
-                                        forceContinuous = true;
-                                        break;
+                                        var surfacePoint = planet.GetClosestSurfacePointGlobal(pos);
+                                        if (Vector3D.DistanceSquared(pos, surfacePoint) < config.ContinuousAltitudeThreshold * config.ContinuousAltitudeThreshold)
+                                        {
+                                            forceContinuous = true;
+                                        }
                                     }
                                 }
-                                _nearbyBuffer.Clear();
+
+                                // 3. Dynamic Grid Proximity Safety Override:
+                                if (!forceContinuous && config.RevertNearOtherDynamicGrids)
+                                {
+                                    double proxDist = config.DynamicGridProximityRevertDistanceMeters;
+                                    var sphere = new BoundingSphereD(grid.PositionComp.GetPosition(), proxDist);
+                                    _nearbyBuffer.Clear();
+                                    MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref sphere, _nearbyBuffer, MyEntityQueryType.Both);
+                                    foreach (var near in _nearbyBuffer)
+                                    {
+                                        if (near is MyCubeGrid other && other != grid && !other.IsStatic && !other.Closed)
+                                        {
+                                            forceContinuous = true;
+                                            break;
+                                        }
+                                    }
+                                    _nearbyBuffer.Clear();
+                                }
                             }
 
                             // 4. Small Grid / Torpedo Safety: Small crafts (<= 40 blocks) retain Continuous TOI when speed thresholds are active

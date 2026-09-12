@@ -98,6 +98,34 @@ namespace PhysicsOptimizer.Utils
                 }
             }
         }
+
+        /// <summary>
+        /// Gets the primary grid in a mechanical group (typically the main chassis or grid with the most blocks).
+        /// Falls back to the provided grid if grouping is unavailable.
+        /// </summary>
+        public static MyCubeGrid GetMainGrid(MyCubeGrid grid)
+        {
+            if (grid == null || grid.MarkedForClose || grid.Closed) return grid;
+            var group = MyCubeGridGroups.Static?.Mechanical?.GetGroup(grid);
+            if (group?.Nodes == null || group.Nodes.Count <= 1) return grid;
+
+            MyCubeGrid main = grid;
+            int maxBlocks = -1;
+            foreach (var node in group.Nodes)
+            {
+                var g = node?.NodeData;
+                if (g != null && !g.MarkedForClose && !g.Closed)
+                {
+                    int count = g.BlocksCount;
+                    if (count > maxBlocks)
+                    {
+                        maxBlocks = count;
+                        main = g;
+                    }
+                }
+            }
+            return main;
+        }
     }
 }
 
