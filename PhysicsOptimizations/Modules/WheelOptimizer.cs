@@ -48,6 +48,7 @@ namespace PhysicsOptimizer.Modules
 
         private readonly ConcurrentDictionary<long, RoverState> _trackedRovers = new();
         private readonly List<long> _removalBuffer = [];
+        private bool _wasEnabled;
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
@@ -110,8 +111,17 @@ namespace PhysicsOptimizer.Modules
         {
             if (!IsEnabled || _plugin?.Config == null)
             {
+                // Feature disabled: wake all sleeping rovers - the Update prefix checks only the static
+                // sleep flag, so without this they stay suspension-frozen and cannot slide/steer.
+                if (_wasEnabled)
+                {
+                    WakeAllSleepingRovers("Feature disabled");
+                    _wasEnabled = false;
+                }
                 return;
             }
+
+            _wasEnabled = true;
 
             // Run evaluation every 30 frames (~0.5s) to avoid per-tick overhead
             if (frameCounter % 30 != 0)
@@ -253,6 +263,18 @@ namespace PhysicsOptimizer.Modules
             }
         }
 
+        /// <summary>Wakes every rover with suspension asleep; runs on toggle-off and shutdown.</summary>
+        public void WakeAllSleepingRovers(string reason)
+        {
+            foreach (var kvp in _trackedRovers)
+            {
+                if (kvp.Value.IsSuspensionAsleep && kvp.Value.GridRef.TryGetTarget(out var grid))
+                {
+                    WakeRover(kvp.Value, grid, reason);
+                }
+            }
+        }
+
         public void RegisterRover(MyCubeGrid grid)
         {
             if (grid == null || grid.MarkedForClose || grid.Closed) return;
@@ -329,6 +351,7 @@ namespace PhysicsOptimizer.Modules
 
         public void Dispose()
         {
+            WakeAllSleepingRovers("Plugin shutdown");
             _trackedRovers.Clear();
             _removalBuffer.Clear();
             _sleepingGridIds.Clear();

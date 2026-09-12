@@ -240,7 +240,7 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
   * Blocks with no recognized flame dummies, and any internal error, fall back to vanilla behavior (never silently breaks thrust damage).
 * **Damage Routing**:
   * **Characters**: 50 Environment burn damage - player safety fully preserved.
-  * **Own construct** (same physical grid group): In `Optimized` mode the obstructing block is instantly vaporized on first contact (`DoDamage(float.MaxValue)`), terminating the compound shape invalidation loop at the root. In `VanillaLike` mode, gradual `FlameDamage * CurrentStrength` thermal damage applies. The thruster's own slim block is never damaged (hard `ReferenceEquals` guard).
+  * **Own construct** (same physical grid group): In `Optimized` mode the obstructing block is instantly vaporized on first contact (`DoDamage(1e9f)` - large but finite; `float.MaxValue` overflows Keen's damage pipeline into `Infinity`/`NaN`), terminating the compound shape invalidation loop at the root. In `VanillaLike` mode, gradual `FlameDamage * CurrentStrength` thermal damage applies. The thruster's own slim block is never damaged (hard `ReferenceEquals` guard).
   * **External grids** (landing pads, carrier decks, enemy hulls): In `Optimized` mode, 100% immune. In `VanillaLike` mode, gradual thermal damage at vanilla rates.
 * **Inactive Thrusters**: Deal no damage unless `MyFakes.INACTIVE_THRUSTER_DMG` is enabled.
 * **Mode Switching**: `ThrusterDamageMode` is `Optimized` (default) or `VanillaLike`.
@@ -324,11 +324,6 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `EnableDebugLogging` | `bool` | `false` | Enables verbose trace logging in the Torch console. |
 | `EnablePeriodicConsoleTelemetry` | `bool` | `true` | Periodically prints a telemetry heartbeat to the server log. |
 | `ConsoleTelemetryIntervalSeconds` | `int` | `30` | Interval (seconds) between console telemetry heartbeats. |
-| `LogWheelOptimizer` | `bool` | `false` | Logs rover suspension sleep/wake and wheel filter events. |
-| `LogRigidBodySleep` | `bool` | `false` | Logs rigid body deactivation/activation events. |
-| `LogOreMerge` | `bool` | `false` | Logs proximity ore merging and floating object elimination passes. |
-| `LogSubgridStabilizer` | `bool` | `false` | Logs subgrid joint stabilization and masking events. |
-| `LogAdaptiveCollision` | `bool` | `false` | Logs discrete/continuous TOI transitions. |
 | `LogGridDefender` | `bool` | `false` | Logs kinetic collision damping and defender events. |
 | `LogThrusterClearance` | `bool` | `false` | Logs thruster clearance raycasts and vaporizations. |
 | `LogMissileDefense` | `bool` | `false` | Logs kinetic PMW missile impact events. |
@@ -358,7 +353,6 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `AutoMergeNearbyOre` | `bool` | `true` | Automatically merges matching floating items within proximity. |
 | `OreMergeRadiusMeters` | `float` | `3.0` | Spatial radius (meters) for clustering floating items. |
 | `OreMergeIntervalTicks` | `int` | `120` | Simulation ticks between merge passes (clamped to >= 30; 60 ticks = 1s). |
-| `MaxSectorFloatingObjects` | `int` | `64` | Reserved threshold for local floating object density. |
 
 ### Module 4: Subgrid Stabilizer
 | Setting | Type | Default | Description |
@@ -551,6 +545,26 @@ Audited against the plugin's full source (Bishbash777's repo verified byte-ident
 * Never patch `MyEntityComponentUpdater.*` or the `MyEntity` update-dispatch family (`BeforeUpdate`/`AfterUpdate`/`UpdateBeforeSimulation`/`UpdateAfterSimulation`) - Concealment's home turf, and Keen actively reworks it (SE 207).
 * Never patch `MyEntityComponentUpdater.OnEntityClosing` / `AddEntityComponents` and never toggle `MyProjectorBase.Enabled` from patch code - their reflection spine and state.
 * `PatchConflictAudit` logs a boot line when the `Concealment` assembly is detected - re-audit if either plugin updates.
+
+---
+
+### Sleep/quality lifecycle on toggle-off and shutdown (v2.0.0 review pass)
+
+Every module that mutates Havok state must undo it when its toggle or the master switch flips off; otherwise the mutation outlives the feature:
+
+* **Rigid Body Sleep**: toggle-off and plugin shutdown `Activate()` every tracked sleeping grid (deactivated bodies stay frozen after the patches revert - Havok state persists, patch state does not).
+* **Wheel Optimizer**: toggle-off and shutdown wake all suspension-sleeping rovers; the `MyMotorSuspension.Update` prefix checks only the static sleep flag, so a stale flag means suspension updates keep being skipped with no wake path.
+* **Adaptive Collision**: toggle-off restores original collision qualities for any grid currently forced into `Debris`.
+* **Rigid Body Sleep** also `Activate()`s in the evaluation's else-branch whenever a tracked grid stops being sleep-eligible (pilot entered, drifting, bumped) - the cockpit/damage wake hooks are gated on the feature toggle and cannot fire while the body stays deactivated.
+* Direct damage to a rotor/piston/hinge block now clears SubgridStabilizer state for that joint via the shared damage wake hook, so stabilized velocity-sync cannot fight an active deformation.
+
+### Thruster Clearance damage parity
+
+Parallel ray fans (1/5/9 rays per flame) previously applied full damage per ray to the same target; hits are now deduped per flame pass (characters and blocks), matching vanilla's single shape-cast per flame. Own-construct vaporization uses `1e9f` instead of `float.MaxValue` - `MaxValue` overflows Keen's damage pipeline into `Infinity`/`NaN`.
+
+### WPF UI threading
+
+Sleep All / Wake All / Merge Ore buttons dispatch through `MySandboxGame.Static.Invoke` and report back on the WPF dispatcher. `MyEntities`/Havok calls from the Torch UI thread race the simulation loop; console commands (`!phys ...`) already ran on the game thread.
 
 ---
 

@@ -94,7 +94,7 @@ namespace PhysicsOptimizer.Commands
 
             var t = Plugin.Telemetry;
             var sb = new StringBuilder();
-            sb.AppendLine("=== [Physics Optimizer Live Telemetry v1.0.0] ===");
+            sb.AppendLine("=== [Physics Optimizer Live Telemetry v2.0.0] ===");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Server Sim Speed: {0:F2}", t.ServerSimulationSpeed));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Active Rigid Bodies: {0:N0}", t.ActiveRigidBodies));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Sleeping Rigid Bodies: {0:N0}", t.SleepingRigidBodies));

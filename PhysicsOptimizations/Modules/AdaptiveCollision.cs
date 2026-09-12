@@ -35,6 +35,7 @@ namespace PhysicsOptimizer.Modules
         private readonly ConcurrentDictionary<long, GridQualityState> _trackedQualities = new();
         private readonly List<long> _cleanupBuffer = [];
         private readonly List<MyEntity> _nearbyBuffer = [];
+        private bool _wasEnabled;
 
         public void Init(PhysicsOptimizerPlugin plugin)
         {
@@ -47,8 +48,16 @@ namespace PhysicsOptimizer.Modules
         {
             if (!IsEnabled || _plugin?.Config == null)
             {
+                // Feature disabled: restore original collision qualities or grids stay stuck in Debris.
+                if (_wasEnabled)
+                {
+                    RestoreAllGridQualities();
+                    _wasEnabled = false;
+                }
                 return;
             }
+
+            _wasEnabled = true;
 
             // Run evaluation every 30 frames (~0.5s)
             if (frameCounter % 30 != 0)

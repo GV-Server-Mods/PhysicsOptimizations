@@ -29,6 +29,13 @@ namespace PhysicsOptimizer.Modules
         [ThreadStatic]
         private static List<MyPhysics.HitInfo> _thrusterHitList;
 
+        // Per-flame dedupe of blocks/characters already damaged - parallel rays must not multi-hit the same target.
+        [ThreadStatic]
+        private static HashSet<object> _thrusterDamageTargets;
+
+        // Large but finite: float.MaxValue overflows Keen's damage pipeline into Infinity/NaN.
+        private const float MaxVaporizeDamage = 1e9f;
+
         public static void RegisterPatches(PatchContext ctx)
         {
             try
@@ -42,6 +49,10 @@ namespace PhysicsOptimizer.Modules
                     ctx.GetPattern(targetMethod).Prefixes.Add(prefixMethod);
                     PatchConflictAudit.RegisterTarget(targetMethod);
                     Log.Info(LogSource, $"Registered {targetMethod.Name} for Thruster Clearance Optimizer.");
+                }
+                else
+                {
+                    Log.Warn(LogSource, "No thruster damage method found (ThrustDamageAsync/DamageGrid); Thruster Clearance inactive. Keen renamed it?");
                 }
             }
             catch (Exception ex)
@@ -77,6 +88,8 @@ namespace PhysicsOptimizer.Modules
                 {
                     var flame = flames[f];
                     if (!flame.HasDamage) continue;
+
+                    (_thrusterDamageTargets ??= []).Clear();
 
                     Vector3D flameStart = Vector3D.Transform(flame.Position, worldMatrix);
                     Vector3D flameDir = Vector3D.TransformNormal(flame.Direction, worldMatrix);
@@ -158,6 +171,7 @@ namespace PhysicsOptimizer.Modules
 
                 if (hitEntity is IMyCharacter character)
                 {
+                    if (!_thrusterDamageTargets.Add(character)) continue;
                     character.DoDamage(50f, MyDamageType.Environment, true, null, thruster.EntityId);
                     continue;
                 }
@@ -176,12 +190,14 @@ namespace PhysicsOptimizer.Modules
                     // Critical safety guard: NEVER damage the thruster itself
                     if (ReferenceEquals(block, thruster.SlimBlock)) continue;
 
+                    if (!_thrusterDamageTargets.Add(block)) continue;
+
                     if (isOwnConstruct)
                     {
                         if (config.ThrusterDamageMode == ThrusterDamageMode.Optimized)
                         {
                             // Anti-exploit: Instantly vaporize buried internal blocks on own construct
-                            block.DoDamage(float.MaxValue, MyDamageType.Deformation, true, null, thruster.EntityId);
+                            block.DoDamage(MaxVaporizeDamage, MyDamageType.Deformation, true, null, thruster.EntityId);
                             PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementThrusterObstructionsVaporized();
 
                             if (config.EnableDebugLogging && config.LogThrusterClearance)

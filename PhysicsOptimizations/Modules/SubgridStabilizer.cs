@@ -203,10 +203,10 @@ namespace PhysicsOptimizer.Modules
             _trackedJoints.TryRemove(entity.EntityId, out _);
         }
 
-        /// <summary>True when the top grid hosts a suspension wheel block. Wheels are single-block subgrids.</summary>
+        /// <summary>True when the top grid hosts a suspension wheel block. Wheels are 1-block subgrids; larger grids cannot be one.</summary>
         private static bool IsWheelSubgrid(MyCubeGrid grid)
         {
-            if (grid == null || grid.MarkedForClose || grid.Closed) return false;
+            if (grid == null || grid.MarkedForClose || grid.Closed || grid.BlocksCount > 4) return false;
             foreach (var fat in grid.GetFatBlocks())
             {
                 if (fat is MyMotorRotor rotor && rotor.Stator is MyMotorSuspension) return true;
@@ -362,7 +362,7 @@ namespace PhysicsOptimizer.Modules
         public static void DetachPostfix(MyMechanicalConnectionBlockBase __instance, MyCubeGrid topGrid, bool updateGroups)
         {
             var config = PhysicsOptimizerPlugin.Instance?.Config;
-            if (config == null || !config.EnableSubgridStabilization || !config.MaskSmallUtilitySubgrids) return;
+            if (config == null || !config.EnableSubgridStabilizer || !config.EnableSubgridStabilization || !config.MaskSmallUtilitySubgrids) return;
 
             if (__instance?.CubeGrid != null)
             {
@@ -378,7 +378,7 @@ namespace PhysicsOptimizer.Modules
         public static void CreateSplitPostfix(MyCubeGrid originalGrid, MyCubeGrid __result)
         {
             var config = PhysicsOptimizerPlugin.Instance?.Config;
-            if (config == null || !config.EnableSubgridStabilization || !config.MaskSmallUtilitySubgrids) return;
+            if (config == null || !config.EnableSubgridStabilizer || !config.EnableSubgridStabilization || !config.MaskSmallUtilitySubgrids) return;
 
             if (originalGrid != null)
             {

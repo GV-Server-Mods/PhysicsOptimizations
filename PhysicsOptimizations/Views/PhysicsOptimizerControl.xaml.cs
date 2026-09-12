@@ -53,36 +53,67 @@ namespace PhysicsOptimizer.Views
             Plugin?.DefenseStats?.Reset();
         }
 
+        /// <summary>
+        /// Runs physics-touching work on the game thread and reports the result on the UI thread.
+        /// MyEntities/Havok calls from the WPF thread race the simulation loop.
+        /// </summary>
+        private void RunOnGameThread(string title, Func<string> gameThreadWork)
+        {
+            if (Sandbox.MySandboxGame.Static == null)
+            {
+                MessageBox.Show("No game session is loaded.", title, MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dispatcher = Dispatcher;
+            Sandbox.MySandboxGame.Static.Invoke(() =>
+            {
+                string message;
+                MessageBoxImage icon;
+                try
+                {
+                    message = gameThreadWork();
+                    icon = MessageBoxImage.Information;
+                }
+                catch (Exception ex)
+                {
+                    message = $"Error: {ex.Message}";
+                    icon = MessageBoxImage.Error;
+                }
+
+                var msg = message;
+                var img = icon;
+                dispatcher.BeginInvoke(new Action(() =>
+                    MessageBox.Show(msg, title, MessageBoxButton.OK, img)));
+            }, "PhysicsOptimizer." + title);
+        }
+
         private void SleepAllButton_OnClick(object sender, RoutedEventArgs e)
         {
-            try
+            if (Plugin?.RigidBodySleep == null)
             {
-                if (Plugin?.RigidBodySleep == null)
-                {
-                    MessageBox.Show("Rigid Body Sleep is not initialized.", "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
+                MessageBox.Show("Rigid Body Sleep is not initialized.", "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
 
-                if (!Plugin.RigidBodySleep.IsEnabled)
-                {
-                    MessageBox.Show(
-                        "Rigid Body Sleep is currently disabled.\n\nEnable it from the toggle panel (Enable Rigid Body Sleep) or console (!phys toggle sleep), then click Sleep All Grids again.",
-                        "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
+            if (!Plugin.RigidBodySleep.IsEnabled)
+            {
+                MessageBox.Show(
+                    "Rigid Body Sleep is currently disabled.\n\nEnable it from the toggle panel (Enable Rigid Body Sleep) or console (!phys toggle sleep), then click Sleep All Grids again.",
+                    "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
 
+            RunOnGameThread("Sleep All Grids", () =>
+            {
                 int slept = Plugin.RigidBodySleep.ForceSleepAllIdleGrids();
-                MessageBox.Show($"Successfully forced {slept} idle dynamic grids into Havok SLEEP mode.", "Sleep All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error sleeping grids: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+                return $"Successfully forced {slept} idle dynamic grids into Havok SLEEP mode.";
+            });
         }
 
         private void WakeAllButton_OnClick(object sender, RoutedEventArgs e)
         {
-            try
+            RunOnGameThread("Wake All Grids", () =>
             {
                 int count = 0;
                 var entities = Sandbox.Game.Entities.MyEntities.GetEntities();
@@ -98,25 +129,17 @@ namespace PhysicsOptimizer.Views
                         }
                     }
                 }
-                MessageBox.Show($"Successfully woke {count} sleeping dynamic grids/rovers.", "Wake All Grids", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error waking grids: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+                return $"Successfully woke {count} sleeping dynamic grids/rovers.";
+            });
         }
 
         private void MergeOreButton_OnClick(object sender, RoutedEventArgs e)
         {
-            try
+            RunOnGameThread("Ore Merge", () =>
             {
                 int eliminated = Plugin?.OreMerge?.MergeProximityFloatingObjects() ?? 0;
-                MessageBox.Show($"Proximity merge completed. Eliminated {eliminated} redundant floating entities.", "Ore Merge", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error running ore merge: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+                return $"Proximity merge completed. Eliminated {eliminated} redundant floating entities.";
+            });
         }
 
         private void CopyDiagnosticsButton_OnClick(object sender, RoutedEventArgs e)

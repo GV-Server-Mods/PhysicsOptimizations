@@ -87,7 +87,6 @@ namespace PhysicsOptimizer.Modules
         private readonly ConcurrentDictionary<long, ulong> _lastExtremeSpeedLogFrames = new();
         private static readonly ConcurrentDictionary<long, ulong> _lastVoxelContactFrames = new();
         private readonly ConcurrentDictionary<long, BurialProbeState> _burialProbeStates = new();
-        private readonly List<MyCubeGrid> _groupMembersBuffer = new();
         private readonly ConcurrentDictionary<long, int> _pushApartAttempts = new();
         private readonly ConcurrentDictionary<long, EscapeRecord> _lastEscapes = new();
 
@@ -109,8 +108,16 @@ namespace PhysicsOptimizer.Modules
         private static readonly ConcurrentDictionary<long, MyVoxelBase.StorageChanged> _voxelRangeHandlers = new();
         private const int VoxelRegionBucketShift = 5; // 32m buckets (voxel storage cells are 1m)
 
+        private static bool _damageHandlerRegistered;
+
         [ThreadStatic]
         private static List<MyPhysics.HitInfo> _voxelHitsCache;
+
+        [ThreadStatic]
+        private static List<MyCubeGrid> _wheelResolveBuffer;
+
+        [ThreadStatic]
+        private static List<MyCubeGrid> _pushMechanicalGroupBuffer;
 
         public static void UpdateCollisionContext(long gridId, Vector3D position)
         {
@@ -202,18 +209,60 @@ namespace PhysicsOptimizer.Modules
                 EvictGrid(grid.EntityId);
                 RemoveCollisionContext(grid.EntityId);
             }
+            else if (entity is MyVoxelBase voxel)
+            {
+                if (_voxelRangeHandlers.TryRemove(voxel.EntityId, out var handler))
+                {
+                    voxel.RangeChanged -= handler;
+                }
+                _modifiedVoxelRegions.TryRemove(voxel.EntityId, out _);
+            }
         }
 
         public void Dispose()
         {
             RestoreVoxelFakes();
+            UnregisterDamageHandler();
             ClearCollections();
             _plugin = null;
+        }
+
+        private static void UnregisterDamageHandler()
+        {
+            if (!_damageHandlerRegistered) return;
+            try
+            {
+                if (MyDamageSystem.Static != null)
+                {
+                    FieldInfo beforeField = typeof(MyDamageSystem).GetField("m_beforeDamageHandlers", BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (beforeField?.GetValue(MyDamageSystem.Static) is List<Tuple<int, BeforeDamageApplied>> handlers)
+                    {
+                        handlers.RemoveAll(t => t.Item2 == OnBeforeDamageApplied);
+                        Log.Info(LogSource, "Unregistered Layered Armor Occlusion damage handler on Dispose.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(ex, LogSource, "Failed to unregister damage handler on Dispose.");
+            }
+            finally
+            {
+                _damageHandlerRegistered = false;
+            }
         }
 
         private void ClearCollections()
         {
             while (_pushQueue.TryDequeue(out _)) { }
+            foreach (var id in _activeMissiles.Keys)
+            {
+                if (MyEntities.TryGetEntityById(id, out MyEntity ent) && ent is MyCubeGrid g)
+                {
+                    g.OnClose -= OnTrackedGridClosed;
+                    g.OnGridSplit -= OnTrackedGridSplit;
+                }
+            }
             _activeMissiles.Clear();
             _lastDeformationFrames.Clear();
             _consecutiveContactFrames.Clear();
@@ -232,7 +281,16 @@ namespace PhysicsOptimizer.Modules
             _contactStartPositions.Clear();
             _lastVoxelContactFrames.Clear();
             _burialProbeStates.Clear();
-            _groupMembersBuffer.Clear();
+
+            foreach (var kvp in _voxelRangeHandlers)
+            {
+                if (MyEntities.TryGetEntityById(kvp.Key, out MyEntity ent) && ent is MyVoxelBase v)
+                {
+                    v.RangeChanged -= kvp.Value;
+                }
+            }
+            _voxelRangeHandlers.Clear();
+            _modifiedVoxelRegions.Clear();
         }
 
         public void SyncVoxelFakes()
@@ -296,26 +354,22 @@ namespace PhysicsOptimizer.Modules
             if (otherEntity == null || otherEntity.MarkedForClose || otherEntity.Closed) return true;
 
             stats?.IncrementEvaluated();
-            SyncVoxelFakes();
 
             ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
 
-            // 3. Speed calculations (hoisted - the subgrid branch and impact gate need impactSpeed)
-            float gridSpeed = grid.GetSpeed();
-            float otherSpeed = (otherEntity as MyCubeGrid)?.GetSpeed() ?? 0f;
-            float absSepVelocity = Math.Abs(separatingVelocity);
-            float impactSpeed = Math.Max(absSepVelocity, Math.Max(gridSpeed, otherSpeed));
-
             // 1. Subgrid / Mechanicals (Pistons, Rotors, Hinges, Connectors) Protection
+            bool isConnectedSubgrid = false;
             if (otherEntity is MyCubeGrid otherGrid)
             {
-                if (config.ProtectSubgrids && (GridUtils.AreInSameMechanicalGroup(grid, otherGrid) || GridUtils.AreInSameLogicalGroup(grid, otherGrid)))
+                isConnectedSubgrid = GridUtils.AreInSameMechanicalGroup(grid, otherGrid) || GridUtils.AreInSameLogicalGroup(grid, otherGrid);
+                if (config.ProtectSubgrids && isConnectedSubgrid)
                 {
                     if (config.EnableDebugLogging && ShouldLog(_lastSubgridLogFrames, grid.EntityId ^ otherGrid.EntityId, currentFrame, 120))
                     {
                         Log.Info(LogSource, $"[SUBGRID] Protected: Blocked collision between '{grid.DisplayName}' and '{otherGrid.DisplayName}'.");
                     }
-                    ApplyAntiClang(grid, physics, otherEntity, impactSpeed);
+                    float subgridImpactSpeed = Math.Max(Math.Abs(separatingVelocity), Math.Max(grid.GetSpeed(), otherGrid.GetSpeed()));
+                    ApplyAntiClang(grid, physics, otherEntity, subgridImpactSpeed, isConnectedSubgrid: true);
                     stats?.IncrementBlocked(isSubgrid: true);
                     return false;
                 }
@@ -327,6 +381,13 @@ namespace PhysicsOptimizer.Modules
                 stats?.IncrementBlocked(isDebris: true);
                 return false;
             }
+
+            // 3. Speed calculations (hoisted after subgrid/debris early exits; pre-squared to minimize sqrt calls)
+            float gridSpeedSq = grid.GetSpeedSquared();
+            float otherSpeedSq = (otherEntity as MyCubeGrid)?.GetSpeedSquared() ?? 0f;
+            float absSepVelocity = Math.Abs(separatingVelocity);
+            float impactSpeedSq = Math.Max(absSepVelocity * absSepVelocity, Math.Max(gridSpeedSq, otherSpeedSq));
+            float impactSpeed = (float)Math.Sqrt(impactSpeedSq);
 
             // 4. Missile (PMW) Evaluation & Engagement Tracking (Targets grids only, never voxels)
             if (otherEntity is MyCubeGrid targetGrid)
@@ -352,10 +413,12 @@ namespace PhysicsOptimizer.Modules
                     if (gridInMissile)
                     {
                         engagement = gridEngage;
+                        engagement.ExpireFrame = Math.Max(engagement.ExpireFrame, currentFrame + 30);
                     }
                     else if (otherInMissile)
                     {
                         engagement = otherEngage;
+                        engagement.ExpireFrame = Math.Max(engagement.ExpireFrame, currentFrame + 30);
                     }
                     else
                     {
@@ -374,7 +437,14 @@ namespace PhysicsOptimizer.Modules
 
                         if (config.EnableDebugLogging && config.LogMissileDefense)
                         {
-                            Log.Info(LogSource, $"[MISSILE] Impact ALLOWED: '{engagement.MissileName}' struck '{engagement.TargetName}' at {engagement.InitialSpeed:F1} m/s.");
+                            if (gridQualifies && otherQualifies)
+                            {
+                                Log.Info(LogSource, $"[MISSILE] Head-on missile collision ALLOWED: '{grid.DisplayName}' and '{targetGrid.DisplayName}' collided at {impactSpeed:F1} m/s.");
+                            }
+                            else
+                            {
+                                Log.Info(LogSource, $"[MISSILE] Impact ALLOWED: '{engagement.MissileName}' struck '{engagement.TargetName}' at {engagement.InitialSpeed:F1} m/s.");
+                            }
                         }
                     }
 
@@ -403,7 +473,7 @@ namespace PhysicsOptimizer.Modules
                     else
                         Log.Info(LogSource, $"[DOCKING] Safe Docking: Suppressed low-speed bump on '{grid.DisplayName}'.");
                 }
-                ApplyAntiClang(grid, physics, otherEntity, impactSpeed);
+                ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
                 stats?.IncrementBlocked(isLowSpeed: true);
                 return false;
             }
@@ -416,7 +486,7 @@ namespace PhysicsOptimizer.Modules
                     Log.Warn(LogSource, $"[SPEED] Limit: Suppressed collision on '{grid.DisplayName}' ({impactSpeed:F1} m/s > {config.MaxDeformationVelocity:F1} m/s limit).");
                 }
                 ApplyImpactDamping(physics, grid.IsStatic);
-                ApplyAntiClang(grid, physics, otherEntity, impactSpeed);
+                ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
                 stats?.IncrementBlocked(isRamming: otherEntity is MyCubeGrid, isVoxel: otherEntity is MyVoxelBase);
                 return false;
             }
@@ -437,13 +507,13 @@ namespace PhysicsOptimizer.Modules
                     if (otherEntity is MyCubeGrid otherCubeGrid && !otherCubeGrid.IsStatic && otherCubeGrid.Physics != null)
                     {
                         ApplyImpactDamping(otherCubeGrid.Physics as MyGridPhysics, false);
-                        ApplyAntiClang(otherCubeGrid, otherCubeGrid.Physics as MyGridPhysics, grid, impactSpeed);
+                        ApplyAntiClang(otherCubeGrid, otherCubeGrid.Physics as MyGridPhysics, grid, impactSpeed, isConnectedSubgrid);
                     }
                 }
                 else
                 {
                     ApplyImpactDamping(physics, false);
-                    ApplyAntiClang(grid, physics, otherEntity, impactSpeed);
+                    ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
                 }
                 stats?.IncrementBlocked(isStation: true);
                 return false;
@@ -459,7 +529,7 @@ namespace PhysicsOptimizer.Modules
                         Log.Info(LogSource, $"[VOXEL] Terrain Crash Blocked: '{grid.DisplayName}' ({grid.BlocksCount} blocks) hit voxels at {impactSpeed:F1} m/s (damage suppressed).");
                     }
                     ApplyImpactDamping(physics, grid.IsStatic);
-                    ApplyAntiClang(grid, physics, otherEntity, impactSpeed);
+                    ApplyAntiClang(grid, physics, otherEntity, impactSpeed, false);
                     stats?.IncrementBlocked(isVoxel: true);
                     return false;
                 }
@@ -474,7 +544,7 @@ namespace PhysicsOptimizer.Modules
                     Log.Info(LogSource, $"[RAMMING] Blocked: '{grid.DisplayName}' ({grid.BlocksCount} blocks) hit '{otherEntity.DisplayName}' at {impactSpeed:F1} m/s (damage suppressed).");
                 }
                 ApplyImpactDamping(physics, grid.IsStatic);
-                ApplyAntiClang(grid, physics, otherEntity, impactSpeed);
+                ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
                 stats?.IncrementBlocked(isRamming: true);
                 return false;
             }
@@ -510,7 +580,11 @@ namespace PhysicsOptimizer.Modules
 
         private void EvictGrid(long id)
         {
-            _activeMissiles.TryRemove(id, out _);
+            if (_activeMissiles.TryRemove(id, out _) && MyEntities.TryGetEntityById(id, out MyEntity ent) && ent is MyCubeGrid grid)
+            {
+                grid.OnClose -= OnTrackedGridClosed;
+                grid.OnGridSplit -= OnTrackedGridSplit;
+            }
             _lastDeformationFrames.TryRemove(id, out _);
             _consecutiveContactFrames.TryRemove(id, out _);
             _lastContactFrameTracker.TryRemove(id, out _);
@@ -532,6 +606,11 @@ namespace PhysicsOptimizer.Modules
         private void OnTrackedGridClosed(IMyEntity entity)
         {
             if (entity == null) return;
+            if (entity is MyCubeGrid grid)
+            {
+                grid.OnClose -= OnTrackedGridClosed;
+                grid.OnGridSplit -= OnTrackedGridSplit;
+            }
             EvictGrid(entity.EntityId);
         }
 
@@ -592,20 +671,28 @@ namespace PhysicsOptimizer.Modules
 
             // Fallback: mechanical group scan for the base grid (wheels should always have a stator,
             // but if the stator reference is not yet wired, pick the first non-rotor member).
-            var members = new List<MyCubeGrid>();
-            GridUtils.GetMechanicalGroupMembers(grid, members);
-            foreach (MyCubeGrid member in members)
+            _wheelResolveBuffer ??= new List<MyCubeGrid>();
+            _wheelResolveBuffer.Clear();
+            try
             {
-                if (member == null || member.MarkedForClose || member.Closed || member.EntityId == grid.EntityId) continue;
-                foreach (MyCubeBlock fat in member.GetFatBlocks())
+                GridUtils.GetMechanicalGroupMembers(grid, _wheelResolveBuffer);
+                foreach (MyCubeGrid member in _wheelResolveBuffer)
                 {
-                    if (fat != null && !(fat is MyMotorRotor)) return member.EntityId;
+                    if (member == null || member.MarkedForClose || member.Closed || member.EntityId == grid.EntityId) continue;
+                    foreach (MyCubeBlock fat in member.GetFatBlocks())
+                    {
+                        if (fat != null && !(fat is MyMotorRotor)) return member.EntityId;
+                    }
                 }
+                return -1L;
             }
-            return -1L;
+            finally
+            {
+                _wheelResolveBuffer.Clear();
+            }
         }
 
-        private void ApplyAntiClang(MyCubeGrid grid, MyGridPhysics physics, MyEntity otherEntity, float impactSpeed)
+        private void ApplyAntiClang(MyCubeGrid grid, MyGridPhysics physics, MyEntity otherEntity, float impactSpeed, bool isConnectedSubgrid = false)
         {
             PhysicsOptimizerConfig config = _plugin?.Config;
             if (config == null || grid == null || grid.MarkedForClose || grid.Closed) return;
@@ -613,7 +700,7 @@ namespace PhysicsOptimizer.Modules
             bool isWheelVoxel = otherEntity is MyVoxelBase && IsWheelSubgrid(grid, out _);
 
             // Push-apart contact tracking runs even with Anti-Clang disabled - Phase 2 is gated on EnablePushApart only
-            int contactCount = UpdateContactContext(grid, otherEntity, config, impactSpeed, isWheelVoxel);
+            int contactCount = UpdateContactContext(grid, otherEntity, config, impactSpeed, isWheelVoxel, isConnectedSubgrid);
 
             if (physics == null || !config.EnableAntiClang) return;
 
@@ -640,7 +727,7 @@ namespace PhysicsOptimizer.Modules
             }
         }
 
-        private int UpdateContactContext(MyCubeGrid grid, MyEntity otherEntity, PhysicsOptimizerConfig config, float impactSpeed, bool isWheelVoxel)
+        private int UpdateContactContext(MyCubeGrid grid, MyEntity otherEntity, PhysicsOptimizerConfig config, float impactSpeed, bool isWheelVoxel, bool isConnectedSubgrid)
         {
             long gridEntityId = grid.EntityId;
             ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
@@ -673,8 +760,7 @@ namespace PhysicsOptimizer.Modules
             }
 
             // Phase 2: Active Push-Apart (Excludes mechanically/logically connected subgrids)
-            bool areConnectedSubgrids = otherEntity is MyCubeGrid otherGrid &&
-                (GridUtils.AreInSameMechanicalGroup(grid, otherGrid) || GridUtils.AreInSameLogicalGroup(grid, otherGrid));
+            bool areConnectedSubgrids = isConnectedSubgrid;
 
             // Impact-speed gate: resting grids (contacts at ~0 m/s) never arm pushes; only energetic
             // contacts from driving, docking bumps, or clang oscillation qualify
@@ -861,7 +947,7 @@ namespace PhysicsOptimizer.Modules
                 separationDir = Vector3D.Up;
             }
 
-            EnqueuePush(grid, separationDir, otherEntity is MyVoxelBase, config.PushApartDistance);
+            EnqueuePush(grid, separationDir, false, config.PushApartDistance);
         }
 
         private void EnqueuePush(MyCubeGrid grid, Vector3D separationDir, bool voxelPush, double distance)
@@ -976,27 +1062,35 @@ namespace PhysicsOptimizer.Modules
 
                     // Apply the same translation to the entire mechanical group (wheels are separate
                     // physics bodies - moving only the main grid leaves wheels buried and clanging)
-                    _groupMembersBuffer.Clear();
-                    GridUtils.GetMechanicalGroupMembers(grid, _groupMembersBuffer);
-
-                    foreach (MyCubeGrid member in _groupMembersBuffer)
+                    _pushMechanicalGroupBuffer ??= new List<MyCubeGrid>();
+                    _pushMechanicalGroupBuffer.Clear();
+                    try
                     {
-                        if (member == null || member.MarkedForClose || member.Closed) continue;
+                        GridUtils.GetMechanicalGroupMembers(grid, _pushMechanicalGroupBuffer);
 
-                        MatrixD matrix = member.WorldMatrix;
-                        matrix.Translation += action.SeparationDir * action.Distance;
-                        member.PositionComp.SetWorldMatrix(ref matrix);
-
-                        if (member.Physics != null)
+                        foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
                         {
-                            // Wake the body first - velocity writes on a deactivated rigid body are lost
-                            member.Physics.RigidBody?.Activate();
-                            member.Physics.LinearVelocity = (Vector3)action.SeparationDir * 0.8f;
-                            member.Physics.AngularVelocity = Vector3.Zero;
-                        }
+                            if (member == null || member.MarkedForClose || member.Closed) continue;
 
-                        _consecutiveContactFrames[member.EntityId] = 0;
-                        _lastVoxelContactFrames.TryRemove(member.EntityId, out _);
+                            MatrixD matrix = member.WorldMatrix;
+                            matrix.Translation += action.SeparationDir * action.Distance;
+                            member.PositionComp.SetWorldMatrix(ref matrix);
+
+                            if (member.Physics != null)
+                            {
+                                // Wake the body first - velocity writes on a deactivated rigid body are lost
+                                member.Physics.RigidBody?.Activate();
+                                member.Physics.LinearVelocity = (Vector3)action.SeparationDir * 0.8f;
+                                member.Physics.AngularVelocity = Vector3.Zero;
+                            }
+
+                            _consecutiveContactFrames[member.EntityId] = 0;
+                            _lastVoxelContactFrames.TryRemove(member.EntityId, out _);
+                        }
+                    }
+                    finally
+                    {
+                        _pushMechanicalGroupBuffer.Clear();
                     }
                 }
                 catch (Exception ex)
@@ -1084,55 +1178,47 @@ namespace PhysicsOptimizer.Modules
             PhysicsOptimizerConfig config = _plugin?.Config;
             if (config == null || !config.EnableBurialProbe || !config.EnablePushApart) return;
 
-            MyConcurrentHashSet<MyEntity> entities = MyEntities.GetEntities();
-            try
+            foreach (MyEntity entity in MyEntities.GetEntities())
             {
-                foreach (MyEntity entity in entities)
+                if (entity is not MyCubeGrid grid || grid.IsStatic || grid.MarkedForClose || grid.Closed || grid.Physics?.RigidBody == null) continue;
+
+                long id = grid.EntityId;
+                Vector3D pos = grid.PositionComp.GetPosition();
+
+                if (!_burialProbeStates.TryGetValue(id, out BurialProbeState state))
                 {
-                    if (entity is not MyCubeGrid grid || grid.IsStatic || grid.MarkedForClose || grid.Closed || grid.Physics?.RigidBody == null) continue;
+                    _burialProbeStates[id] = new BurialProbeState { LastPosition = pos, StationarySweeps = 0 };
+                    continue;
+                }
 
-                    long id = grid.EntityId;
-                    Vector3D pos = grid.PositionComp.GetPosition();
-
-                    if (!_burialProbeStates.TryGetValue(id, out BurialProbeState state))
-                    {
-                        _burialProbeStates[id] = new BurialProbeState { LastPosition = pos, StationarySweeps = 0 };
-                        continue;
-                    }
-
-                    if (Vector3D.DistanceSquared(pos, state.LastPosition) > 0.25)
-                    {
-                        state.LastPosition = pos;
-                        state.StationarySweeps = 0;
-                        continue;
-                    }
-
+                if (Vector3D.DistanceSquared(pos, state.LastPosition) > 0.25)
+                {
                     state.LastPosition = pos;
-                    state.StationarySweeps++;
-                    if (state.StationarySweeps < 2) continue;
+                    state.StationarySweeps = 0;
+                    continue;
+                }
 
-                    // Contact-driven push-apart owns grids that are actively grinding; probe is for silent burials
-                    if (HadRecentVoxelContact(id)) continue;
+                state.LastPosition = pos;
+                state.StationarySweeps++;
+                if (state.StationarySweeps < 2) continue;
 
-                    // Cliff-wedged grids are confined on only 1-2 horizontal sides, so they get a relaxed
-                    // 2-side test when terrain contact was seen recently; silent burials still need 3 sides
-                    int minSolidSides = HadVoxelContactWithin(id, 1800) ? 2 : 3;
-                    if (IsGridBuried(grid, config, minSolidSides))
+                // Contact-driven push-apart owns grids that are actively grinding; probe is for silent burials
+                if (HadRecentVoxelContact(id)) continue;
+
+                // Cliff-wedged grids are confined on only 1-2 horizontal sides, so they get a relaxed
+                // 2-side test when terrain contact was seen recently; silent burials still need 3 sides
+                int minSolidSides = HadVoxelContactWithin(id, 1800) ? 2 : 3;
+                if (IsGridBuried(grid, config, minSolidSides))
+                {
+                    Vector3D up = grid.Physics.Gravity.LengthSquared() > 0.1f ? -Vector3D.Normalize(grid.Physics.Gravity) : Vector3D.Up;
+                    EnqueuePush(grid, up, voxelPush: true, config.PushApartDistance);
+                    state.StationarySweeps = 0;
+
+                    if (config.EnableDebugLogging)
                     {
-                        Vector3D up = grid.Physics.Gravity.LengthSquared() > 0.1f ? -Vector3D.Normalize(grid.Physics.Gravity) : Vector3D.Up;
-                        EnqueuePush(grid, up, voxelPush: true, config.PushApartDistance);
-                        state.StationarySweeps = 0;
-
-                        if (config.EnableDebugLogging)
-                        {
-                            Log.Info(LogSource, $"[BURIAL PROBE] Queued rescue push for buried grid '{grid.DisplayName}'.");
-                        }
+                        Log.Info(LogSource, $"[BURIAL PROBE] Queued rescue push for buried grid '{grid.DisplayName}'.");
                     }
                 }
-            }
-            finally
-            {
-                entities.Clear();
             }
         }
 
@@ -1168,7 +1254,11 @@ namespace PhysicsOptimizer.Modules
                 {
                     if (currentFrame > kvp.Value.ExpireFrame + 300)
                     {
-                        _activeMissiles.TryRemove(kvp.Key, out _);
+                        if (_activeMissiles.TryRemove(kvp.Key, out _) && MyEntities.TryGetEntityById(kvp.Key, out MyEntity ent) && ent is MyCubeGrid g)
+                        {
+                            g.OnClose -= OnTrackedGridClosed;
+                            g.OnGridSplit -= OnTrackedGridSplit;
+                        }
                     }
                 }
 
@@ -1279,8 +1369,14 @@ namespace PhysicsOptimizer.Modules
                 }
                 else if (MyDamageSystem.Static != null)
                 {
-                    MyDamageSystem.Static.RegisterBeforeDamageHandler(100, OnBeforeDamageApplied);
-                    Log.Info(LogSource, "Registered Layered Armor Occlusion damage handler directly.");
+                    FieldInfo beforeField = typeof(MyDamageSystem).GetField("m_beforeDamageHandlers", BindingFlags.Instance | BindingFlags.NonPublic);
+                    var handlers = beforeField?.GetValue(MyDamageSystem.Static) as List<Tuple<int, BeforeDamageApplied>>;
+                    if (handlers == null || !handlers.Exists(t => t.Item2 == OnBeforeDamageApplied))
+                    {
+                        MyDamageSystem.Static.RegisterBeforeDamageHandler(100, OnBeforeDamageApplied);
+                        _damageHandlerRegistered = true;
+                        Log.Info(LogSource, "Registered Layered Armor Occlusion damage handler directly.");
+                    }
                 }
             }
             catch (Exception ex)
@@ -1368,6 +1464,7 @@ namespace PhysicsOptimizer.Modules
                     bool hitAir = voxelEnt == null || !IsVoxelRegionModified(voxelEnt, contactPos);
                     if (!hitAir)
                     {
+                        hitAir = true; // Assume air above unless raycast hits solid voxel
                         Vector3D rayStart = contactPos;
                         Vector3D rayEnd = rayStart + (Vector3D)upVector * 1.5f;
 
@@ -1457,7 +1554,15 @@ namespace PhysicsOptimizer.Modules
         {
             if (__instance != null)
             {
+                FieldInfo beforeField = typeof(MyDamageSystem).GetField("m_beforeDamageHandlers", BindingFlags.Instance | BindingFlags.NonPublic);
+                var handlers = beforeField?.GetValue(__instance) as List<Tuple<int, BeforeDamageApplied>>;
+                if (handlers != null && handlers.Exists(t => t.Item2 == OnBeforeDamageApplied))
+                {
+                    return;
+                }
+
                 __instance.RegisterBeforeDamageHandler(100, OnBeforeDamageApplied);
+                _damageHandlerRegistered = true;
                 Log.Info(LogSource, "Registered Layered Armor Occlusion damage handler via Postfix.");
             }
         }
@@ -1473,6 +1578,10 @@ namespace PhysicsOptimizer.Modules
             {
                 MyCubeGrid grid = slimBlock.CubeGrid;
 
+                // Note: Occlusion relies on the most recent contact point recorded in _lastImpactPositions.
+                // In simultaneous multi-point impacts from opposing directions, the single recorded position
+                // may attribute occlusion to the latest contact point. This design is optimized for rover
+                // collisions and frontal impacts without per-contact memory allocations.
                 if (!_lastImpactPositions.TryGetValue(grid.EntityId, out Vector3D globalHitPos))
                 {
                     return; // Can't determine direction without a collision point

@@ -37,6 +37,15 @@ namespace PhysicsOptimizer.Utils
         }
 
         /// <summary>
+        /// Gets the current squared linear speed of the grid without square root calculation.
+        /// </summary>
+        public static float GetSpeedSquared(this IMyCubeGrid grid)
+        {
+            if (grid?.Physics == null) return 0f;
+            return grid.Physics.LinearVelocity.LengthSquared();
+        }
+
+        /// <summary>
         /// Checks if two grids belong to the same mechanical group (e.g. connected via rotors, pistons, hinges, or suspension wheel attachments).
         /// </summary>
         public static bool AreInSameMechanicalGroup(IMyCubeGrid gridA, IMyCubeGrid gridB)

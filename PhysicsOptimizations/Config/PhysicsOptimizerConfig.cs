@@ -21,11 +21,6 @@ namespace PhysicsOptimizer.Config
         private int _consoleTelemetryIntervalSeconds = 30;
 
         // Logging specific modules
-        private bool _logWheelOptimizer = false;
-        private bool _logRigidBodySleep = false;
-        private bool _logOreMerge = false;
-        private bool _logSubgridStabilizer = false;
-        private bool _logAdaptiveCollision = false;
         private bool _logGridDefender = false;
         private bool _logThrusterClearance = false;
         private bool _logMissileDefense = false;
@@ -48,7 +43,6 @@ namespace PhysicsOptimizer.Config
         private bool _autoMergeNearbyOre = true;
         private float _oreMergeRadiusMeters = 3.0f;
         private int _oreMergeIntervalTicks = 120;
-        private int _maxSectorFloatingObjects = 64;
 
         // --- Module 4: Subgrid Constraints ---
         private bool _enableSubgridStabilizer = true;
@@ -135,11 +129,6 @@ namespace PhysicsOptimizer.Config
         public bool EnablePeriodicConsoleTelemetry { get => _enablePeriodicConsoleTelemetry; set => SetValue(ref _enablePeriodicConsoleTelemetry, value); }
         public int ConsoleTelemetryIntervalSeconds { get => _consoleTelemetryIntervalSeconds; set => SetValue(ref _consoleTelemetryIntervalSeconds, value); }
 
-        public bool LogWheelOptimizer { get => _logWheelOptimizer; set => SetValue(ref _logWheelOptimizer, value); }
-        public bool LogRigidBodySleep { get => _logRigidBodySleep; set => SetValue(ref _logRigidBodySleep, value); }
-        public bool LogOreMerge { get => _logOreMerge; set => SetValue(ref _logOreMerge, value); }
-        public bool LogSubgridStabilizer { get => _logSubgridStabilizer; set => SetValue(ref _logSubgridStabilizer, value); }
-        public bool LogAdaptiveCollision { get => _logAdaptiveCollision; set => SetValue(ref _logAdaptiveCollision, value); }
         public bool LogGridDefender { get => _logGridDefender; set => SetValue(ref _logGridDefender, value); }
         public bool LogThrusterClearance { get => _logThrusterClearance; set => SetValue(ref _logThrusterClearance, value); }
         public bool LogMissileDefense { get => _logMissileDefense; set => SetValue(ref _logMissileDefense, value); }
@@ -159,7 +148,6 @@ namespace PhysicsOptimizer.Config
         public bool AutoMergeNearbyOre { get => _autoMergeNearbyOre; set => SetValue(ref _autoMergeNearbyOre, value); }
         public float OreMergeRadiusMeters { get => _oreMergeRadiusMeters; set => SetValue(ref _oreMergeRadiusMeters, value); }
         public int OreMergeIntervalTicks { get => _oreMergeIntervalTicks; set => SetValue(ref _oreMergeIntervalTicks, value); }
-        public int MaxSectorFloatingObjects { get => _maxSectorFloatingObjects; set => SetValue(ref _maxSectorFloatingObjects, value); }
 
         public bool EnableSubgridStabilizer { get => _enableSubgridStabilizer; set => SetValue(ref _enableSubgridStabilizer, value); }
         public bool EnableSubgridStabilization { get => _enableSubgridStabilization; set => SetValue(ref _enableSubgridStabilization, value); }

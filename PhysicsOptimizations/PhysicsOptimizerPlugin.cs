@@ -200,6 +200,7 @@ namespace PhysicsOptimizer
             _optimizers.Clear();
 
             base.Dispose();
+            Instance = null;
         }
 
         public void LoadConfig()

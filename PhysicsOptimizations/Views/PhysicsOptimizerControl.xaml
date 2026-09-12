@@ -169,13 +169,6 @@
                                                  ToolTip="Simulation frames between proximity merge sweeps (60 = 1 sec, 120 = 2 sec). Default: 120 ticks."/>
                                         <TextBlock Text="Ticks (60 = ~1s)." Foreground="#CCCCCC" VerticalAlignment="Center"/>
                                     </WrapPanel>
-
-                                    <WrapPanel Margin="16,2,0,2" VerticalAlignment="Center">
-                                        <TextBlock Text="Accelerate cleanup when sector floating objects exceed" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                        <TextBox Text="{Binding Config.MaxSectorFloatingObjects}" Width="55" HorizontalContentAlignment="Center" Margin="5,0" VerticalAlignment="Center"
-                                                 ToolTip="Maximum threshold of floating objects permitted in a sector before accelerated cleanup and merging are triggered. Default: 64."/>
-                                        <TextBlock Text="Items." Foreground="#CCCCCC" VerticalAlignment="Center"/>
-                                    </WrapPanel>
                                 </StackPanel>
                             </StackPanel>
                         </GroupBox>

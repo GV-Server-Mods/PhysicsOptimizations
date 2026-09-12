@@ -51,9 +51,10 @@ namespace PhysicsOptimizer.Modules
             bool enabled = IsEnabled && _plugin?.Config != null;
             if (!enabled)
             {
-                // Feature disabled: drop any forced-sleep state so stale trackers cannot wake grids.
+                // Feature disabled: wake every grid we deactivated, or it stays frozen until damage/cockpit input.
                 if (_wasEnabled)
                 {
+                    WakeAllTrackedGrids("Feature disabled");
                     _trackers.Clear();
                     _wasEnabled = false;
                 }
@@ -145,6 +146,12 @@ namespace PhysicsOptimizer.Modules
                         }
                         else
                         {
+                            // Conditions no longer hold (pilot entered, drifting, bumped): reactivate the frozen body.
+                            // Cockpit/damage wake hooks cannot fire while the body stays deactivated.
+                            if (tracker.IsForcedSleep)
+                            {
+                                rb.Activate();
+                            }
                             tracker.IdleSeconds = 0;
                             tracker.IsForcedSleep = false;
                         }
@@ -245,6 +252,27 @@ namespace PhysicsOptimizer.Modules
             return _trackers.TryGetValue(gridEntityId, out var tracker) && tracker.IsForcedSleep;
         }
 
+        /// <summary>Activates every grid we put to sleep; runs on toggle-off and shutdown so nothing stays frozen.</summary>
+        private void WakeAllTrackedGrids(string reason)
+        {
+            int woke = 0;
+            foreach (var kvp in _trackers)
+            {
+                if (!kvp.Value.GridRef.TryGetTarget(out var grid)) continue;
+                var rb = grid.Physics?.RigidBody;
+                if (rb != null && !grid.Closed && !grid.MarkedForClose && !rb.IsActive)
+                {
+                    rb.Activate();
+                    woke++;
+                }
+            }
+
+            if (woke > 0)
+            {
+                Log.Info(LogSource, $"Woke {woke} tracked grids ({reason}).");
+            }
+        }
+
         public void OnEntityAdded(MyEntity entity)
         {
         }
@@ -309,6 +337,8 @@ namespace PhysicsOptimizer.Modules
 
         public void Dispose()
         {
+            // Bodies stay deactivated after the patches revert, so explicitly wake everything we slept.
+            WakeAllTrackedGrids("Plugin shutdown");
             _trackers.Clear();
             _cleanupBuffer.Clear();
             _plugin = null;
@@ -415,6 +445,13 @@ namespace PhysicsOptimizer.Modules
             {
                 // Cross-feature wake: rover suspension sleep lives in WheelOptimizer (independent toggle)
                 plugin.WheelOptimizer?.WakeRover(grid.EntityId, "Grid took damage");
+
+                // Cross-feature wake: damage to a rotor/piston/hinge must clear stabilization, or the
+                // velocity-sync fights the deformation for up to 0.5s (SubgridStabilizer, independent toggle).
+                if (slim?.FatBlock is Sandbox.Game.Entities.Blocks.MyMechanicalConnectionBlockBase mech)
+                {
+                    plugin.SubgridStabilizer?.WakeJoint(mech.EntityId);
+                }
 
                 // Rigid-body wake is gated by this feature's own toggle
                 if (plugin.RigidBodySleep != null && plugin.RigidBodySleep.IsEnabled)
