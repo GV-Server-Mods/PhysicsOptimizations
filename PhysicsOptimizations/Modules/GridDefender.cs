@@ -76,9 +76,20 @@ namespace PhysicsOptimizer.Modules
             public int Level;
         }
 
+        private sealed class ConstructCrashRecord
+        {
+            public string DisplayName;
+            public int TotalCrashes;
+            public int WindowCrashes;
+            public int LastSecondRate;
+            public ulong WindowStartFrame;
+            public ulong LastCrashFrame;
+        }
+
         private static long _nextMissileGroupId = 0;
 
         private readonly ConcurrentQueue<PushApartAction> _pushQueue = new();
+        private static readonly ConcurrentDictionary<long, ConstructCrashRecord> _constructCrashRecords = new();
         private readonly ConcurrentDictionary<long, MissileEngagement> _activeMissiles = new();
         private readonly ConcurrentDictionary<long, ulong> _lastDeformationFrames = new();
         private readonly ConcurrentDictionary<long, int> _consecutiveContactFrames = new();
@@ -89,6 +100,10 @@ namespace PhysicsOptimizer.Modules
         private readonly ConcurrentDictionary<long, ulong> _lastSubgridLogFrames = new();
         private readonly ConcurrentDictionary<long, ulong> _lastExtremeSpeedLogFrames = new();
         private static readonly ConcurrentDictionary<long, ulong> _lastVoxelContactFrames = new();
+        private readonly ConcurrentDictionary<long, int> _consecutiveVoxelContactFrames = new();
+        private readonly ConcurrentDictionary<long, ulong> _lastVoxelContactFrameTracker = new();
+        private readonly ConcurrentDictionary<long, Vector3D> _voxelContactStartPositions = new();
+        private readonly ConcurrentDictionary<long, ulong> _lastPushApartGateLogFrames = new();
         private readonly ConcurrentDictionary<long, BurialProbeState> _burialProbeStates = new();
         private readonly ConcurrentDictionary<long, int> _pushApartAttempts = new();
         private readonly ConcurrentDictionary<long, EscapeRecord> _lastEscapes = new();
@@ -288,7 +303,12 @@ namespace PhysicsOptimizer.Modules
             _lastEscapes.Clear();
             _contactStartPositions.Clear();
             _lastVoxelContactFrames.Clear();
+            _consecutiveVoxelContactFrames.Clear();
+            _lastVoxelContactFrameTracker.Clear();
+            _voxelContactStartPositions.Clear();
+            _lastPushApartGateLogFrames.Clear();
             _burialProbeStates.Clear();
+            _constructCrashRecords.Clear();
 
             foreach (var kvp in _voxelRangeHandlers)
             {
@@ -349,6 +369,106 @@ namespace PhysicsOptimizer.Modules
             return false;
         }
 
+        private static void RecordBlockedCrash(MyCubeGrid grid, ulong currentFrame)
+        {
+            if (grid == null || currentFrame == 0) return;
+            MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+            long constructId = topGrid.EntityId;
+            ConstructCrashRecord record = _constructCrashRecords.GetOrAdd(constructId, id => new ConstructCrashRecord
+            {
+                DisplayName = topGrid.DisplayName,
+                WindowStartFrame = currentFrame,
+                LastCrashFrame = currentFrame
+            });
+
+            record.DisplayName = topGrid.DisplayName;
+            record.LastCrashFrame = currentFrame;
+            Interlocked.Increment(ref record.TotalCrashes);
+
+            if (currentFrame >= record.WindowStartFrame + 60)
+            {
+                record.LastSecondRate = record.WindowCrashes;
+                record.WindowCrashes = 1;
+                record.WindowStartFrame = currentFrame;
+            }
+            else
+            {
+                record.WindowCrashes++;
+            }
+        }
+
+        private bool BlockDeformation(MyCubeGrid grid, ulong currentFrame, DefenseStatistics stats, bool isRamming = false, bool isVoxel = false, bool isSubgrid = false, bool isCooldown = false, bool isLowSpeed = false, bool isStation = false, bool isDebris = false)
+        {
+            RecordBlockedCrash(grid, currentFrame);
+            stats?.IncrementBlocked(isRamming, isVoxel, isSubgrid, isCooldown, isLowSpeed, isStation, isDebris);
+            return false;
+        }
+
+        public static List<(string Name, long Id, int Rate, int Total)> GetActiveCrashOffenders(int minRate = 1, int maxResults = 5)
+        {
+            if (_constructCrashRecords.IsEmpty) return null;
+            ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+            List<(string Name, long Id, int Rate, int Total)> results = null;
+
+            foreach (var kvp in _constructCrashRecords)
+            {
+                ConstructCrashRecord rec = kvp.Value;
+                if (rec == null) continue;
+
+                int rate = rec.LastSecondRate;
+                if (currentFrame > 0 && rec.LastCrashFrame > 0 && currentFrame > rec.LastCrashFrame + 120)
+                {
+                    rate = 0;
+                }
+                else if (rate == 0 && currentFrame > 0 && rec.LastCrashFrame > 0 && currentFrame <= rec.LastCrashFrame + 60)
+                {
+                    rate = rec.WindowCrashes;
+                }
+
+                if (rate >= minRate)
+                {
+                    results ??= new List<(string Name, long Id, int Rate, int Total)>();
+                    results.Add((rec.DisplayName ?? "Unknown", kvp.Key, rate, rec.TotalCrashes));
+                }
+            }
+
+            if (results != null && results.Count > 1)
+            {
+                results.Sort((a, b) => b.Rate.CompareTo(a.Rate));
+                if (results.Count > maxResults)
+                {
+                    results.RemoveRange(maxResults, results.Count - maxResults);
+                }
+            }
+
+            return results;
+        }
+
+        private static int GetConstructCrashRate(long constructId, ulong currentFrame)
+        {
+            if (_constructCrashRecords.TryGetValue(constructId, out ConstructCrashRecord cRec) && cRec != null)
+            {
+                if (currentFrame > 0 && cRec.LastCrashFrame > 0 && currentFrame > cRec.LastCrashFrame + 120)
+                {
+                    return 0;
+                }
+                if (cRec.LastSecondRate > 0)
+                {
+                    return cRec.LastSecondRate;
+                }
+                if (currentFrame > 0 && cRec.LastCrashFrame > 0 && currentFrame <= cRec.LastCrashFrame + 60)
+                {
+                    return cRec.WindowCrashes;
+                }
+            }
+            return 0;
+        }
+
+        private static int GetConstructCrashTotal(long constructId)
+        {
+            return _constructCrashRecords.TryGetValue(constructId, out ConstructCrashRecord cRec) ? cRec.TotalCrashes : 0;
+        }
+
         /// <summary>
         /// Main collision decision hook. Filters deformation across the sequential defense pipeline.
         /// </summary>
@@ -378,16 +498,14 @@ namespace PhysicsOptimizer.Modules
                     }
                     float subgridImpactSpeed = Math.Max(Math.Abs(separatingVelocity), Math.Max(grid.GetSpeed(), otherGrid.GetSpeed()));
                     ApplyAntiClang(grid, physics, otherEntity, subgridImpactSpeed, isConnectedSubgrid: true);
-                    stats?.IncrementBlocked(isSubgrid: true);
-                    return false;
+                    return BlockDeformation(grid, currentFrame, stats, isSubgrid: true);
                 }
             }
 
             // 2. Floating Objects / Ores / Loose Debris Protection
             if (otherEntity is MyFloatingObject && config.ProtectAgainstFloatingObjects)
             {
-                stats?.IncrementBlocked(isDebris: true);
-                return false;
+                return BlockDeformation(grid, currentFrame, stats, isDebris: true);
             }
 
             // 3. Speed calculations (hoisted after subgrid/debris early exits; pre-squared to minimize sqrt calls)
@@ -406,7 +524,7 @@ namespace PhysicsOptimizer.Modules
                 // Friendly-fire shield: Suppress self-damage between splits of the same missile
                 if (gridInMissile && otherInMissile && gridEngage.GroupId == otherEngage.GroupId)
                 {
-                    return false;
+                    return BlockDeformation(grid, currentFrame, stats);
                 }
 
                 bool gridQualifies = gridInMissile || (config.AllowMissileDamage && IsMissile(grid, impactSpeed));
@@ -467,7 +585,7 @@ namespace PhysicsOptimizer.Modules
                         physics.AngularVelocity = Vector3.Zero;
                     }
 
-                    return AllowOrScale(grid.EntityId, ref separatingVelocity, isMissile: true);
+                    return AllowOrScale(grid, ref separatingVelocity, isMissile: true);
                 }
             }
 
@@ -482,8 +600,7 @@ namespace PhysicsOptimizer.Modules
                         Log.Info(LogSource, $"[DOCKING] Safe Docking: Suppressed low-speed bump on '{grid.DisplayName}'.");
                 }
                 ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
-                stats?.IncrementBlocked(isLowSpeed: true);
-                return false;
+                return BlockDeformation(grid, currentFrame, stats, isLowSpeed: true);
             }
 
             // 6. Extreme Velocity Anti-Freeze Limit (Non-missiles only)
@@ -495,8 +612,7 @@ namespace PhysicsOptimizer.Modules
                 }
                 ApplyImpactDamping(physics, grid.IsStatic);
                 ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
-                stats?.IncrementBlocked(isRamming: otherEntity is MyCubeGrid, isVoxel: otherEntity is MyVoxelBase);
-                return false;
+                return BlockDeformation(grid, currentFrame, stats, isRamming: otherEntity is MyCubeGrid, isVoxel: otherEntity is MyVoxelBase);
             }
 
             // 7. Non-Missile Collisions (Ships, Rovers, Stations, Voxels)
@@ -523,8 +639,7 @@ namespace PhysicsOptimizer.Modules
                     ApplyImpactDamping(physics, false);
                     ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
                 }
-                stats?.IncrementBlocked(isStation: true);
-                return false;
+                return BlockDeformation(grid, currentFrame, stats, isStation: true);
             }
 
             // B. Ship vs Voxel Protection (Asteroids, terrain, and off-target missiles hitting dirt)
@@ -538,10 +653,9 @@ namespace PhysicsOptimizer.Modules
                     }
                     ApplyImpactDamping(physics, grid.IsStatic);
                     ApplyAntiClang(grid, physics, otherEntity, impactSpeed, false);
-                    stats?.IncrementBlocked(isVoxel: true);
-                    return false;
+                    return BlockDeformation(grid, currentFrame, stats, isVoxel: true);
                 }
-                return AllowOrScale(grid.EntityId, ref separatingVelocity, isMissile: false);
+                return AllowOrScale(grid, ref separatingVelocity, isMissile: false);
             }
 
             // C. Ship vs Ship Ramming Protection
@@ -553,8 +667,7 @@ namespace PhysicsOptimizer.Modules
                 }
                 ApplyImpactDamping(physics, grid.IsStatic);
                 ApplyAntiClang(grid, physics, otherEntity, impactSpeed, isConnectedSubgrid);
-                stats?.IncrementBlocked(isRamming: true);
-                return false;
+                return BlockDeformation(grid, currentFrame, stats, isRamming: true);
             }
 
             // 8. Rate Limiting / Cooldown for any unprotected continuous deformations
@@ -564,13 +677,12 @@ namespace PhysicsOptimizer.Modules
                 {
                     if (currentFrame >= lastFrame && (currentFrame - lastFrame) < (ulong)config.DeformationCooldownFrames)
                     {
-                        stats?.IncrementBlocked(isCooldown: true);
-                        return false;
+                        return BlockDeformation(grid, currentFrame, stats, isCooldown: true);
                     }
                 }
             }
 
-            return AllowOrScale(grid.EntityId, ref separatingVelocity, isMissile: false);
+            return AllowOrScale(grid, ref separatingVelocity, isMissile: false);
         }
 
         private void RegisterActiveMissile(MyCubeGrid missileGrid, MissileEngagement engagement)
@@ -610,6 +722,11 @@ namespace PhysicsOptimizer.Modules
             _wheelBaseGridIds.TryRemove(id, out _);
             _lastEscapes.TryRemove(id, out _);
             _contactStartPositions.TryRemove(id, out _);
+            _consecutiveVoxelContactFrames.TryRemove(id, out _);
+            _lastVoxelContactFrameTracker.TryRemove(id, out _);
+            _voxelContactStartPositions.TryRemove(id, out _);
+            _lastPushApartGateLogFrames.TryRemove(id, out _);
+            _constructCrashRecords.TryRemove(id, out _);
         }
 
         private void OnTrackedGridClosed(IMyEntity entity)
@@ -742,6 +859,15 @@ namespace PhysicsOptimizer.Modules
             ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
             if (currentFrame == 0) return 0;
 
+            // RigidBodySleep guard feed & AntiClang hook: sleeping bodies emit no contact callbacks, so a voxel-contact
+            // timestamp is the only signal keeping a terrain-grinding grid awake long enough to be rescued.
+            // Voxel contacts and push-apart are handled exclusively by RecordVoxelContactFrame.
+            if (otherEntity is MyVoxelBase)
+            {
+                _lastVoxelContactFrames[gridEntityId] = currentFrame;
+                return _consecutiveVoxelContactFrames.TryGetValue(gridEntityId, out int c) ? c : 0;
+            }
+
             int contactCount;
             if (_lastContactFrameTracker.TryGetValue(gridEntityId, out ulong lastFrame))
             {
@@ -784,7 +910,7 @@ namespace PhysicsOptimizer.Modules
             // never arm pushes; only energetic contacts from driving, docking bumps, hard hits,
             // or active rotational Clang shuddering (>= 0.5 rad/s) qualify
             float angularSpeed = grid.Physics?.AngularVelocity.Length() ?? 0f;
-            bool isClangVibrating = angularSpeed >= 0.5f;
+            bool isClangVibrating = angularSpeed >= config.PushApartClangAngularThreshold;
             bool speedGateOpen = config.PushApartMinImpactSpeed <= 0f || impactSpeed >= config.PushApartMinImpactSpeed;
             bool impactGateOpen = speedGateOpen || isClangVibrating;
 
@@ -817,93 +943,135 @@ namespace PhysicsOptimizer.Modules
             ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
             if (currentFrame == 0) return;
 
+            bool isWheelVoxel = otherEntity is MyVoxelBase && IsWheelSubgrid(grid, out _);
+
             int contactCount;
-            if (_lastContactFrameTracker.TryGetValue(gridEntityId, out ulong lastFrame))
+            if (_lastVoxelContactFrameTracker.TryGetValue(gridEntityId, out ulong lastFrame))
             {
                 if (currentFrame == lastFrame)
                 {
-                    return;
+                    if (!isWheelVoxel)
+                    {
+                        _lastVoxelPenetrations.AddOrUpdate(gridEntityId, distance, (k, old) => Math.Min(old, distance));
+                    }
+                    contactCount = _consecutiveVoxelContactFrames.TryGetValue(gridEntityId, out int c) ? c : 0;
+                    if (contactCount == 0) return;
                 }
                 else if (currentFrame == lastFrame + 1)
                 {
-                    contactCount = _consecutiveContactFrames.AddOrUpdate(gridEntityId, 1, (k, v) => v + 1);
-                    _lastContactFrameTracker[gridEntityId] = currentFrame;
+                    contactCount = _consecutiveVoxelContactFrames.AddOrUpdate(gridEntityId, 1, (k, v) => v + 1);
+                    _lastVoxelContactFrameTracker[gridEntityId] = currentFrame;
+                    if (!isWheelVoxel) _lastVoxelPenetrations[gridEntityId] = distance;
+
+                    // Rolling drift window: reset start position every threshold cycle so drift doesn't monotonically accumulate forever
+                    if (config.PushApartThreshold > 0 && contactCount % config.PushApartThreshold == 0)
+                    {
+                        _voxelContactStartPositions[gridEntityId] = grid.PositionComp.WorldVolume.Center;
+                    }
                 }
                 else
                 {
                     contactCount = 1;
-                    _consecutiveContactFrames[gridEntityId] = 1;
-                    _lastContactFrameTracker[gridEntityId] = currentFrame;
-                    _contactStartPositions[gridEntityId] = grid.PositionComp.WorldVolume.Center;
+                    _consecutiveVoxelContactFrames[gridEntityId] = 1;
+                    _lastVoxelContactFrameTracker[gridEntityId] = currentFrame;
+                    _voxelContactStartPositions[gridEntityId] = grid.PositionComp.WorldVolume.Center;
+                    if (!isWheelVoxel) _lastVoxelPenetrations[gridEntityId] = distance;
                 }
             }
             else
             {
                 contactCount = 1;
-                _consecutiveContactFrames[gridEntityId] = 1;
-                _lastContactFrameTracker[gridEntityId] = currentFrame;
-                _contactStartPositions[gridEntityId] = grid.PositionComp.WorldVolume.Center;
+                _consecutiveVoxelContactFrames[gridEntityId] = 1;
+                _lastVoxelContactFrameTracker[gridEntityId] = currentFrame;
+                _voxelContactStartPositions[gridEntityId] = grid.PositionComp.WorldVolume.Center;
+                if (!isWheelVoxel) _lastVoxelPenetrations[gridEntityId] = distance;
             }
 
-            bool isWheelVoxel = otherEntity is MyVoxelBase && IsWheelSubgrid(grid, out _);
-            if (!isWheelVoxel)
-            {
-                _lastVoxelPenetrations[gridEntityId] = distance;
-            }
             bool pushApartAllowed = !isWheelVoxel || !config.ExcludeWheelSubgridsFromPushApart;
 
             if (pushApartAllowed && config.EnablePushApart && contactCount >= config.PushApartThreshold)
             {
-                bool driftGateOpen = config.PushApartMaxDrift <= 0f;
-                if (!driftGateOpen && _contactStartPositions.TryGetValue(gridEntityId, out Vector3D startPos))
+                Vector3D gridCenter = grid.PositionComp.WorldVolume.Center;
+                MyPlanet planet = otherEntity as MyPlanet ?? MyGamePruningStructure.GetClosestPlanet(gridCenter);
+                bool isUnderSurface = false;
+                if (planet != null)
                 {
-                    Vector3D drift = grid.PositionComp.WorldVolume.Center - startPos;
-                    driftGateOpen = drift.LengthSquared() <= (double)config.PushApartMaxDrift * config.PushApartMaxDrift;
+                    Vector3D core = planet.PositionComp.WorldVolume.Center;
+                    Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref gridCenter);
+                    isUnderSurface = (gridCenter - core).LengthSquared() < (surfacePt - core).LengthSquared();
                 }
 
-                if (driftGateOpen)
+                float effectiveDistance = distance;
+                if (_lastVoxelPenetrations.TryGetValue(gridEntityId, out float recordedDist))
                 {
-                    Vector3D gridCenter = grid.PositionComp.WorldVolume.Center;
-                    MyPlanet planet = otherEntity as MyPlanet ?? MyGamePruningStructure.GetClosestPlanet(gridCenter);
-                    bool isUnderSurface = false;
-                    if (planet != null)
+                    effectiveDistance = Math.Min(distance, recordedDist);
+                }
+
+                // A grid is physically embedded if Havok reports contact penetration exceeding the configured threshold
+                // (default 0.20m), or its center of mass is submerged below the planet heightmap surface.
+                bool isPhysicallyEmbedded = effectiveDistance < -config.PushApartEmbeddedDepth;
+                bool isEmbedded = isPhysicallyEmbedded || isUnderSurface;
+
+                float speed = grid.Physics?.LinearVelocity.Length() ?? 0f;
+                float angularSpeed = grid.Physics?.AngularVelocity.Length() ?? 0f;
+
+                // Crash rate check: if the construct is generating continuous blocked deformation crashes,
+                // it is clanging violently in Havok even if angular velocity is clamped by the solver
+                MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+                long constructId = topGrid.EntityId;
+                int crashesTotal = GetConstructCrashTotal(constructId);
+                int crashesRate = GetConstructCrashRate(constructId, currentFrame);
+                bool isCrashClanging = config.PushApartClangCrashRateThreshold > 0 && crashesRate >= config.PushApartClangCrashRateThreshold;
+
+                // Drift gate: normal driving rovers move across the map (drift > max drift), preventing micro-teleports.
+                // However, embedded/submerged grids or grids actively clanging bypass the drift gate
+                // because stationary/jittering clanging rovers or rovers slowly sliding down slopes need rescue.
+                double driftDist = 0.0;
+                bool driftGateOpen = config.PushApartMaxDrift <= 0f || isCrashClanging || isEmbedded;
+                if (_voxelContactStartPositions.TryGetValue(gridEntityId, out Vector3D startPos))
+                {
+                    Vector3D drift = grid.PositionComp.WorldVolume.Center - startPos;
+                    driftDist = drift.Length();
+                    if (!driftGateOpen)
                     {
-                        Vector3D core = planet.PositionComp.WorldVolume.Center;
-                        Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref gridCenter);
-                        isUnderSurface = (gridCenter - core).LengthSquared() < (surfacePt - core).LengthSquared();
+                        driftGateOpen = driftDist <= config.PushApartMaxDrift;
                     }
+                }
+                else if (!driftGateOpen)
+                {
+                    _voxelContactStartPositions[gridEntityId] = grid.PositionComp.WorldVolume.Center;
+                    driftGateOpen = true;
+                }
 
-                    // A grid is physically embedded if Havok reports contact penetration exceeding the configured threshold
-                    // (default 0.20m), or its center of mass is submerged below the planet heightmap surface.
-                    // Embedded or submerged grids bypass speed/vibration gates entirely and push immediately.
-                    bool isPhysicallyEmbedded = distance < -config.PushApartEmbeddedDepth;
-                    bool isEmbedded = isPhysicallyEmbedded || isUnderSurface;
+                // Energetic impact or active solver torque vibration (Clang shuddering):
+                // Resting grids have near-zero angular velocity (< 0.05 rad/s) and speed below MinImpactSpeed.
+                // Clang loops against voxels violently twist with angular velocity spikes or continuous crash rate.
+                bool speedImpact = config.PushApartMinImpactSpeed > 0f && speed >= config.PushApartMinImpactSpeed;
+                bool isClangVibrating = angularSpeed >= config.PushApartClangAngularThreshold || isCrashClanging;
 
-                    float speed = grid.Physics?.LinearVelocity.Length() ?? 0f;
-                    float angularSpeed = grid.Physics?.AngularVelocity.Length() ?? 0f;
+                // Non-zero penetration is only evaluated as wedged if it exceeds the configured embedded depth.
+                bool isDeeplyEmbedded = effectiveDistance < -config.PushApartEmbeddedDepth;
+                bool isEnergeticWedged = (isDeeplyEmbedded && speedImpact) || isClangVibrating;
 
-                    // Energetic impact or active solver torque vibration (Clang shuddering):
-                    // Resting grids have near-zero angular velocity (< 0.05 rad/s) and speed below MinImpactSpeed.
-                    // Clang loops against voxels violently twist with angular velocity spikes (>= 0.5 rad/s).
-                    bool speedImpact = config.PushApartMinImpactSpeed > 0f && speed >= config.PushApartMinImpactSpeed;
-                    bool isClangVibrating = angularSpeed >= 0.5f;
+                // Non-wheel chassis body is wedged if physically embedded/submerged, or experiencing sustained energetic penetration/clang vibration
+                bool isChassisWedged = !isWheelVoxel && (isEmbedded || isEnergeticWedged) && driftGateOpen;
+                bool impactGateOpen = isEmbedded || isChassisWedged;
 
-                    // AND condition: Speed gate only qualifies when the grid actually has mesh penetration (distance < 0).
-                    // Grids with 0.0000 penetration (distance >= 0) are on the surface and must never qualify via speed alone.
-                    // Clang vibration (rotational torque >= 0.5 rad/s) qualifies even with 0 reported penetration
-                    // to rescue grids trapped in Havok solver oscillation feedback loops.
-                    bool hasPenetration = distance < -0.001f;
-                    bool isEnergeticWedged = (hasPenetration && speedImpact) || isClangVibrating;
-
-                    // Non-wheel chassis body is wedged if physically embedded/submerged, or experiencing sustained energetic penetration/clang vibration
-                    bool isChassisWedged = !isWheelVoxel && (isEmbedded || isEnergeticWedged) && driftGateOpen && contactCount >= config.PushApartThreshold;
-                    bool impactGateOpen = isEmbedded || isChassisWedged;
-
-                    if (impactGateOpen)
-                    {
-                        TryPushApart(grid, otherEntity);
-                        _consecutiveContactFrames[gridEntityId] = 0;
-                    }
+                if (driftGateOpen && impactGateOpen)
+                {
+                    TryPushApart(grid, otherEntity);
+                    _consecutiveVoxelContactFrames[gridEntityId] = 0;
+                }
+                else if (config.LogPushApartDiagnostics && ShouldLog(_lastPushApartGateLogFrames, gridEntityId, currentFrame, 60))
+                {
+                    string clangCrashMin = config.PushApartClangCrashRateThreshold > 0 ? string.Format(CultureInfo.InvariantCulture, "{0}/s", config.PushApartClangCrashRateThreshold) : "Off";
+                    string closedReason = !driftGateOpen ? "Drift Exceeded" : "No Penetration or Clang";
+                    Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
+                        "[PUSH-APART GATE] '{0}' ({1}) | Contacts: {2}/{3} | Gate: CLOSED ({4}) | Drift: {5:F2}m (Max: {6:F2}m) | Crashes: {7}/s (Min: {8}, Total: {9}) | Penetration: {10:F3}m (Max: {11:F2}m) | Speed: {12:F2} m/s (Min: {13:F2} m/s) | Angular: {14:F2} rad/s (Min: {15:F2} rad/s)",
+                        grid.DisplayName, gridEntityId, contactCount, config.PushApartThreshold, closedReason,
+                        driftDist, config.PushApartMaxDrift, crashesRate, clangCrashMin, crashesTotal,
+                        effectiveDistance < 0 ? -effectiveDistance : 0f, config.PushApartEmbeddedDepth,
+                        speed, config.PushApartMinImpactSpeed, angularSpeed, config.PushApartClangAngularThreshold));
                 }
             }
         }
@@ -1065,6 +1233,17 @@ namespace PhysicsOptimizer.Modules
                 {
                     _lastImpactPositions[topGrid.EntityId] = subImpact;
                 }
+                if (_consecutiveVoxelContactFrames.TryGetValue(grid.EntityId, out int subCnt))
+                {
+                    _consecutiveVoxelContactFrames[topGrid.EntityId] = Math.Max(_consecutiveVoxelContactFrames.TryGetValue(topGrid.EntityId, out int tc) ? tc : 0, subCnt);
+                }
+                if (_voxelContactStartPositions.TryGetValue(grid.EntityId, out Vector3D subStart))
+                {
+                    if (!_voxelContactStartPositions.ContainsKey(topGrid.EntityId))
+                    {
+                        _voxelContactStartPositions[topGrid.EntityId] = subStart;
+                    }
+                }
                 TryPushApart(topGrid, otherEntity);
                 return;
             }
@@ -1177,7 +1356,12 @@ namespace PhysicsOptimizer.Modules
                 float penetration = contactDist < 0f ? -contactDist : 0f;
                 float pushSpeed = grid.Physics?.LinearVelocity.Length() ?? 0f;
                 float pushAngular = grid.Physics?.AngularVelocity.Length() ?? 0f;
-                bool isClang = pushAngular >= 0.5f;
+
+                int crashesTotal = GetConstructCrashTotal(trackingId);
+                int crashesRate = GetConstructCrashRate(trackingId, currentFrame);
+                bool isCrashClanging = config.PushApartClangCrashRateThreshold > 0 && crashesRate >= config.PushApartClangCrashRateThreshold;
+                bool isClang = pushAngular >= config.PushApartClangAngularThreshold || isCrashClanging;
+                string clangCrashMin = config.PushApartClangCrashRateThreshold > 0 ? string.Format(CultureInfo.InvariantCulture, "{0}/s", config.PushApartClangCrashRateThreshold) : "Off";
 
                 if (!TryResolveVoxelEscapeDirection(grid, config, contactVoxel, out Vector3D resolvedDir))
                 {
@@ -1196,26 +1380,57 @@ namespace PhysicsOptimizer.Modules
                 }
 
                 // Distance to collision point calculation:
-                // Measures the physical penetration depth of the construct past the collision contact point along the escape vector.
-                // Unlike radial heightmap altDiff (which inflates on steep cliffs or canyon walls), this reflects true obstacle penetration.
+                // Measures physical obstacle penetration depth along the escape vector using the grid's oriented bounding box (OBB).
+                // ONLY evaluated when the construct center is confirmed underground (isUnderSurface == true).
+                // On surface constructs (isUnderSurface == false), OBB corners extend into empty air (e.g. turrets, masts,
+                // sloped hulls), creating false phantom penetration depths that launch rovers into sky loops.
                 double collisionDepth = 0.0;
-                if (_lastImpactPositions.TryGetValue(trackingId, out Vector3D hitPos) &&
+                if (isUnderSurface &&
+                    _lastImpactPositions.TryGetValue(trackingId, out Vector3D hitPos) &&
                     Vector3D.DistanceSquared(hitPos, gridCenter) <= Math.Pow(grid.PositionComp.WorldVolume.Radius * 2 + 10.0, 2))
                 {
-                    BoundingBoxD box = grid.PositionComp.WorldAABB;
-                    Vector3D deepestPoint = new Vector3D(
-                        resolvedDir.X > 0 ? box.Min.X : box.Max.X,
-                        resolvedDir.Y > 0 ? box.Min.Y : box.Max.Y,
-                        resolvedDir.Z > 0 ? box.Min.Z : box.Max.Z);
+                    MatrixD worldMatrix = grid.WorldMatrix;
+                    MatrixD invWorld = grid.PositionComp.WorldMatrixNormalizedInv;
+                    Vector3D localDir = Vector3D.TransformNormal(-resolvedDir, invWorld);
+
+                    BoundingBox localBox = grid.PositionComp.LocalAABB;
+                    Vector3D localSupport = new Vector3D(
+                        localDir.X > 0 ? localBox.Max.X : localBox.Min.X,
+                        localDir.Y > 0 ? localBox.Max.Y : localBox.Min.Y,
+                        localDir.Z > 0 ? localBox.Max.Z : localBox.Min.Z);
+
+                    Vector3D deepestPoint = Vector3D.Transform(localSupport, worldMatrix);
                     collisionDepth = Math.Max(0.0, Vector3D.Dot(hitPos - deepestPoint, resolvedDir));
                 }
 
-                // Defensive guard: A grid on the surface with zero mesh penetration that is not clanging,
-                // not physically penetrating past a collision point, and not submerged is merely driving/resting on terrain and must not be pushed apart.
-                if (penetration <= 0.0001f && collisionDepth <= 0.0001f && !isUnderSurface && !isClang)
+                // Defensive guard:
+                // 1. Confirmed shallow non-zero penetration on the surface without Clang = peaceful resting
+                if (penetration > 0.001f && penetration < config.PushApartEmbeddedDepth && !isUnderSurface && !isClang)
                 {
+                    if (config.LogPushApartDiagnostics && ShouldLog(_lastPushApartGateLogFrames, trackingId, currentFrame, 60))
+                    {
+                        Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
+                            "[PUSH-APART DIAG] '{0}' ({1}) [SKIPPED - RESTING] | Reason: Shallow Penetration | Penetration: {2:F3}m (Max: {3:F2}m) | Crashes: {4}/s (Min: {5}, Total: {6}) | Speed: {7:F2} m/s (Min: {8:F2} m/s) | Angular: {9:F2} rad/s (Min: {10:F2} rad/s)",
+                            grid.DisplayName, trackingId, penetration, config.PushApartEmbeddedDepth, crashesRate, clangCrashMin, crashesTotal, pushSpeed, config.PushApartMinImpactSpeed, pushAngular, config.PushApartClangAngularThreshold));
+                    }
                     return;
                 }
+
+                // 2. Zero penetration on the surface without Clang and without impact speed = peaceful resting
+                if (penetration <= 0.001f && !isUnderSurface && !isClang && pushSpeed < config.PushApartMinImpactSpeed)
+                {
+                    if (config.LogPushApartDiagnostics && ShouldLog(_lastPushApartGateLogFrames, trackingId, currentFrame, 60))
+                    {
+                        Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
+                            "[PUSH-APART DIAG] '{0}' ({1}) [SKIPPED - RESTING] | Reason: Zero Penetration & Low Speed | Penetration: {2:F3}m (Max: {3:F2}m) | Crashes: {4}/s (Min: {5}, Total: {6}) | Speed: {7:F2} m/s (Min: {8:F2} m/s) | Angular: {9:F2} rad/s (Min: {10:F2} rad/s)",
+                            grid.DisplayName, trackingId, penetration, config.PushApartEmbeddedDepth, crashesRate, clangCrashMin, crashesTotal, pushSpeed, config.PushApartMinImpactSpeed, pushAngular, config.PushApartClangAngularThreshold));
+                    }
+                    return;
+                }
+
+                // Effective penetration depth across both Havok contact depth and OBB collision depth
+                double effectiveDepth = Math.Max((double)penetration, collisionDepth);
+                double depthRequired = effectiveDepth > 0.001 ? effectiveDepth + config.PushApartDistance : config.PushApartDistance;
 
                 double distance;
                 if (hasPriorEscape)
@@ -1223,7 +1438,10 @@ namespace PhysicsOptimizer.Modules
                     esc.Level = Math.Min(esc.Level + 1, 1000);
                     esc.Frame = currentFrame;
                     // Further attempts: continue nudging with previous settings (escalating from PushApartDistance)
-                    distance = Math.Min(config.PushApartDistance * (esc.Level + 1), config.PushApartMaxNudgeDistance);
+                    double escalated = config.PushApartDistance * (esc.Level + 1);
+                    distance = isUnderSurface
+                        ? Math.Min(Math.Max(escalated, depthRequired), config.PushApartMaxNudgeDistance)
+                        : Math.Min(escalated, config.PushApartMaxNudgeDistance);
 
                     // Rolling blend: 50% prior escape vector + 50% latest resolved vector
                     Vector3D blended = esc.Direction + resolvedDir;
@@ -1233,11 +1451,11 @@ namespace PhysicsOptimizer.Modules
                 }
                 else
                 {
-                    // First shot: depth-aware 1-shot nudge to clear mesh in one attempt (+ 0.3m margin).
-                    // Factors in both local Havok mesh penetration and physical penetration depth past the collision point.
-                    double effectiveDepth = Math.Max((double)penetration, collisionDepth);
-                    double depthRequired = effectiveDepth + 0.3;
-                    distance = Math.Min(Math.Max(config.PushApartDistance, depthRequired), config.PushApartMaxNudgeDistance);
+                    // First shot: depth-aware clearance only for underground grids.
+                    // Surface grids use standard PushApartDistance to prevent artificial sky launches.
+                    distance = isUnderSurface
+                        ? Math.Min(Math.Max((double)config.PushApartDistance, depthRequired), config.PushApartMaxNudgeDistance)
+                        : config.PushApartDistance;
 
                     separationDir = resolvedDir;
                     _lastEscapes[grid.EntityId] = new EscapeRecord { Direction = separationDir, Frame = currentFrame, Level = 0 };
@@ -1250,9 +1468,19 @@ namespace PhysicsOptimizer.Modules
                         ? string.Format(CultureInfo.InvariantCulture, " | UnderSurface: {0} (AltDiff: {1:F2}m)", isUnderSurface, altDiff)
                         : "";
                     string lockInfo = hasPriorEscape ? string.Format(CultureInfo.InvariantCulture, "Blended (Lvl {0})", esc.Level) : "Attempt 1";
+
+                    int contacts = _consecutiveVoxelContactFrames.TryGetValue(trackingId, out int vcnt) ? vcnt : (_consecutiveContactFrames.TryGetValue(trackingId, out int cnt) ? cnt : 0);
+                    double drift = _voxelContactStartPositions.TryGetValue(trackingId, out Vector3D vsPos)
+                        ? (grid.PositionComp.WorldVolume.Center - vsPos).Length()
+                        : (_contactStartPositions.TryGetValue(trackingId, out Vector3D sPos) ? (grid.PositionComp.WorldVolume.Center - sPos).Length() : 0.0);
+
                     Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                        "[PUSH-APART DIAG] '{0}' ({1}) | Attempt: {2}/{3}{4} | Penetration: {5:F3}m (Max: {6:F2}m) | HitDepth: {7:F2}m | Speed: {8:F2} m/s | Angular: {9:F2} rad/s | Nudge: {10:F2}m | Dir: {11:F3} | Locked: {12}",
-                        grid.DisplayName, trackingId, attempts + 1, config.PushApartMaxAttempts, underSurfaceInfo, penetration, config.PushApartEmbeddedDepth, collisionDepth, pushSpeed, pushAngular, distance, separationDir, lockInfo));
+                        "[PUSH-APART DIAG] '{0}' ({1}) [PUSHED] | Attempt: {2}/{3}{4} | Crashes: {5}/s (Min: {6}, Total: {7}) | Contacts: {8}/{9} | Drift: {10:F2}m (Max: {11:F2}m) | Penetration: {12:F3}m (Max: {13:F2}m) | HitDepth: {14:F2}m | Speed: {15:F2} m/s (Min: {16:F2} m/s) | Angular: {17:F2} rad/s (Min: {18:F2} rad/s) | Nudge: {19:F2}m (Base: {20:F2}m, Max: {21:F2}m) | Dir: {22:F3} | Locked: {23}",
+                        grid.DisplayName, trackingId, attempts + 1, config.PushApartMaxAttempts, underSurfaceInfo,
+                        crashesRate, clangCrashMin, crashesTotal, contacts, config.PushApartThreshold, drift, config.PushApartMaxDrift,
+                        penetration, config.PushApartEmbeddedDepth, collisionDepth, pushSpeed, config.PushApartMinImpactSpeed,
+                        pushAngular, config.PushApartClangAngularThreshold, distance, config.PushApartDistance, config.PushApartMaxNudgeDistance,
+                        separationDir, lockInfo));
                 }
                 EnqueuePush(grid, separationDir, true, distance);
                 return;
@@ -1281,22 +1509,29 @@ namespace PhysicsOptimizer.Modules
 
             _plugin?.DefenseStats?.IncrementGridsSeparated();
 
+            // Clear cached contact context for the pushed grid so old coordinates cannot poison future frames
+            _lastImpactPositions.TryRemove(grid.EntityId, out _);
+            _lastVoxelContactNormals.TryRemove(grid.EntityId, out _);
+            _lastVoxelPenetrations.TryRemove(grid.EntityId, out _);
+
             if (config.EnableDebugLogging)
             {
                 Log.Info(LogSource, $"[PUSH-APART] Queued push for '{grid.DisplayName}' {distance:F2}m along separation vector.");
             }
         }
 
-        private bool AllowOrScale(long gridEntityId, ref float separatingVelocity, bool isMissile)
+        private bool AllowOrScale(MyCubeGrid grid, ref float separatingVelocity, bool isMissile)
         {
+            if (grid == null) return true;
             PhysicsOptimizerConfig config = _plugin?.Config;
             DefenseStatistics stats = _plugin?.DefenseStats;
             if (config == null) return true;
 
+            ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+
             if (config.DeformationMultiplier <= 0.0f)
             {
-                stats?.IncrementBlocked();
-                return false;
+                return BlockDeformation(grid, currentFrame, stats);
             }
 
             if (config.DeformationMultiplier < 1.0f)
@@ -1304,8 +1539,7 @@ namespace PhysicsOptimizer.Modules
                 separatingVelocity *= config.DeformationMultiplier;
             }
 
-            ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
-            _lastDeformationFrames[gridEntityId] = currentFrame;
+            _lastDeformationFrames[grid.EntityId] = currentFrame;
 
             stats?.IncrementAllowed(isMissile: isMissile);
             return true;
@@ -1596,9 +1830,9 @@ namespace PhysicsOptimizer.Modules
                 // Contact-driven push-apart owns grids that are actively grinding; probe is for silent burials
                 if (HadRecentVoxelContact(id)) continue;
 
-                // Cliff-wedged grids are confined on only 1-2 horizontal sides, so they get a relaxed
-                // 2-side test when terrain contact was seen recently; silent burials still need 3 sides
-                int minSolidSides = HadVoxelContactWithin(id, 1800) ? 2 : 3;
+                // Silent burials require solid terrain confinement on 3+ horizontal sides.
+                // Grids resting on the surface are filtered out by IsGridBuried.
+                int minSolidSides = 3;
                 if (IsGridBuried(grid, config, minSolidSides))
                 {
                     if (!TryResolveVoxelEscapeDirection(grid, config, null, out Vector3D escapeDir))
@@ -1618,21 +1852,71 @@ namespace PhysicsOptimizer.Modules
         }
 
         /// <summary>
-        /// Burial test: voxel layer hit within (bounding radius + probe margin) on 3+ of 4 horizontal
-        /// sides means the grid is solidly confined by terrain. Air pockets bigger than the margin
-        /// pass cleanly, so underground-but-not-touching grids are not nudged.
+        /// Burial test: checks whether a stationary grid is solidly confined by voxel material (silent burial).
+        /// Grids on the planet surface (center of mass above terrain heightmap) are never considered buried.
+        /// Underground or asteroid grids use OBB support extents and must be confined on 3+ horizontal sides to qualify.
         /// </summary>
         private static bool IsGridBuried(MyCubeGrid grid, PhysicsOptimizerConfig config, int minSolidSides)
         {
             Vector3D center = grid.PositionComp.WorldVolume.Center;
-            float radius = (float)grid.PositionComp.WorldVolume.Radius;
-            float rayLength = radius + config.BurialProbeRadius;
+
+            MyPlanet planet = MyGamePruningStructure.GetClosestPlanet(center);
+            if (planet != null)
+            {
+                Vector3D core = planet.PositionComp.WorldVolume.Center;
+                Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref center);
+                double centerDist = (center - core).Length();
+                double surfaceDist = (surfacePt - core).Length();
+                bool isUnderSurface = centerDist < surfaceDist;
+
+                // Surface construct: Center of mass is on or above the planet heightmap surface.
+                // It is resting or driving on terrain under open air, not buried underground.
+                if (!isUnderSurface)
+                {
+                    return false;
+                }
+            }
+
+            Vector3D up = grid.Physics != null && grid.Physics.Gravity.LengthSquared() > 0.1f
+                ? -Vector3D.Normalize(grid.Physics.Gravity)
+                : Vector3D.Up;
+
+            if (planet != null && (grid.Physics == null || grid.Physics.Gravity.LengthSquared() <= 0.1f))
+            {
+                Vector3D core = planet.PositionComp.WorldVolume.Center;
+                Vector3D radial = center - core;
+                if (radial.LengthSquared() > 0.001) up = Vector3D.Normalize(radial);
+            }
+
+            // Construct true horizontal tangent basis perpendicular to up vector
+            Vector3D tangent1 = Vector3D.CalculatePerpendicularVector(up);
+            Vector3D tangent2 = Vector3D.Cross(up, tangent1);
+
+            Vector3D[] horizontalDirs = { tangent1, -tangent1, tangent2, -tangent2 };
             int solidSides = 0;
 
-            for (int i = 0; i < 4; i++)
+            // Use Oriented Bounding Box (OBB) rather than spherical radius for tight clearance checks
+            MatrixD worldMatrix = grid.WorldMatrix;
+            MatrixD invWorld = grid.PositionComp.WorldMatrixNormalizedInv;
+            BoundingBox localBox = grid.PositionComp.LocalAABB;
+
+            for (int i = 0; i < horizontalDirs.Length; i++)
             {
-                Vector3D dir = i == 0 ? Vector3D.Right : i == 1 ? Vector3D.Left : i == 2 ? Vector3D.Forward : Vector3D.Backward;
-                if (MyPhysics.CastRay(center + dir * (rayLength + 2.0), center, MyPhysics.CollisionLayers.VoxelCollisionLayer).HasValue)
+                Vector3D dir = horizontalDirs[i];
+
+                // Sample OBB support point along dir to find actual construct surface in that direction
+                Vector3D localDir = Vector3D.TransformNormal(dir, invWorld);
+                Vector3D localSupport = new Vector3D(
+                    localDir.X > 0 ? localBox.Max.X : localBox.Min.X,
+                    localDir.Y > 0 ? localBox.Max.Y : localBox.Min.Y,
+                    localDir.Z > 0 ? localBox.Max.Z : localBox.Min.Z);
+                Vector3D obbSurfacePoint = Vector3D.Transform(localSupport, worldMatrix);
+
+                // Raycast from outside clearance margin inward to the OBB surface
+                Vector3D from = obbSurfacePoint + dir * (config.BurialProbeRadius + 2.0);
+                Vector3D to = obbSurfacePoint;
+                MyPhysics.HitInfo? hit = MyPhysics.CastRay(from, to, MyPhysics.CollisionLayers.VoxelCollisionLayer);
+                if (hit.HasValue && hit.Value.HkHitInfo.GetHitEntity() is MyVoxelBase)
                 {
                     solidSides++;
                 }
@@ -1658,9 +1942,11 @@ namespace PhysicsOptimizer.Modules
                 }
 
                 TrimDictionary(_lastContactFrameTracker, currentFrame, 600, _consecutiveContactFrames);
+                TrimDictionary(_lastVoxelContactFrameTracker, currentFrame, 600, _consecutiveVoxelContactFrames);
                 TrimDictionary(_lastDeformationFrames, currentFrame, 600);
                 TrimDictionary(_lastVoxelContactFrames, currentFrame, 1800);
                 TrimDictionary(_lastPushApartGiveUpLogFrames, currentFrame, 1200);
+                TrimDictionary(_lastPushApartGateLogFrames, currentFrame, 1200);
 
                 // Only refund attempt budget and evict contact caches when grid has had no voxel contact for double the contact threshold
                 ulong resetFrames = (ulong)Math.Max(10, (_plugin?.Config?.PushApartThreshold ?? 25) * 2);
@@ -1675,6 +1961,10 @@ namespace PhysicsOptimizer.Modules
                 foreach (var trackedId in _contactStartPositions.Keys)
                 {
                     if (!HadRecentVoxelContact(trackedId)) _contactStartPositions.TryRemove(trackedId, out _);
+                }
+                foreach (var trackedId in _voxelContactStartPositions.Keys)
+                {
+                    if (!HadRecentVoxelContact(trackedId)) _voxelContactStartPositions.TryRemove(trackedId, out _);
                 }
                 foreach (var trackedId in _lastVoxelContactNormals.Keys)
                 {
@@ -1693,6 +1983,25 @@ namespace PhysicsOptimizer.Modules
                 TrimDictionary(_lastStationLogFrames, currentFrame, 600);
                 TrimDictionary(_lastSubgridLogFrames, currentFrame, 600);
                 TrimDictionary(_lastExtremeSpeedLogFrames, currentFrame, 600);
+
+                // Decay or evict construct crash records
+                foreach (var kvp in _constructCrashRecords)
+                {
+                    ConstructCrashRecord rec = kvp.Value;
+                    if (rec == null) continue;
+                    if (currentFrame > 0 && rec.LastCrashFrame > 0)
+                    {
+                        if (currentFrame > rec.LastCrashFrame + 600)
+                        {
+                            _constructCrashRecords.TryRemove(kvp.Key, out _);
+                        }
+                        else if (currentFrame > rec.LastCrashFrame + 120)
+                        {
+                            rec.LastSecondRate = 0;
+                            rec.WindowCrashes = 0;
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {

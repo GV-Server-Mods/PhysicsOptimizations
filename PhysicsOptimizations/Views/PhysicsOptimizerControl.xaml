@@ -1098,6 +1098,32 @@
                                                                                                    Foreground="#CCCCCC"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="5,0,0,0"/>
+                                                                                        <TextBlock Text="Clang angular threshold:"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="12,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PushApartClangAngularThreshold, StringFormat={}{0:F2}}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 ToolTip="Rotational speed threshold in rad/s (default: 0.5 rad/s) required to classify a contact as violent Havok solver torque vibration (Clang). Clanging grids qualify for push-apart regardless of reported penetration depth."/>
+                                                                                        <TextBlock Text="rad/s"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="5,0,0,0"/>
+                                                                                        <TextBlock Text="Clang crash rate threshold:"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="12,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PushApartClangCrashRateThreshold}"
+                                                                                                 Width="50"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 ToolTip="Blocked collision deformation rate in crashes/s (default: 5 crashes/s) required to classify a contact as Clang even when angular velocity and penetration are clamped by Havok. Clanging grids qualify for push-apart and bypass resting guards. Set 0 to disable."/>
+                                                                                        <TextBlock Text="crashes/s"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="5,0,0,0"/>
                                                                                 </WrapPanel>
 
                                                                                 <CheckBox Content="Enable Push-Apart Debug GPS Markers"
@@ -1310,6 +1336,12 @@
                                     <Run Text=" ("/>
                                     <Run Text="{Binding DefenseStats.LowSpeedBlocked, Mode=OneWay, StringFormat=N0}"/>
                                     <Run Text=" Low-Speed)"/>
+                                                                </TextBlock>
+                                                                <TextBlock Margin="0,2,0,2">
+                                     <Run Text="- Active Clang Offenders: "/>
+                                     <Run Text="{Binding DefenseStats.ActiveCollisionOffendersSummary, Mode=OneWay}"
+                                                                        FontWeight="Bold"
+                                                                        Foreground="#FF5252"/>
                                                                 </TextBlock>
                                                                 <TextBlock Text="{Binding DefenseStats.BlockRatio, StringFormat={}- Defense Block Ratio: {0:F1}%}"
                                                                            FontWeight="Bold"

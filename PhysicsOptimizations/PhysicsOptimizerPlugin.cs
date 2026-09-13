@@ -182,9 +182,16 @@ namespace PhysicsOptimizer
             long arr = DefenseStats?.ClangVibrationsArrested ?? 0;
             long inv = DefenseStats?.VoxelNormalsInverted ?? 0;
 
+            string offendersStr = "";
+            var offenders = Modules.GridDefender.GetActiveCrashOffenders(minRate: 10, maxResults: 2);
+            if (offenders != null && offenders.Count > 0)
+            {
+                offendersStr = " | Offenders: " + string.Join(", ", System.Linq.Enumerable.Select(offenders, o => $"'{o.Name}' ({o.Rate}/s)"));
+            }
+
             Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Clang: {10} Arr, {11} Inv",
-                speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, arr, inv));
+                "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Clang: {10} Arr, {11} Inv{12}",
+                speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, arr, inv, offendersStr));
         }
 
         public override void Dispose()

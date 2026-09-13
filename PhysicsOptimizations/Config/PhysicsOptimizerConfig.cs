@@ -108,6 +108,8 @@ namespace PhysicsOptimizer.Config
         private bool _enableBurialProbe = true;
         private bool _enablePushApartDebugDraw = false;
         private float _pushApartMinImpactSpeed = 1.0f;
+        private float _pushApartClangAngularThreshold = 0.50f;
+        private int _pushApartClangCrashRateThreshold = 5;
         private float _pushApartEmbeddedDepth = 0.20f;
         private float _pushApartMaxDrift = 1.5f;
         private float _pushApartMaxNudgeDistance = 2.0f;
@@ -315,6 +317,16 @@ namespace PhysicsOptimizer.Config
         {
             get => _pushApartMinImpactSpeed;
             set => SetValue(ref _pushApartMinImpactSpeed, Math.Max(0f, Math.Min(50f, value)));
+        }
+        public float PushApartClangAngularThreshold
+        {
+            get => _pushApartClangAngularThreshold;
+            set => SetValue(ref _pushApartClangAngularThreshold, Math.Max(0.05f, Math.Min(5.0f, value)));
+        }
+        public int PushApartClangCrashRateThreshold
+        {
+            get => _pushApartClangCrashRateThreshold;
+            set => SetValue(ref _pushApartClangCrashRateThreshold, Math.Max(0, Math.Min(1000, value)));
         }
         public float PushApartEmbeddedDepth
         {

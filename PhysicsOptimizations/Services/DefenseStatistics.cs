@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading;
 using Torch;
 
@@ -130,6 +131,19 @@ namespace PhysicsOptimizer.Services
         }
 
         /// <summary>
+        /// Human-readable summary of active constructs triggering continuous deformation / clang crashes.
+        /// </summary>
+        public string ActiveCollisionOffendersSummary
+        {
+            get
+            {
+                var offenders = Modules.GridDefender.GetActiveCrashOffenders(minRate: 5, maxResults: 3);
+                if (offenders == null || offenders.Count == 0) return "None (Clean)";
+                return string.Join(", ", offenders.Select(o => $"'{o.Name}' ({o.Rate}/s)"));
+            }
+        }
+
+        /// <summary>
         /// Increments the total evaluated collisions counter.
         /// </summary>
         public void IncrementEvaluated()
@@ -248,6 +262,7 @@ namespace PhysicsOptimizer.Services
             OnPropertyChanged(nameof(ThrusterObstructionsVaporized));
             OnPropertyChanged(nameof(VoxelCutoutsPrevented));
             OnPropertyChanged(nameof(PilotedBuggySaves));
+            OnPropertyChanged(nameof(ActiveCollisionOffendersSummary));
         }
 
         public string GetDiagnosticSummary()
@@ -257,7 +272,8 @@ namespace PhysicsOptimizer.Services
                    $"PMW Torpedoes Allowed: {MissileHitsAllowed:N0}, Piloted Buggy Saves: {PilotedBuggySaves:N0}\n" +
                    $"Layered Armor Saved: {ArmorHitsOccluded:N0}, Voxel Normals Inverted: {VoxelNormalsInverted:N0}\n" +
                    $"Clang Vibrations Arrested: {ClangVibrationsArrested:N0}, Grids Nudged Apart: {GridsSeparated:N0}\n" +
-                   $"Thruster Obstructions Vaporized: {ThrusterObstructionsVaporized:N0}, Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}";
+                   $"Thruster Obstructions Vaporized: {ThrusterObstructionsVaporized:N0}, Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}\n" +
+                   $"Active Clang Offenders: {ActiveCollisionOffendersSummary}";
         }
 
         /// <summary>
