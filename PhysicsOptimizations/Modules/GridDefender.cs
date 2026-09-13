@@ -887,11 +887,17 @@ namespace PhysicsOptimizer.Modules
                     // Clang loops against voxels violently twist with angular velocity spikes (>= 0.5 rad/s).
                     bool speedImpact = config.PushApartMinImpactSpeed > 0f && speed >= config.PushApartMinImpactSpeed;
                     bool isClangVibrating = angularSpeed >= 0.5f;
-                    bool isEnergetic = speedImpact || isClangVibrating;
 
-                    // Non-wheel chassis body is wedged if physically embedded/submerged, or experiencing sustained energetic/clang vibration
-                    bool isChassisWedged = !isWheelVoxel && (isEmbedded || isEnergetic) && driftGateOpen && contactCount >= config.PushApartThreshold;
-                    bool impactGateOpen = isEmbedded || isChassisWedged || isEnergetic;
+                    // AND condition: Speed gate only qualifies when the grid actually has mesh penetration (distance < 0).
+                    // Grids with 0.0000 penetration (distance >= 0) are on the surface and must never qualify via speed alone.
+                    // Clang vibration (rotational torque >= 0.5 rad/s) qualifies even with 0 reported penetration
+                    // to rescue grids trapped in Havok solver oscillation feedback loops.
+                    bool hasPenetration = distance < -0.001f;
+                    bool isEnergeticWedged = (hasPenetration && speedImpact) || isClangVibrating;
+
+                    // Non-wheel chassis body is wedged if physically embedded/submerged, or experiencing sustained energetic penetration/clang vibration
+                    bool isChassisWedged = !isWheelVoxel && (isEmbedded || isEnergeticWedged) && driftGateOpen && contactCount >= config.PushApartThreshold;
+                    bool impactGateOpen = isEmbedded || isChassisWedged;
 
                     if (impactGateOpen)
                     {
@@ -1038,6 +1044,12 @@ namespace PhysicsOptimizer.Modules
             MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
             if (topGrid != grid)
             {
+                // Suspension wheels never initiate or forward push-apart to the main chassis
+                if (otherEntity is MyVoxelBase && IsWheelSubgrid(grid, out _))
+                {
+                    return;
+                }
+
                 if (_lastVoxelContactNormals.TryGetValue(grid.EntityId, out Vector3D subNormal) && subNormal.LengthSquared() > 0.001)
                 {
                     if (!_lastVoxelContactNormals.TryGetValue(topGrid.EntityId, out Vector3D topNormal) || topNormal.LengthSquared() <= 0.001)
@@ -1049,13 +1061,18 @@ namespace PhysicsOptimizer.Modules
                 {
                     _lastVoxelPenetrations[topGrid.EntityId] = subPen;
                 }
+                if (_lastImpactPositions.TryGetValue(grid.EntityId, out Vector3D subImpact))
+                {
+                    _lastImpactPositions[topGrid.EntityId] = subImpact;
+                }
                 TryPushApart(topGrid, otherEntity);
                 return;
             }
 
             ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
-            // Cooldown: do not push the same construct more frequently than every 30 frames (~0.5s) to allow Havok to settle
-            if (_lastEscapes.TryGetValue(grid.EntityId, out EscapeRecord recentEsc) && currentFrame < recentEsc.Frame + 30)
+            // Cooldown: do not push the same construct more frequently than its contact threshold frames to allow Havok to settle
+            int cooldownFrames = Math.Max(10, config.PushApartThreshold);
+            if (_lastEscapes.TryGetValue(grid.EntityId, out EscapeRecord recentEsc) && currentFrame < recentEsc.Frame + (ulong)cooldownFrames)
             {
                 return;
             }
@@ -1109,6 +1126,14 @@ namespace PhysicsOptimizer.Modules
             else if (otherEntity is MyVoxelBase contactVoxel)
             {
                 long trackingId = grid.EntityId;
+                ulong resetWindow = (ulong)Math.Max(10, config.PushApartThreshold * 2);
+                bool hasPriorEscape = _lastEscapes.TryGetValue(grid.EntityId, out EscapeRecord esc) && currentFrame <= esc.Frame + resetWindow;
+
+                if (!hasPriorEscape)
+                {
+                    _pushApartAttempts.TryRemove(trackingId, out _);
+                }
+
                 int attempts = _pushApartAttempts.TryGetValue(trackingId, out int a) ? a : 0;
                 if (config.PushApartMaxAttempts > 0 && attempts >= config.PushApartMaxAttempts)
                 {
@@ -1135,12 +1160,24 @@ namespace PhysicsOptimizer.Modules
                     return;
                 }
 
-                // Direction & distance escalation:
-                // Rather than hard-locking to Attempt 1's vector for 5 seconds, each re-trigger re-evaluates
-                // the freshest escape direction and smoothly blends with prior momentum (50/50 rolling average).
-                // Distance escalates up to PushApartMaxNudgeDistance to overcome deep wedges.
-                double distance = config.PushApartDistance;
-                bool hasPriorEscape = _lastEscapes.TryGetValue(grid.EntityId, out EscapeRecord esc) && currentFrame <= esc.Frame + 300;
+                // Check heightmap submersion
+                Vector3D gridCenter = grid.PositionComp.WorldVolume.Center;
+                MyPlanet planet = contactVoxel as MyPlanet ?? MyGamePruningStructure.GetClosestPlanet(gridCenter);
+                bool isUnderSurface = false;
+                double altDiff = 0.0;
+                if (planet != null)
+                {
+                    Vector3D core = planet.PositionComp.WorldVolume.Center;
+                    Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref gridCenter);
+                    altDiff = (gridCenter - core).Length() - (surfacePt - core).Length();
+                    isUnderSurface = altDiff < 0;
+                }
+
+                _lastVoxelPenetrations.TryGetValue(trackingId, out float contactDist);
+                float penetration = contactDist < 0f ? -contactDist : 0f;
+                float pushSpeed = grid.Physics?.LinearVelocity.Length() ?? 0f;
+                float pushAngular = grid.Physics?.AngularVelocity.Length() ?? 0f;
+                bool isClang = pushAngular >= 0.5f;
 
                 if (!TryResolveVoxelEscapeDirection(grid, config, contactVoxel, out Vector3D resolvedDir))
                 {
@@ -1158,10 +1195,34 @@ namespace PhysicsOptimizer.Modules
                     }
                 }
 
+                // Distance to collision point calculation:
+                // Measures the physical penetration depth of the construct past the collision contact point along the escape vector.
+                // Unlike radial heightmap altDiff (which inflates on steep cliffs or canyon walls), this reflects true obstacle penetration.
+                double collisionDepth = 0.0;
+                if (_lastImpactPositions.TryGetValue(trackingId, out Vector3D hitPos) &&
+                    Vector3D.DistanceSquared(hitPos, gridCenter) <= Math.Pow(grid.PositionComp.WorldVolume.Radius * 2 + 10.0, 2))
+                {
+                    BoundingBoxD box = grid.PositionComp.WorldAABB;
+                    Vector3D deepestPoint = new Vector3D(
+                        resolvedDir.X > 0 ? box.Min.X : box.Max.X,
+                        resolvedDir.Y > 0 ? box.Min.Y : box.Max.Y,
+                        resolvedDir.Z > 0 ? box.Min.Z : box.Max.Z);
+                    collisionDepth = Math.Max(0.0, Vector3D.Dot(hitPos - deepestPoint, resolvedDir));
+                }
+
+                // Defensive guard: A grid on the surface with zero mesh penetration that is not clanging,
+                // not physically penetrating past a collision point, and not submerged is merely driving/resting on terrain and must not be pushed apart.
+                if (penetration <= 0.0001f && collisionDepth <= 0.0001f && !isUnderSurface && !isClang)
+                {
+                    return;
+                }
+
+                double distance;
                 if (hasPriorEscape)
                 {
                     esc.Level = Math.Min(esc.Level + 1, 1000);
                     esc.Frame = currentFrame;
+                    // Further attempts: continue nudging with previous settings (escalating from PushApartDistance)
                     distance = Math.Min(config.PushApartDistance * (esc.Level + 1), config.PushApartMaxNudgeDistance);
 
                     // Rolling blend: 50% prior escape vector + 50% latest resolved vector
@@ -1172,6 +1233,12 @@ namespace PhysicsOptimizer.Modules
                 }
                 else
                 {
+                    // First shot: depth-aware 1-shot nudge to clear mesh in one attempt (+ 0.3m margin).
+                    // Factors in both local Havok mesh penetration and physical penetration depth past the collision point.
+                    double effectiveDepth = Math.Max((double)penetration, collisionDepth);
+                    double depthRequired = effectiveDepth + 0.3;
+                    distance = Math.Min(Math.Max(config.PushApartDistance, depthRequired), config.PushApartMaxNudgeDistance);
+
                     separationDir = resolvedDir;
                     _lastEscapes[grid.EntityId] = new EscapeRecord { Direction = separationDir, Frame = currentFrame, Level = 0 };
                 }
@@ -1179,24 +1246,13 @@ namespace PhysicsOptimizer.Modules
                 _pushApartAttempts[trackingId] = attempts + 1;
                 if (config.LogPushApartDiagnostics)
                 {
-                    string underSurfaceInfo = "";
-                    Vector3D gridCenter = grid.PositionComp.WorldVolume.Center;
-                    MyPlanet planet = contactVoxel as MyPlanet ?? MyGamePruningStructure.GetClosestPlanet(gridCenter);
-                    if (planet != null)
-                    {
-                        Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref gridCenter);
-                        Vector3D core = planet.PositionComp.WorldVolume.Center;
-                        double altDiff = (gridCenter - core).Length() - (surfacePt - core).Length();
-                        underSurfaceInfo = string.Format(CultureInfo.InvariantCulture, " | UnderSurface: {0} (AltDiff: {1:F2}m)", altDiff < 0, altDiff);
-                    }
-                    float pushSpeed = grid.Physics?.LinearVelocity.Length() ?? 0f;
-                    float pushAngular = grid.Physics?.AngularVelocity.Length() ?? 0f;
-                    _lastVoxelPenetrations.TryGetValue(trackingId, out float contactDist);
-                    float penetration = contactDist < 0f ? -contactDist : 0f;
-                    string lockInfo = hasPriorEscape ? string.Format(CultureInfo.InvariantCulture, "Blended (Lvl {0})", esc.Level) : "False";
+                    string underSurfaceInfo = planet != null
+                        ? string.Format(CultureInfo.InvariantCulture, " | UnderSurface: {0} (AltDiff: {1:F2}m)", isUnderSurface, altDiff)
+                        : "";
+                    string lockInfo = hasPriorEscape ? string.Format(CultureInfo.InvariantCulture, "Blended (Lvl {0})", esc.Level) : "Attempt 1";
                     Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                        "[PUSH-APART DIAG] '{0}' ({1}) | Attempt: {2}/{3}{4} | Penetration: {5:F3}m (Max: {6:F2}m) | Speed: {7:F2} m/s | Angular: {8:F2} rad/s | Nudge: {9:F2}m | Dir: {10:F3} | Locked: {11}",
-                        grid.DisplayName, trackingId, attempts + 1, config.PushApartMaxAttempts, underSurfaceInfo, penetration, config.PushApartEmbeddedDepth, pushSpeed, pushAngular, distance, separationDir, lockInfo));
+                        "[PUSH-APART DIAG] '{0}' ({1}) | Attempt: {2}/{3}{4} | Penetration: {5:F3}m (Max: {6:F2}m) | HitDepth: {7:F2}m | Speed: {8:F2} m/s | Angular: {9:F2} rad/s | Nudge: {10:F2}m | Dir: {11:F3} | Locked: {12}",
+                        grid.DisplayName, trackingId, attempts + 1, config.PushApartMaxAttempts, underSurfaceInfo, penetration, config.PushApartEmbeddedDepth, collisionDepth, pushSpeed, pushAngular, distance, separationDir, lockInfo));
                 }
                 EnqueuePush(grid, separationDir, true, distance);
                 return;
@@ -1606,18 +1662,31 @@ namespace PhysicsOptimizer.Modules
                 TrimDictionary(_lastVoxelContactFrames, currentFrame, 1800);
                 TrimDictionary(_lastPushApartGiveUpLogFrames, currentFrame, 1200);
 
-                // Only refund attempt budget when grid has had no voxel contact for 300 frames (5s)
+                // Only refund attempt budget and evict contact caches when grid has had no voxel contact for double the contact threshold
+                ulong resetFrames = (ulong)Math.Max(10, (_plugin?.Config?.PushApartThreshold ?? 25) * 2);
                 foreach (var trackedId in _pushApartAttempts.Keys)
                 {
-                    if (!HadVoxelContactWithin(trackedId, 300)) _pushApartAttempts.TryRemove(trackedId, out _);
+                    if (!HadVoxelContactWithin(trackedId, resetFrames)) _pushApartAttempts.TryRemove(trackedId, out _);
                 }
                 foreach (var trackedId in _lastEscapes.Keys)
                 {
-                    if (!HadVoxelContactWithin(trackedId, 600)) _lastEscapes.TryRemove(trackedId, out _);
+                    if (!HadVoxelContactWithin(trackedId, resetFrames)) _lastEscapes.TryRemove(trackedId, out _);
                 }
                 foreach (var trackedId in _contactStartPositions.Keys)
                 {
                     if (!HadRecentVoxelContact(trackedId)) _contactStartPositions.TryRemove(trackedId, out _);
+                }
+                foreach (var trackedId in _lastVoxelContactNormals.Keys)
+                {
+                    if (!HadVoxelContactWithin(trackedId, resetFrames)) _lastVoxelContactNormals.TryRemove(trackedId, out _);
+                }
+                foreach (var trackedId in _lastImpactPositions.Keys)
+                {
+                    if (!HadVoxelContactWithin(trackedId, resetFrames)) _lastImpactPositions.TryRemove(trackedId, out _);
+                }
+                foreach (var trackedId in _lastVoxelPenetrations.Keys)
+                {
+                    if (!HadVoxelContactWithin(trackedId, resetFrames)) _lastVoxelPenetrations.TryRemove(trackedId, out _);
                 }
                 TrimDictionary(_lastRammingLogFrames, currentFrame, 600);
                 TrimDictionary(_lastVoxelLogFrames, currentFrame, 600);
