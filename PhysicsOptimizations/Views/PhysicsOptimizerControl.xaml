@@ -976,22 +976,23 @@
                                                                         <CheckBox Content="Enable Active Push-Apart Separation"
                                                                                   IsChecked="{Binding Config.EnablePushApart}"
                                                                                   FontWeight="SemiBold"
-                                                                                  Margin="0,0,0,6"
-                                                                                  ToolTip="Gently translates grids apart if they remain stuck or phased together in continuous contact."/>
-                                                                        <CheckBox Content="Exclude Suspension Wheel Subgrids from Push-Apart"
-                                                                                  IsChecked="{Binding Config.ExcludeWheelSubgridsFromPushApart}"
-                                                                                  Margin="16,2,0,2"
-                                                                                  ToolTip="Wheel-terrain contacts fire every frame while driving. Excluding wheel subgrids prevents the plugin from treating normal rover driving as stuck-in-voxel and micro-teleporting the wheels."/>
+                                                                                  Margin="0,0,0,4"
+                                                                                  ToolTip="Gently translates grids apart if they remain stuck or phased together in continuous contact. Default: Checked."/>
                                                                         <StackPanel IsEnabled="{Binding Config.EnablePushApart}">
                                                                                 <TextBlock Text="Gently nudges stuck or overlapping grids apart along the contact normal or gravity vector after continuous contact."
                                                                                            Foreground="#9CA3AF"
                                                                                            FontSize="11"
                                                                                            Margin="16,0,0,8"
                                                                                            TextWrapping="Wrap"/>
+                                                                                <CheckBox Content="Exclude Suspension Wheel Subgrids from Push-Apart"
+                                                                                          IsChecked="{Binding Config.ExcludeWheelSubgridsFromPushApart}"
+                                                                                          Margin="16,2,0,6"
+                                                                                          ToolTip="Wheel-terrain contacts fire every frame while driving. Excluding wheel subgrids prevents the plugin from treating normal rover driving as stuck-in-voxel and micro-teleporting the wheels. Default: Checked."/>
+
                                                                                 <WrapPanel Margin="16,2,0,2"
                                                                                            VerticalAlignment="Center">
                                                                                         <TextBlock Text="Nudge stuck overlapping grids apart by"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="0,0,5,0"/>
                                                                                         <TextBox Text="{Binding Config.PushApartDistance, StringFormat={}{0:F2}}"
@@ -999,16 +1000,16 @@
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  Margin="0,0,5,0"
                                                                                                  VerticalAlignment="Center"
-                                                                                                 ToolTip="Base distance in meters (0.1 to 5.0m) for the first nudge. Repeated pushes within 5s escalate progressively up to the max nudge distance cap. Default: 0.5m."/>
-                                                                                        <TextBlock Text="Meters (base)"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                                 ToolTip="Base distance in meters for the initial separation nudge (0 = rely purely on escalation/clearance). Repeated pushes within the stuck window escalate progressively. Default: 0.50m."/>
+                                                                                        <TextBlock Text="meters initially,"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
 
                                                                                 <WrapPanel Margin="16,2,0,2"
                                                                                            VerticalAlignment="Center">
-                                                                                        <TextBlock Text="Max nudge distance (escalation cap):"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                        <TextBlock Text="escalating repeated attempts up to a maximum of"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="0,0,5,0"/>
                                                                                         <TextBox Text="{Binding Config.PushApartMaxNudgeDistance, StringFormat={}{0:F2}}"
@@ -1016,16 +1017,16 @@
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  Margin="0,0,5,0"
                                                                                                  VerticalAlignment="Center"
-                                                                                                 ToolTip="Ceiling for repeated nudges within the same 5-second stuck window. Escalation increments each attempt up to this cap to safely dig out stubborn grids. Default: 2.0m."/>
-                                                                                        <TextBlock Text="Meters"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                                 ToolTip="Ceiling for repeated nudges within the same stuck window. Escalation increments each attempt up to this cap to safely dig out stubborn surface grids (0 = disabled). Subterranean OBB clearance bypasses this cap so buried constructs can emerge completely above the surface in one shot. Default: 2.00m."/>
+                                                                                        <TextBlock Text="meters (subterranean clearance bypasses cap)."
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
 
                                                                                 <WrapPanel Margin="16,2,0,2"
                                                                                            VerticalAlignment="Center">
-                                                                                        <TextBlock Text="after remaining in continuous contact for"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                        <TextBlock Text="Trigger separation after remaining in continuous contact for"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="0,0,5,0"/>
                                                                                         <TextBox Text="{Binding Config.PushApartThreshold}"
@@ -1033,16 +1034,16 @@
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  Margin="0,0,5,0"
                                                                                                  VerticalAlignment="Center"
-                                                                                                 ToolTip="Consecutive collision frames (~25 frames = 0.4s) required before triggering separation. Evaluated directly from continuous physics contact callbacks every frame. Default: 25 frames."/>
-                                                                                        <TextBlock Text="Frames (~0.4s)."
-                                                                                                   Foreground="#CCCCCC"
+                                                                                                 ToolTip="Consecutive collision frames required before triggering separation. Evaluated directly from continuous physics contact callbacks every frame (0 = disabled). Default: 25 frames (~0.4s)."/>
+                                                                                        <TextBlock Text="frames."
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
 
                                                                                 <WrapPanel Margin="16,2,0,2"
                                                                                            VerticalAlignment="Center">
                                                                                         <TextBlock Text="Give up after"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="0,0,5,0"/>
                                                                                         <TextBox Text="{Binding Config.PushApartMaxAttempts}"
@@ -1051,111 +1052,86 @@
                                                                                                  Margin="0,0,5,0"
                                                                                                  VerticalAlignment="Center"
                                                                                                  ToolTip="Consecutive separation pushes allowed while a grid remains stuck in voxels (0 = never give up, up to 1000). Prevents grids from endlessly staircasing up cliff faces when pushes cannot free them. When giving up, the grid can optionally be converted to a static station to kill Havok solver saturation. Default: 3."/>
-                                                                                        <TextBlock Text="failed pushes (0 = never give up). Default: 3."
-                                                                                                   Foreground="#CCCCCC"
+                                                                                        <TextBlock Text="failed push attempts (0 = never give up)."
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
 
                                                                                 <CheckBox Content="Convert to Static Station when Give-Up Limit is Reached"
                                                                                           IsChecked="{Binding Config.ConvertToStaticOnPushApartGiveUp}"
-                                                                                          Margin="16,2,0,2"
+                                                                                          Margin="16,2,0,4"
                                                                                           ToolTip="Nuclear anti-solver-saturation option: when PushApartMaxAttempts is reached and the grid is still stuck, converts the grid to a static station on the game thread to halt Havok physics vibrations and save server sim-speed. If unchecked, stops pushing without stationing. Default: Checked."/>
 
                                                                                 <WrapPanel Margin="16,2,0,2"
                                                                                            VerticalAlignment="Center">
-                                                                                        <TextBlock Text="Min impact speed for pushes:"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                        <TextBlock Text="Consider grids stuck only if drift remains under"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="0,0,5,0"/>
-                                                                                        <TextBox Text="{Binding Config.PushApartMinImpactSpeed, StringFormat={}{0:F1}}"
-                                                                                                 Width="55"
-                                                                                                 HorizontalContentAlignment="Center"
-                                                                                                 VerticalAlignment="Center"
-                                                                                                 ToolTip="Pushes normally require contacts at or above this impact speed in m/s (0 = no gate) to avoid nudging resting or docked grids. Grids physically embedded beyond the depth threshold or submerged underground automatically qualify. Default: 1.0 m/s."/>
-                                                                                        <TextBlock Text="Max drift while stuck:"
-                                                                                                   Foreground="#CCCCCC"
-                                                                                                   VerticalAlignment="Center"
-                                                                                                   Margin="12,0,5,0"/>
                                                                                         <TextBox Text="{Binding Config.PushApartMaxDrift, StringFormat={}{0:F1}}"
                                                                                                  Width="55"
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  VerticalAlignment="Center"
-                                                                                                 ToolTip="A grid that moved more than this many meters (0 = no gate) during the contact window is driving, not stuck, and never gets pushed. Wheel-terrain contacts fire every frame of normal driving, so without this gate the plugin micro-teleports moving rovers. Wedged grids drift near zero. Default: 1.5m."/>
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Base drift limit in meters (0 = disabled). Grids that moved more than this distance during the contact window are driving, not stuck, and never get pushed. Automatically scales upward with construct bounding radius (Math.Max(Base, Radius * 0.10)) to allow rocking and gyro-yanking on large mobile bases without lockout. Default: 1.5m."/>
+                                                                                        <TextBlock Text="meters (scales with construct radius)."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
 
                                                                                 <WrapPanel Margin="16,2,0,2"
                                                                                            VerticalAlignment="Center">
-                                                                                        <TextBlock Text="Embedded depth threshold:"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                        <TextBlock Text="Rescue high-centered chassis when mesh penetration exceeds"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="0,0,5,0"/>
                                                                                         <TextBox Text="{Binding Config.PushApartEmbeddedDepth, StringFormat={}{0:F2}}"
                                                                                                  Width="55"
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  VerticalAlignment="Center"
-                                                                                                 ToolTip="Physical penetration depth into voxel mesh (meters) required to treat the grid as embedded/wedged. A higher value (e.g. 0.20m) prevents heavy resting vehicles from falsely triggering pushes while catching wedged chassis. Default: 0.20m."/>
-                                                                                        <TextBlock Text="Meters"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Micro-level physical penetration depth into voxel mesh (meters) required to classify a stationary non-wheel chassis as wedged/high-centered (0 = any non-zero contact qualifies). Default: 0.20m."/>
+                                                                                        <TextBlock Text="meters (0 = any contact)."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Rescue violent Clang loops when deformation rate exceeds"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
-                                                                                                   Margin="5,0,0,0"/>
-                                                                                        <TextBlock Text="Clang angular threshold:"
-                                                                                                   Foreground="#CCCCCC"
-                                                                                                   VerticalAlignment="Center"
-                                                                                                   Margin="12,0,5,0"/>
-                                                                                        <TextBox Text="{Binding Config.PushApartClangAngularThreshold, StringFormat={}{0:F2}}"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PushApartClangRateThreshold}"
                                                                                                  Width="55"
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  VerticalAlignment="Center"
-                                                                                                 ToolTip="Rotational speed threshold in rad/s (default: 0.5 rad/s) required to classify a contact as violent Havok solver torque vibration (Clang). Clanging grids qualify for push-apart regardless of reported penetration depth."/>
-                                                                                        <TextBlock Text="rad/s"
-                                                                                                   Foreground="#CCCCCC"
-                                                                                                   VerticalAlignment="Center"
-                                                                                                   Margin="5,0,0,0"/>
-                                                                                        <TextBlock Text="Clang crash rate threshold:"
-                                                                                                   Foreground="#CCCCCC"
-                                                                                                   VerticalAlignment="Center"
-                                                                                                   Margin="12,0,5,0"/>
-                                                                                        <TextBox Text="{Binding Config.PushApartClangCrashRateThreshold}"
-                                                                                                 Width="50"
-                                                                                                 HorizontalContentAlignment="Center"
-                                                                                                 VerticalAlignment="Center"
-                                                                                                 ToolTip="Blocked collision deformation rate in crashes/s (default: 5 crashes/s) required to classify a contact as Clang even when angular velocity and penetration are clamped by Havok. Clanging grids qualify for push-apart and bypass resting guards. Set 0 to disable."/>
-                                                                                        <TextBlock Text="crashes/s"
-                                                                                                   Foreground="#CCCCCC"
-                                                                                                   VerticalAlignment="Center"
-                                                                                                   Margin="5,0,0,0"/>
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Blocked deformation rate in clangs/s (0 = disabled) required to classify a contact as violent Havok solver saturation loop (true Clang). Clanging grids qualify for push-apart and bypass resting/drift guards even when Havok reports 0.000m penetration. Default: 500 clangs/s."/>
+                                                                                        <TextBlock Text="clangs/s (0 = disabled)."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
 
-                                                                                <CheckBox Content="Enable Push-Apart Debug GPS Markers"
-                                                                                          IsChecked="{Binding Config.EnablePushApartDebugDraw}"
-                                                                                          Margin="16,2,0,2"
-                                                                                          ToolTip="Spawns a bright GPS marker pair at each applied push origin and end (5m apart): magenta = voxel push, yellow = grid push. Auto-expires after 10 seconds. Capped at 10 live markers server-wide (one pair per grid - re-pushes refresh instead of stacking). Debug tool - leave off in normal play."/>
-                                                                                <CheckBox Content="Log Push-Apart Escape Diagnostics"
-                                                                                          IsChecked="{Binding Config.LogPushApartDiagnostics}"
-                                                                                          Margin="16,2,0,2"
-                                                                                          ToolTip="Outputs structured server logs detailing grid center, surface height, evaluated underground state, raw contact normal, and final resolved escape vector for every push-apart calculation."/>
-                                                                                <CheckBox Content="Log Station Conversion Give-Up"
-                                                                                          IsChecked="{Binding Config.LogPushApartStationConversion}"
-                                                                                          Margin="16,2,0,2"
-                                                                                          ToolTip="Outputs server log warnings when push-apart attempts hit the maximum limit and details per-subgrid station conversion execution."/>
                                                                                 <CheckBox Content="Enable Burial Probe (Experimental)"
                                                                                           IsChecked="{Binding Config.EnableBurialProbe}"
                                                                                           Margin="16,4,0,2"
-                                                                                          ToolTip="Cold-path probe (once per ~10s) for grids stationary 20s+: if voxel material confines the grid on 3+ horizontal sides, it is pushed out along the gravity up-vector. Covers fully buried grids where Havok emits no contact callbacks (e.g. underground station converted to ship, rover spawned embedded)."/>
+                                                                                          ToolTip="Cold-path probe (once per ~10s) for grids stationary 20s+: if voxel material confines the grid on 3+ horizontal sides, it is pushed out along the gravity up-vector. Covers fully buried grids where Havok emits no contact callbacks (e.g. underground station converted to ship, rover spawned embedded). Default: Checked."/>
                                                                                 <WrapPanel Margin="16,2,0,2"
                                                                                            IsEnabled="{Binding Config.EnableBurialProbe}"
                                                                                            VerticalAlignment="Center">
-                                                                                        <TextBlock Text="Burial probe clearance margin:"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                        <TextBlock Text="Check for surrounding voxel confinement within"
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"
                                                                                                    Margin="0,0,5,0"/>
                                                                                         <TextBox Text="{Binding Config.BurialProbeRadius, StringFormat={}{0:F1}}"
                                                                                                  Width="55"
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
                                                                                                  ToolTip="Extra meters of clearance around the grid's bounding sphere (1-10m) before the probe considers the grid buried. Lower = fewer false positives near terrain. Default: 2.0m."/>
-                                                                                        <TextBlock Text="Meters"
-                                                                                                   Foreground="#CCCCCC"
+                                                                                        <TextBlock Text="meters of grid hull."
+                                                                                                   Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
                                                                         </StackPanel>
@@ -1210,36 +1186,60 @@
                                                 Padding="8,5"
                                                 Margin="0,0,0,12"
                                                 IsEnabled="{Binding Config.Enabled}">
-                                                <WrapPanel Orientation="Horizontal"
-                                                           VerticalAlignment="Center">
-                                                        <TextBlock Text="Global Diagnostics:"
-                                                                   FontWeight="SemiBold"
-                                                                   Foreground="#9CA3AF"
-                                                                   VerticalAlignment="Center"
-                                                                   Margin="0,0,14,0"
-                                                                   TextWrapping="Wrap"/>
-                                                        <CheckBox Content="Enable Debug Logging"
-                                                                  IsChecked="{Binding Config.EnableDebugLogging}"
-                                                                  VerticalAlignment="Center"
-                                                                  Margin="0,0,16,0"
-                                                                  ToolTip="Outputs real-time event logs (sleep/wake transitions, ore merges, subgrid dampening, TOI changes, missile impacts) to the Torch console and torch.log at INFO level."/>
-                                                        <WrapPanel VerticalAlignment="Center">
-                                                                <CheckBox Content="Emit Console Telemetry heartbeat every"
-                                                                          IsChecked="{Binding Config.EnablePeriodicConsoleTelemetry}"
+                                                <StackPanel>
+                                                        <WrapPanel Orientation="Horizontal"
+                                                                   VerticalAlignment="Center">
+                                                                <TextBlock Text="Global Diagnostics:"
+                                                                           FontWeight="SemiBold"
+                                                                           Foreground="#9CA3AF"
+                                                                           VerticalAlignment="Center"
+                                                                           Margin="0,0,14,0"/>
+                                                                <CheckBox Content="Enable Debug Logging"
+                                                                          IsChecked="{Binding Config.EnableDebugLogging}"
                                                                           VerticalAlignment="Center"
-                                                                          ToolTip="Periodically logs a concise 1-line telemetry summary (sim speed, rigid body states, rovers, subgrids, floating items, defense blocks) to the Torch console."/>
-                                                                <TextBox Text="{Binding Config.ConsoleTelemetryIntervalSeconds}"
-                                                                         Width="50"
-                                                                         HorizontalContentAlignment="Center"
-                                                                         Margin="5,0"
-                                                                         VerticalAlignment="Center"
-                                                                         IsEnabled="{Binding Config.EnablePeriodicConsoleTelemetry}"
-                                                                         ToolTip="How often (in seconds) the automated 1-line telemetry summary is emitted to the Torch console. Default: 30s."/>
-                                                                <TextBlock Text="Seconds."
-                                                                           Foreground="#CCCCCC"
-                                                                           VerticalAlignment="Center"/>
+                                                                          Margin="0,0,16,0"
+                                                                          ToolTip="Outputs real-time event logs (sleep/wake transitions, ore merges, subgrid dampening, TOI changes, missile impacts) to the Torch console and torch.log at INFO level. Default: Unchecked."/>
+                                                                <WrapPanel VerticalAlignment="Center">
+                                                                        <CheckBox Content="Emit Console Telemetry heartbeat every"
+                                                                                  IsChecked="{Binding Config.EnablePeriodicConsoleTelemetry}"
+                                                                                  VerticalAlignment="Center"
+                                                                                  ToolTip="Periodically logs a concise 1-line telemetry summary (sim speed, rigid body states, rovers, subgrids, floating items, defense blocks) to the Torch console. Default: Checked."/>
+                                                                        <TextBox Text="{Binding Config.ConsoleTelemetryIntervalSeconds}"
+                                                                                 Width="50"
+                                                                                 HorizontalContentAlignment="Center"
+                                                                                 Margin="5,0"
+                                                                                 VerticalAlignment="Center"
+                                                                                 IsEnabled="{Binding Config.EnablePeriodicConsoleTelemetry}"
+                                                                                 ToolTip="How often (in seconds) the automated 1-line telemetry summary is emitted to the Torch console. Default: 30s."/>
+                                                                        <TextBlock Text="Seconds."
+                                                                                   Foreground="#FFFFFF"
+                                                                                   VerticalAlignment="Center"/>
+                                                                </WrapPanel>
                                                         </WrapPanel>
-                                                </WrapPanel>
+                                                        <WrapPanel Orientation="Horizontal"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="0,4,0,0">
+                                                                <TextBlock Text="Push-Apart Diagnostics:"
+                                                                           FontWeight="SemiBold"
+                                                                           Foreground="#9CA3AF"
+                                                                           VerticalAlignment="Center"
+                                                                           Margin="0,0,14,0"/>
+                                                                <CheckBox Content="Log Push-Apart Escape Diagnostics"
+                                                                          IsChecked="{Binding Config.LogPushApartDiagnostics}"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="0,0,14,0"
+                                                                          ToolTip="Outputs structured server logs detailing grid center, surface height, evaluated underground state, raw contact normal, and final resolved escape vector for every push-apart calculation. Default: Unchecked."/>
+                                                                <CheckBox Content="Log Station Conversion Give-Up"
+                                                                          IsChecked="{Binding Config.LogPushApartStationConversion}"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="0,0,14,0"
+                                                                          ToolTip="Outputs server log warnings when push-apart attempts hit the maximum limit and details per-subgrid station conversion execution. Default: Checked."/>
+                                                                <CheckBox Content="Enable Push-Apart Debug GPS Markers"
+                                                                          IsChecked="{Binding Config.EnablePushApartDebugDraw}"
+                                                                          VerticalAlignment="Center"
+                                                                          ToolTip="Spawns a bright GPS marker pair at each applied push origin and end (5m apart): magenta = voxel push, yellow = grid push. Auto-expires after 10 seconds. Capped at 10 live markers server-wide (one pair per grid - re-pushes refresh instead of stacking). Debug tool - leave off in normal play. Default: Unchecked."/>
+                                                        </WrapPanel>
+                                                </StackPanel>
                                         </Border>
 
                                         <Grid Grid.Row="2">

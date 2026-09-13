@@ -107,9 +107,7 @@ namespace PhysicsOptimizer.Config
         private bool _convertToStaticOnPushApartGiveUp = true;
         private bool _enableBurialProbe = true;
         private bool _enablePushApartDebugDraw = false;
-        private float _pushApartMinImpactSpeed = 1.0f;
-        private float _pushApartClangAngularThreshold = 0.50f;
-        private int _pushApartClangCrashRateThreshold = 5;
+        private int _pushApartClangRateThreshold = 500;
         private float _pushApartEmbeddedDepth = 0.20f;
         private float _pushApartMaxDrift = 1.5f;
         private float _pushApartMaxNudgeDistance = 2.0f;
@@ -298,12 +296,12 @@ namespace PhysicsOptimizer.Config
         public int PushApartThreshold
         {
             get => _pushApartThreshold;
-            set => SetValue(ref _pushApartThreshold, Math.Max(5, value));
+            set => SetValue(ref _pushApartThreshold, Math.Max(0, value));
         }
         public float PushApartDistance
         {
             get => _pushApartDistance;
-            set => SetValue(ref _pushApartDistance, Math.Max(0.1f, Math.Min(5.0f, value)));
+            set => SetValue(ref _pushApartDistance, Math.Max(0.0f, Math.Min(5.0f, value)));
         }
         public int PushApartMaxAttempts
         {
@@ -313,35 +311,25 @@ namespace PhysicsOptimizer.Config
         public bool ConvertToStaticOnPushApartGiveUp { get => _convertToStaticOnPushApartGiveUp; set => SetValue(ref _convertToStaticOnPushApartGiveUp, value); }
         public bool EnableBurialProbe { get => _enableBurialProbe; set => SetValue(ref _enableBurialProbe, value); }
         public bool EnablePushApartDebugDraw { get => _enablePushApartDebugDraw; set => SetValue(ref _enablePushApartDebugDraw, value); }
-        public float PushApartMinImpactSpeed
+        public int PushApartClangRateThreshold
         {
-            get => _pushApartMinImpactSpeed;
-            set => SetValue(ref _pushApartMinImpactSpeed, Math.Max(0f, Math.Min(50f, value)));
-        }
-        public float PushApartClangAngularThreshold
-        {
-            get => _pushApartClangAngularThreshold;
-            set => SetValue(ref _pushApartClangAngularThreshold, Math.Max(0.05f, Math.Min(5.0f, value)));
-        }
-        public int PushApartClangCrashRateThreshold
-        {
-            get => _pushApartClangCrashRateThreshold;
-            set => SetValue(ref _pushApartClangCrashRateThreshold, Math.Max(0, Math.Min(1000, value)));
+            get => _pushApartClangRateThreshold;
+            set => SetValue(ref _pushApartClangRateThreshold, Math.Max(0, Math.Min(10000, value)));
         }
         public float PushApartEmbeddedDepth
         {
             get => _pushApartEmbeddedDepth;
-            set => SetValue(ref _pushApartEmbeddedDepth, Math.Max(0.01f, Math.Min(5.0f, value)));
+            set => SetValue(ref _pushApartEmbeddedDepth, Math.Max(0.0f, Math.Min(5.0f, value)));
         }
         public float PushApartMaxDrift
         {
             get => _pushApartMaxDrift;
-            set => SetValue(ref _pushApartMaxDrift, Math.Max(0f, Math.Min(20f, value)));
+            set => SetValue(ref _pushApartMaxDrift, Math.Max(0.0f, Math.Min(20.0f, value)));
         }
         public float PushApartMaxNudgeDistance
         {
             get => _pushApartMaxNudgeDistance;
-            set => SetValue(ref _pushApartMaxNudgeDistance, Math.Max(0.1f, Math.Min(10f, value)));
+            set => SetValue(ref _pushApartMaxNudgeDistance, Math.Max(0.0f, Math.Min(10.0f, value)));
         }
         public bool ExcludeWheelSubgridsFromAntiClang { get => _excludeWheelSubgridsFromAntiClang; set => SetValue(ref _excludeWheelSubgridsFromAntiClang, value); }
         public bool ExcludeWheelSubgridsFromPushApart { get => _excludeWheelSubgridsFromPushApart; set => SetValue(ref _excludeWheelSubgridsFromPushApart, value); }

@@ -58,7 +58,7 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Allowed Multiplier: {1:F2})", cfg.EnableGridDefender, cfg.DeformationMultiplier));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Ship Ramming: {0} | Voxel Crash: {1} | Stations: {2} | Subgrids: {3} | Debris: {4}", cfg.ProtectShipsAgainstRamming, cfg.ProtectShipsAgainstVoxels, cfg.ProtectStaticGrids, cfg.ProtectSubgrids, cfg.ProtectAgainstFloatingObjects));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Fallback Gates (Applicable={0}): Safe Harbor < {1:F1} m/s | Max Deform < {2:F1} m/s | Cooldown: {3} frames", cfg.IsSpeedGatesApplicable, cfg.MinDrivingVelocity, cfg.MaxDeformationVelocity, cfg.DeformationCooldownFrames));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Push-Apart: {0} (Base: {1:F2}m, Max: {2:F2}m, Threshold: {3} frames, Max Attempts: {4}, Station On Give-Up: {5}, Debug GPS: {6}, Min Impact: {7:F1} m/s, Exclude Wheels: {8}, Embed Depth: {9:F2}m, Clang Ang: {10:F2} rad/s, Clang Crash: {11}/s)", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartMaxNudgeDistance, cfg.PushApartThreshold, cfg.PushApartMaxAttempts, cfg.ConvertToStaticOnPushApartGiveUp, cfg.EnablePushApartDebugDraw, cfg.PushApartMinImpactSpeed, cfg.ExcludeWheelSubgridsFromPushApart, cfg.PushApartEmbeddedDepth, cfg.PushApartClangAngularThreshold, cfg.PushApartClangCrashRateThreshold));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Push-Apart: {0} (Base: {1:F2}m, Max: {2:F2}m, Threshold: {3} frames, Max Attempts: {4}, Station On Give-Up: {5}, Debug GPS: {6}, Exclude Wheels: {7}, Embed Depth: {8:F2}m, Clang Rate: {9}/s)", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartMaxNudgeDistance, cfg.PushApartThreshold, cfg.PushApartMaxAttempts, cfg.ConvertToStaticOnPushApartGiveUp, cfg.EnablePushApartDebugDraw, cfg.ExcludeWheelSubgridsFromPushApart, cfg.PushApartEmbeddedDepth, cfg.PushApartClangRateThreshold));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Voxel Normal Arbitrator: {0} (Debug GPS: {1})", cfg.EnableVoxelNormalArbitrator, cfg.EnableVoxelNormalArbitratorDebugDraw));
             sb.AppendLine();
             sb.AppendLine("* Player-Made Missiles (PMWs):");
@@ -116,14 +116,14 @@ namespace PhysicsOptimizer.Commands
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Clang Vibrations Arrested: {0:N0} | Grids Nudged Apart: {1:N0}", d.ClangVibrationsArrested, d.GridsSeparated));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Thruster Obstructions Burned: {0:N0} | Voxel Cutouts Prevented: {1:N0}", d.ThrusterObstructionsVaporized, d.VoxelCutoutsPrevented));
 
-                var offenders = Modules.GridDefender.GetActiveCrashOffenders(minRate: 1, maxResults: 5);
+                var offenders = Modules.GridDefender.GetActiveClangers(minRate: 1, maxResults: 5);
                 if (offenders != null && offenders.Count > 0)
                 {
                     sb.AppendLine();
-                    sb.AppendLine("=== [Active Collision / Clang Offenders] ===");
+                    sb.AppendLine("=== [Active Clangers] ===");
                     foreach (var o in offenders)
                     {
-                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  * '{0}' (Id: {1}) - {2} crashes/s (Total: {3:N0} blocked)", o.Name, o.Id, o.Rate, o.Total));
+                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  * '{0}' (Id: {1}) - {2} clangs/s (Total: {3:N0} blocked)", o.Name, o.Id, o.Rate, o.Total));
                     }
                 }
             }

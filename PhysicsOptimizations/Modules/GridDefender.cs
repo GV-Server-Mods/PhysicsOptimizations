@@ -76,20 +76,28 @@ namespace PhysicsOptimizer.Modules
             public int Level;
         }
 
-        private sealed class ConstructCrashRecord
+        private sealed class ConstructClangRecord
         {
             public string DisplayName;
-            public int TotalCrashes;
-            public int WindowCrashes;
-            public int LastSecondRate;
-            public ulong WindowStartFrame;
-            public ulong LastCrashFrame;
+            public int TotalClangs;
+            public int CurrentSecondClangs;
+            public int PreviousSecondClangs;
+            public ulong CurrentSecondStartFrame;
+            public ulong LastClangFrame;
+        }
+
+        private struct VoxelArbDebugMarker
+        {
+            public string GridName;
+            public Vector3D OldForcePos;
+            public Vector3D NewForcePos;
         }
 
         private static long _nextMissileGroupId = 0;
 
         private readonly ConcurrentQueue<PushApartAction> _pushQueue = new();
-        private static readonly ConcurrentDictionary<long, ConstructCrashRecord> _constructCrashRecords = new();
+        private static readonly ConcurrentDictionary<long, VoxelArbDebugMarker> _pendingVoxelArbDebugGps = new();
+        private static readonly ConcurrentDictionary<long, ConstructClangRecord> _constructClangRecords = new();
         private readonly ConcurrentDictionary<long, MissileEngagement> _activeMissiles = new();
         private readonly ConcurrentDictionary<long, ulong> _lastDeformationFrames = new();
         private readonly ConcurrentDictionary<long, int> _consecutiveContactFrames = new();
@@ -246,6 +254,7 @@ namespace PhysicsOptimizer.Modules
             RestoreVoxelFakes();
             UnregisterDamageHandler();
             ClearCollections();
+            ClearAllDebugGps();
             _plugin = null;
         }
 
@@ -277,6 +286,7 @@ namespace PhysicsOptimizer.Modules
         private void ClearCollections()
         {
             while (_pushQueue.TryDequeue(out _)) { }
+            _pendingVoxelArbDebugGps.Clear();
             foreach (var id in _activeMissiles.Keys)
             {
                 if (MyEntities.TryGetEntityById(id, out MyEntity ent) && ent is MyCubeGrid g)
@@ -308,7 +318,7 @@ namespace PhysicsOptimizer.Modules
             _voxelContactStartPositions.Clear();
             _lastPushApartGateLogFrames.Clear();
             _burialProbeStates.Clear();
-            _constructCrashRecords.Clear();
+            _constructClangRecords.Clear();
 
             foreach (var kvp in _voxelRangeHandlers)
             {
@@ -369,66 +379,65 @@ namespace PhysicsOptimizer.Modules
             return false;
         }
 
-        private static void RecordBlockedCrash(MyCubeGrid grid, ulong currentFrame)
+        private static void RecordBlockedClang(MyCubeGrid grid, ulong currentFrame)
         {
             if (grid == null || currentFrame == 0) return;
             MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
             long constructId = topGrid.EntityId;
-            ConstructCrashRecord record = _constructCrashRecords.GetOrAdd(constructId, id => new ConstructCrashRecord
+            ConstructClangRecord record = _constructClangRecords.GetOrAdd(constructId, id => new ConstructClangRecord
             {
                 DisplayName = topGrid.DisplayName,
-                WindowStartFrame = currentFrame,
-                LastCrashFrame = currentFrame
+                CurrentSecondStartFrame = currentFrame,
+                LastClangFrame = currentFrame
             });
 
             record.DisplayName = topGrid.DisplayName;
-            record.LastCrashFrame = currentFrame;
-            Interlocked.Increment(ref record.TotalCrashes);
+            record.LastClangFrame = currentFrame;
+            Interlocked.Increment(ref record.TotalClangs);
 
-            if (currentFrame >= record.WindowStartFrame + 60)
+            if (currentFrame >= record.CurrentSecondStartFrame + 60)
             {
-                record.LastSecondRate = record.WindowCrashes;
-                record.WindowCrashes = 1;
-                record.WindowStartFrame = currentFrame;
+                if (currentFrame >= record.CurrentSecondStartFrame + 120)
+                {
+                    record.PreviousSecondClangs = 0;
+                    record.CurrentSecondClangs = 1;
+                }
+                else
+                {
+                    record.PreviousSecondClangs = record.CurrentSecondClangs;
+                    record.CurrentSecondClangs = 1;
+                }
+                record.CurrentSecondStartFrame = currentFrame;
             }
             else
             {
-                record.WindowCrashes++;
+                record.CurrentSecondClangs++;
             }
         }
 
         private bool BlockDeformation(MyCubeGrid grid, ulong currentFrame, DefenseStatistics stats, bool isRamming = false, bool isVoxel = false, bool isSubgrid = false, bool isCooldown = false, bool isLowSpeed = false, bool isStation = false, bool isDebris = false)
         {
-            RecordBlockedCrash(grid, currentFrame);
+            RecordBlockedClang(grid, currentFrame);
             stats?.IncrementBlocked(isRamming, isVoxel, isSubgrid, isCooldown, isLowSpeed, isStation, isDebris);
             return false;
         }
 
-        public static List<(string Name, long Id, int Rate, int Total)> GetActiveCrashOffenders(int minRate = 1, int maxResults = 5)
+        public static List<(string Name, long Id, int Rate, int Total)> GetActiveClangers(int minRate = 1, int maxResults = 5)
         {
-            if (_constructCrashRecords.IsEmpty) return null;
+            if (_constructClangRecords.IsEmpty) return null;
             ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
             List<(string Name, long Id, int Rate, int Total)> results = null;
 
-            foreach (var kvp in _constructCrashRecords)
+            foreach (var kvp in _constructClangRecords)
             {
-                ConstructCrashRecord rec = kvp.Value;
+                ConstructClangRecord rec = kvp.Value;
                 if (rec == null) continue;
 
-                int rate = rec.LastSecondRate;
-                if (currentFrame > 0 && rec.LastCrashFrame > 0 && currentFrame > rec.LastCrashFrame + 120)
-                {
-                    rate = 0;
-                }
-                else if (rate == 0 && currentFrame > 0 && rec.LastCrashFrame > 0 && currentFrame <= rec.LastCrashFrame + 60)
-                {
-                    rate = rec.WindowCrashes;
-                }
-
+                int rate = GetConstructClangRate(kvp.Key, currentFrame);
                 if (rate >= minRate)
                 {
                     results ??= new List<(string Name, long Id, int Rate, int Total)>();
-                    results.Add((rec.DisplayName ?? "Unknown", kvp.Key, rate, rec.TotalCrashes));
+                    results.Add((rec.DisplayName ?? "Unknown", kvp.Key, rate, rec.TotalClangs));
                 }
             }
 
@@ -444,29 +453,47 @@ namespace PhysicsOptimizer.Modules
             return results;
         }
 
-        private static int GetConstructCrashRate(long constructId, ulong currentFrame)
+        private static int GetConstructClangRate(long constructId, ulong currentFrame)
         {
-            if (_constructCrashRecords.TryGetValue(constructId, out ConstructCrashRecord cRec) && cRec != null)
+            if (_constructClangRecords.TryGetValue(constructId, out ConstructClangRecord cRec) && cRec != null)
             {
-                if (currentFrame > 0 && cRec.LastCrashFrame > 0 && currentFrame > cRec.LastCrashFrame + 120)
+                if (currentFrame == 0 || cRec.LastClangFrame == 0) return 0;
+
+                // If no clangs occurred in the last 60 frames (1 second), rate drops to 0
+                if (currentFrame > cRec.LastClangFrame + 60)
                 {
                     return 0;
                 }
-                if (cRec.LastSecondRate > 0)
+
+                ulong framesSinceStart = currentFrame - cRec.CurrentSecondStartFrame;
+                if (framesSinceStart >= 120)
                 {
-                    return cRec.LastSecondRate;
+                    return 0;
                 }
-                if (currentFrame > 0 && cRec.LastCrashFrame > 0 && currentFrame <= cRec.LastCrashFrame + 60)
+                if (framesSinceStart >= 60)
                 {
-                    return cRec.WindowCrashes;
+                    return cRec.CurrentSecondClangs;
                 }
+
+                int prevPortion = (int)((cRec.PreviousSecondClangs * (60L - (long)framesSinceStart)) / 60L);
+                return prevPortion + cRec.CurrentSecondClangs;
             }
             return 0;
         }
 
-        private static int GetConstructCrashTotal(long constructId)
+        private static int GetConstructClangTotal(long constructId)
         {
-            return _constructCrashRecords.TryGetValue(constructId, out ConstructCrashRecord cRec) ? cRec.TotalCrashes : 0;
+            return _constructClangRecords.TryGetValue(constructId, out ConstructClangRecord cRec) ? cRec.TotalClangs : 0;
+        }
+
+        private static void ResetConstructClangTracking(long constructId, ulong currentFrame)
+        {
+            if (_constructClangRecords.TryGetValue(constructId, out ConstructClangRecord rec) && rec != null)
+            {
+                rec.CurrentSecondClangs = 0;
+                rec.PreviousSecondClangs = 0;
+                rec.CurrentSecondStartFrame = currentFrame;
+            }
         }
 
         /// <summary>
@@ -726,7 +753,8 @@ namespace PhysicsOptimizer.Modules
             _lastVoxelContactFrameTracker.TryRemove(id, out _);
             _voxelContactStartPositions.TryRemove(id, out _);
             _lastPushApartGateLogFrames.TryRemove(id, out _);
-            _constructCrashRecords.TryRemove(id, out _);
+            _constructClangRecords.TryRemove(id, out _);
+            _pendingVoxelArbDebugGps.TryRemove(id, out _);
         }
 
         private void OnTrackedGridClosed(IMyEntity entity)
@@ -906,23 +934,25 @@ namespace PhysicsOptimizer.Modules
             // Phase 2: Active Push-Apart (Excludes mechanically/logically connected subgrids)
             bool areConnectedSubgrids = isConnectedSubgrid;
 
-            // Impact-speed & Clang vibration gate: resting grids (contacts at ~0 m/s and 0 rad/s)
-            // never arm pushes; only energetic contacts from driving, docking bumps, hard hits,
-            // or active rotational Clang shuddering (>= 0.5 rad/s) qualify
-            float angularSpeed = grid.Physics?.AngularVelocity.Length() ?? 0f;
-            bool isClangVibrating = angularSpeed >= config.PushApartClangAngularThreshold;
-            bool speedGateOpen = config.PushApartMinImpactSpeed <= 0f || impactSpeed >= config.PushApartMinImpactSpeed;
-            bool impactGateOpen = speedGateOpen || isClangVibrating;
+            // Resolve construct top grid and dynamic drift radius
+            MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+            double constructRadius = topGrid.PositionComp.WorldVolume.Radius;
+            double effectiveMaxDrift = Math.Max((double)config.PushApartMaxDrift, constructRadius * 0.10);
 
-            // Drift gate: a grid covering ground during the contact window is driving, not stuck -
-            // wheel-terrain contacts fire every frame of normal driving, so contact counts alone
-            // would micro-teleport every moving rover. Wedged grids drift near zero.
-            bool driftGateOpen = config.PushApartMaxDrift <= 0f;
+            // Clang gate: resting or docking grids never arm pushes;
+            // only active Clang loops (>= ClangRateThreshold clangs/s) qualify
+            bool isClanging = config.PushApartClangRateThreshold > 0 && GetConstructClangRate(topGrid.EntityId, currentFrame) >= config.PushApartClangRateThreshold;
+            bool impactGateOpen = isClanging;
+
+            // Drift gate: a grid covering ground during the contact window is driving/flying, not stuck.
+            // Clanging grids bypass the drift gate.
+            bool driftGateOpen = config.PushApartMaxDrift <= 0f || isClanging;
             if (!driftGateOpen && _contactStartPositions.TryGetValue(gridEntityId, out Vector3D startPos))
             {
                 Vector3D drift = grid.PositionComp.WorldVolume.Center - startPos;
-                driftGateOpen = drift.LengthSquared() <= (double)config.PushApartMaxDrift * config.PushApartMaxDrift;
+                driftGateOpen = drift.LengthSquared() <= effectiveMaxDrift * effectiveMaxDrift;
             }
+
             // Wheel-terrain contacts fire every frame of normal driving; excluding them removes the
             // driving false positives that cause rovers to micro-teleport across flat terrain.
             bool pushApartAllowed = !isWheelVoxel || !config.ExcludeWheelSubgridsFromPushApart;
@@ -991,14 +1021,21 @@ namespace PhysicsOptimizer.Modules
 
             if (pushApartAllowed && config.EnablePushApart && contactCount >= config.PushApartThreshold)
             {
+                MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+                long constructId = topGrid.EntityId;
+                double constructRadius = topGrid.PositionComp.WorldVolume.Radius;
+                double effectiveMaxDrift = Math.Max((double)config.PushApartMaxDrift, constructRadius * 0.10);
+
                 Vector3D gridCenter = grid.PositionComp.WorldVolume.Center;
                 MyPlanet planet = otherEntity as MyPlanet ?? MyGamePruningStructure.GetClosestPlanet(gridCenter);
                 bool isUnderSurface = false;
+                bool isMacroSubmerged = false;
                 if (planet != null)
                 {
                     Vector3D core = planet.PositionComp.WorldVolume.Center;
                     Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref gridCenter);
                     isUnderSurface = (gridCenter - core).LengthSquared() < (surfacePt - core).LengthSquared();
+                    isMacroSubmerged = (gridCenter - core).LengthSquared() < (surfacePt - core).LengthSquared();
                 }
 
                 float effectiveDistance = distance;
@@ -1011,30 +1048,28 @@ namespace PhysicsOptimizer.Modules
                 // (default 0.20m), or its center of mass is submerged below the planet heightmap surface.
                 bool isPhysicallyEmbedded = effectiveDistance < -config.PushApartEmbeddedDepth;
                 bool isEmbedded = isPhysicallyEmbedded || isUnderSurface;
+                float recordedPenetration = effectiveDistance < -0.001f ? -effectiveDistance : 0f;
+                bool isMeshPenetrated = config.PushApartEmbeddedDepth <= 0f
+                    ? recordedPenetration > 0.001f
+                    : recordedPenetration >= config.PushApartEmbeddedDepth;
 
                 float speed = grid.Physics?.LinearVelocity.Length() ?? 0f;
-                float angularSpeed = grid.Physics?.AngularVelocity.Length() ?? 0f;
-
-                // Crash rate check: if the construct is generating continuous blocked deformation crashes,
-                // it is clanging violently in Havok even if angular velocity is clamped by the solver
-                MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
-                long constructId = topGrid.EntityId;
-                int crashesTotal = GetConstructCrashTotal(constructId);
-                int crashesRate = GetConstructCrashRate(constructId, currentFrame);
-                bool isCrashClanging = config.PushApartClangCrashRateThreshold > 0 && crashesRate >= config.PushApartClangCrashRateThreshold;
+                int clangTotal = GetConstructClangTotal(constructId);
+                int clangRate = GetConstructClangRate(constructId, currentFrame);
+                bool isClanging = config.PushApartClangRateThreshold > 0 && clangRate >= config.PushApartClangRateThreshold;
 
                 // Drift gate: normal driving rovers move across the map (drift > max drift), preventing micro-teleports.
-                // However, embedded/submerged grids or grids actively clanging bypass the drift gate
+                // However, submerged grids or grids actively clanging bypass the drift gate
                 // because stationary/jittering clanging rovers or rovers slowly sliding down slopes need rescue.
                 double driftDist = 0.0;
-                bool driftGateOpen = config.PushApartMaxDrift <= 0f || isCrashClanging || isEmbedded;
+                bool driftGateOpen = config.PushApartMaxDrift <= 0f || isClanging || isMacroSubmerged;
                 if (_voxelContactStartPositions.TryGetValue(gridEntityId, out Vector3D startPos))
                 {
                     Vector3D drift = grid.PositionComp.WorldVolume.Center - startPos;
                     driftDist = drift.Length();
                     if (!driftGateOpen)
                     {
-                        driftGateOpen = driftDist <= config.PushApartMaxDrift;
+                        driftGateOpen = driftDist <= effectiveMaxDrift;
                     }
                 }
                 else if (!driftGateOpen)
@@ -1043,35 +1078,24 @@ namespace PhysicsOptimizer.Modules
                     driftGateOpen = true;
                 }
 
-                // Energetic impact or active solver torque vibration (Clang shuddering):
-                // Resting grids have near-zero angular velocity (< 0.05 rad/s) and speed below MinImpactSpeed.
-                // Clang loops against voxels violently twist with angular velocity spikes or continuous crash rate.
-                bool speedImpact = config.PushApartMinImpactSpeed > 0f && speed >= config.PushApartMinImpactSpeed;
-                bool isClangVibrating = angularSpeed >= config.PushApartClangAngularThreshold || isCrashClanging;
+                // Non-wheel chassis body is wedged if experiencing sustained mesh penetration within the drift envelope
+                bool isChassisWedged = !isWheelVoxel && isMeshPenetrated && driftGateOpen;
+                bool qualifyForRescue = isMacroSubmerged || isClanging || isChassisWedged;
 
-                // Non-zero penetration is only evaluated as wedged if it exceeds the configured embedded depth.
-                bool isDeeplyEmbedded = effectiveDistance < -config.PushApartEmbeddedDepth;
-                bool isEnergeticWedged = (isDeeplyEmbedded && speedImpact) || isClangVibrating;
-
-                // Non-wheel chassis body is wedged if physically embedded/submerged, or experiencing sustained energetic penetration/clang vibration
-                bool isChassisWedged = !isWheelVoxel && (isEmbedded || isEnergeticWedged) && driftGateOpen;
-                bool impactGateOpen = isEmbedded || isChassisWedged;
-
-                if (driftGateOpen && impactGateOpen)
+                if (driftGateOpen && qualifyForRescue)
                 {
                     TryPushApart(grid, otherEntity);
                     _consecutiveVoxelContactFrames[gridEntityId] = 0;
                 }
                 else if (config.LogPushApartDiagnostics && ShouldLog(_lastPushApartGateLogFrames, gridEntityId, currentFrame, 60))
                 {
-                    string clangCrashMin = config.PushApartClangCrashRateThreshold > 0 ? string.Format(CultureInfo.InvariantCulture, "{0}/s", config.PushApartClangCrashRateThreshold) : "Off";
+                    string clangMin = config.PushApartClangRateThreshold > 0 ? string.Format(CultureInfo.InvariantCulture, "{0}/s", config.PushApartClangRateThreshold) : "Off";
                     string closedReason = !driftGateOpen ? "Drift Exceeded" : "No Penetration or Clang";
                     Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                        "[PUSH-APART GATE] '{0}' ({1}) | Contacts: {2}/{3} | Gate: CLOSED ({4}) | Drift: {5:F2}m (Max: {6:F2}m) | Crashes: {7}/s (Min: {8}, Total: {9}) | Penetration: {10:F3}m (Max: {11:F2}m) | Speed: {12:F2} m/s (Min: {13:F2} m/s) | Angular: {14:F2} rad/s (Min: {15:F2} rad/s)",
+                        "[PUSH-APART GATE] '{0}' ({1}) | Contacts: {2}/{3} | Gate: CLOSED ({4}) | Drift: {5:F2}m (Max: {6:F2}m, Radius: {7:F1}m) | Clangs: {8}/s (Min: {9}, Total: {10}) | Penetration: {11:F3}m (Threshold: {12:F2}m) | Speed: {13:F2} m/s | Submerged: {14}",
                         grid.DisplayName, gridEntityId, contactCount, config.PushApartThreshold, closedReason,
-                        driftDist, config.PushApartMaxDrift, crashesRate, clangCrashMin, crashesTotal,
-                        effectiveDistance < 0 ? -effectiveDistance : 0f, config.PushApartEmbeddedDepth,
-                        speed, config.PushApartMinImpactSpeed, angularSpeed, config.PushApartClangAngularThreshold));
+                        driftDist, effectiveMaxDrift, constructRadius, clangRate, clangMin, clangTotal,
+                        recordedPenetration, config.PushApartEmbeddedDepth, speed, isMacroSubmerged));
                 }
             }
         }
@@ -1087,13 +1111,42 @@ namespace PhysicsOptimizer.Modules
         }
 
         /// <summary>
+        /// Samples macroscopic terrain normal around the given center on a planet surface using a 5-point cross pattern.
+        /// Performs single quadtree elevation sampling to return both the smooth outward normal and heightmap surface center.
+        /// </summary>
+        private static Vector3D SampleMacroTerrainNormal(MyPlanet planet, Vector3D center, Vector3D up, double sampleRadius, out Vector3D surfaceCenter)
+        {
+            surfaceCenter = planet.GetClosestSurfacePointGlobal(ref center);
+            Vector3D t1 = Vector3D.CalculatePerpendicularVector(up);
+            Vector3D t2 = Vector3D.Normalize(Vector3D.Cross(up, t1));
+
+            Vector3D s1 = center + t1 * sampleRadius;
+            Vector3D s2 = center - t1 * sampleRadius;
+            Vector3D s3 = center + t2 * sampleRadius;
+            Vector3D s4 = center - t2 * sampleRadius;
+
+            Vector3D p1 = planet.GetClosestSurfacePointGlobal(ref s1);
+            Vector3D p2 = planet.GetClosestSurfacePointGlobal(ref s2);
+            Vector3D p3 = planet.GetClosestSurfacePointGlobal(ref s3);
+            Vector3D p4 = planet.GetClosestSurfacePointGlobal(ref s4);
+
+            Vector3D v1 = p1 - p2;
+            Vector3D v2 = p3 - p4;
+            Vector3D normal = Vector3D.Normalize(Vector3D.Cross(v1, v2));
+            return Vector3D.Dot(normal, up) >= 0.0 ? normal : -normal;
+        }
+
+        /// <summary>
         /// Resolves the push-apart escape direction for a grid embedded in or colliding with voxels.
         /// Uses the raw collision impact normal parallel to the surface, aligned away from the voxel face into open air
         /// when above ground, or toward/above the heightmap surface when underground.
+        /// Uses universal 5-point macroscopic terrain sampling on planets pointing perpendicularly outward into open air,
+        /// or recorded impact normal / local up on asteroids.
         /// </summary>
-        private bool TryResolveVoxelEscapeDirection(MyCubeGrid grid, PhysicsOptimizerConfig config, MyVoxelBase contactVoxel, out Vector3D dir)
+        private bool TryResolveVoxelEscapeDirection(MyCubeGrid grid, PhysicsOptimizerConfig config, MyVoxelBase contactVoxel, out Vector3D dir, out Vector3D surfaceCenter)
         {
             dir = Vector3D.Zero;
+            surfaceCenter = Vector3D.Zero;
             Vector3D center = grid.PositionComp.WorldVolume.Center;
             Vector3D up = grid.Physics != null && grid.Physics.Gravity.LengthSquared() > 0.1f
                 ? -Vector3D.Normalize(grid.Physics.Gravity)
@@ -1109,67 +1162,26 @@ namespace PhysicsOptimizer.Modules
                     if (radial.LengthSquared() > 0.001) up = Vector3D.Normalize(radial);
                 }
 
-                // Query planet heightmap at the grid center to check whether the center is under or over the surface
-                Vector3D surfacePoint = planet.GetClosestSurfacePointGlobal(ref center);
-                double centerDist = (center - planetCore).Length();
-                double surfaceDist = (surfacePoint - planetCore).Length();
-                bool isUnderSurface = centerDist < surfaceDist;
+                MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+                double sampleRadius = Math.Max(topGrid.PositionComp.WorldVolume.Radius, 3.0);
+                Vector3D terrainNormal = SampleMacroTerrainNormal(planet, center, up, sampleRadius, out surfaceCenter);
+                dir = terrainNormal;
 
-                Vector3D recordedNormal = Vector3D.Zero;
-                if (!_lastVoxelContactNormals.TryGetValue(grid.EntityId, out recordedNormal) || recordedNormal.LengthSquared() <= 0.001)
-                {
-                    _pushMechanicalGroupBuffer ??= new List<MyCubeGrid>();
-                    _pushMechanicalGroupBuffer.Clear();
-                    try
-                    {
-                        GridUtils.GetMechanicalGroupMembers(grid, _pushMechanicalGroupBuffer);
-                        foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
-                        {
-                            if (member != null && _lastVoxelContactNormals.TryGetValue(member.EntityId, out Vector3D memberNormal) && memberNormal.LengthSquared() > 0.001)
-                            {
-                                recordedNormal = memberNormal;
-                                break;
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        _pushMechanicalGroupBuffer.Clear();
-                    }
-                }
-
-                if (recordedNormal.LengthSquared() > 0.001)
-                {
-                    dir = Vector3D.Normalize(recordedNormal);
-
-                    // Use impact normal as reference and rectify it so it always points OUT of the planet
-                    if (Vector3D.Dot(dir, up) < 0.0)
-                    {
-                        dir = -dir;
-                    }
-
-                    if (config.LogPushApartDiagnostics || config.EnablePushApartDebugDraw)
-                    {
-                        double dotUp = Vector3D.Dot(dir, up);
-                        Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                            "[PUSH-APART DIAG] Grid '{0}' ({1}) | Center: {2:F1} | Surface: {3:F1} | AltDiff: {4:F2}m | UnderSurface: {5} | RawNormal: {6:F3} | Dot(norm,up): {7:F3} | ResolvedDir: {8:F3}",
-                            grid.DisplayName, grid.EntityId, center, surfacePoint, centerDist - surfaceDist, isUnderSurface, recordedNormal, dotUp, dir));
-                    }
-                    return true;
-                }
-
-                // Fallback when no impact normal was recorded: escape radially away from planet (gravity up)
-                dir = up;
                 if (config.LogPushApartDiagnostics || config.EnablePushApartDebugDraw)
                 {
+                    double centerDist = (center - planetCore).Length();
+                    double surfaceDist = (surfaceCenter - planetCore).Length();
+                    bool isMacroSubmerged = centerDist < surfaceDist;
+                    double dotUp = Vector3D.Dot(dir, up);
                     Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                        "[PUSH-APART DIAG] Grid '{0}' ({1}) [FALLBACK-UP] | Center: {2:F1} | Surface: {3:F1} | AltDiff: {4:F2}m | UnderSurface: {5} | ResolvedDir: {6:F3}",
-                        grid.DisplayName, grid.EntityId, center, surfacePoint, centerDist - surfaceDist, isUnderSurface, dir));
+                        "[PUSH-APART DIAG] '{0}' ({1}) [VECTOR] | AltDiff: {2:F2}m | Submerged: {3} | MacroNormal: {4:F3} (SlopeDot: {5:F2}) | ResolvedDir: {6:F3}",
+                        grid.DisplayName, grid.EntityId, centerDist - surfaceDist, isMacroSubmerged, terrainNormal, dotUp, dir));
                 }
                 return true;
             }
 
             // Non-planet voxels (asteroids): use contact normal pointing toward open air or local up
+            surfaceCenter = center;
             Vector3D astNormal = Vector3D.Zero;
             if (!_lastVoxelContactNormals.TryGetValue(grid.EntityId, out astNormal) || astNormal.LengthSquared() <= 0.001)
             {
@@ -1201,6 +1213,11 @@ namespace PhysicsOptimizer.Modules
 
             dir = up;
             return true;
+        }
+
+        private bool TryResolveVoxelEscapeDirection(MyCubeGrid grid, PhysicsOptimizerConfig config, MyVoxelBase contactVoxel, out Vector3D dir)
+        {
+            return TryResolveVoxelEscapeDirection(grid, config, contactVoxel, out dir, out _);
         }
 
         private void TryPushApart(MyCubeGrid grid, MyEntity otherEntity)
@@ -1339,31 +1356,11 @@ namespace PhysicsOptimizer.Modules
                     return;
                 }
 
-                // Check heightmap submersion
+                // Heightmap submersion and macroscopic escape direction
                 Vector3D gridCenter = grid.PositionComp.WorldVolume.Center;
                 MyPlanet planet = contactVoxel as MyPlanet ?? MyGamePruningStructure.GetClosestPlanet(gridCenter);
-                bool isUnderSurface = false;
-                double altDiff = 0.0;
-                if (planet != null)
-                {
-                    Vector3D core = planet.PositionComp.WorldVolume.Center;
-                    Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref gridCenter);
-                    altDiff = (gridCenter - core).Length() - (surfacePt - core).Length();
-                    isUnderSurface = altDiff < 0;
-                }
 
-                _lastVoxelPenetrations.TryGetValue(trackingId, out float contactDist);
-                float penetration = contactDist < 0f ? -contactDist : 0f;
-                float pushSpeed = grid.Physics?.LinearVelocity.Length() ?? 0f;
-                float pushAngular = grid.Physics?.AngularVelocity.Length() ?? 0f;
-
-                int crashesTotal = GetConstructCrashTotal(trackingId);
-                int crashesRate = GetConstructCrashRate(trackingId, currentFrame);
-                bool isCrashClanging = config.PushApartClangCrashRateThreshold > 0 && crashesRate >= config.PushApartClangCrashRateThreshold;
-                bool isClang = pushAngular >= config.PushApartClangAngularThreshold || isCrashClanging;
-                string clangCrashMin = config.PushApartClangCrashRateThreshold > 0 ? string.Format(CultureInfo.InvariantCulture, "{0}/s", config.PushApartClangCrashRateThreshold) : "Off";
-
-                if (!TryResolveVoxelEscapeDirection(grid, config, contactVoxel, out Vector3D resolvedDir))
+                if (!TryResolveVoxelEscapeDirection(grid, config, contactVoxel, out Vector3D resolvedDir, out Vector3D surfaceCenter))
                 {
                     if (hasPriorEscape && esc.Direction.LengthSquared() > 0.001)
                     {
@@ -1379,69 +1376,90 @@ namespace PhysicsOptimizer.Modules
                     }
                 }
 
-                // Distance to collision point calculation:
-                // Measures physical obstacle penetration depth along the escape vector using the grid's oriented bounding box (OBB).
-                // ONLY evaluated when the construct center is confirmed underground (isUnderSurface == true).
-                // On surface constructs (isUnderSurface == false), OBB corners extend into empty air (e.g. turrets, masts,
-                // sloped hulls), creating false phantom penetration depths that launch rovers into sky loops.
-                double collisionDepth = 0.0;
-                if (isUnderSurface &&
-                    _lastImpactPositions.TryGetValue(trackingId, out Vector3D hitPos) &&
-                    Vector3D.DistanceSquared(hitPos, gridCenter) <= Math.Pow(grid.PositionComp.WorldVolume.Radius * 2 + 10.0, 2))
+                bool isMacroSubmerged = false;
+                double altDiff = 0.0;
+                if (planet != null)
                 {
-                    MatrixD worldMatrix = grid.WorldMatrix;
-                    MatrixD invWorld = grid.PositionComp.WorldMatrixNormalizedInv;
-                    Vector3D localDir = Vector3D.TransformNormal(-resolvedDir, invWorld);
-
-                    BoundingBox localBox = grid.PositionComp.LocalAABB;
-                    Vector3D localSupport = new Vector3D(
-                        localDir.X > 0 ? localBox.Max.X : localBox.Min.X,
-                        localDir.Y > 0 ? localBox.Max.Y : localBox.Min.Y,
-                        localDir.Z > 0 ? localBox.Max.Z : localBox.Min.Z);
-
-                    Vector3D deepestPoint = Vector3D.Transform(localSupport, worldMatrix);
-                    collisionDepth = Math.Max(0.0, Vector3D.Dot(hitPos - deepestPoint, resolvedDir));
+                    Vector3D core = planet.PositionComp.WorldVolume.Center;
+                    altDiff = (gridCenter - core).Length() - (surfaceCenter - core).Length();
+                    isMacroSubmerged = altDiff < 0;
                 }
 
-                // Defensive guard:
-                // 1. Confirmed shallow non-zero penetration on the surface without Clang = peaceful resting
-                if (penetration > 0.001f && penetration < config.PushApartEmbeddedDepth && !isUnderSurface && !isClang)
+                _lastVoxelPenetrations.TryGetValue(trackingId, out float contactDist);
+                float recordedPenetration = contactDist < -0.001f ? -contactDist : 0f;
+                bool isMeshPenetrated = config.PushApartEmbeddedDepth <= 0f
+                    ? recordedPenetration > 0.001f
+                    : recordedPenetration >= config.PushApartEmbeddedDepth;
+
+                float pushSpeed = grid.Physics?.LinearVelocity.Length() ?? 0f;
+
+                int clangTotal = GetConstructClangTotal(trackingId);
+                int clangRate = GetConstructClangRate(trackingId, currentFrame);
+                bool isClanging = config.PushApartClangRateThreshold > 0 && clangRate >= config.PushApartClangRateThreshold;
+                string clangMin = config.PushApartClangRateThreshold > 0 ? string.Format(CultureInfo.InvariantCulture, "{0}/s", config.PushApartClangRateThreshold) : "Off";
+
+                // Peaceful resting guard:
+                // If the grid is not submerged underground, not clanging, and has not penetrated the mesh beyond threshold,
+                // it is peacefully resting on the surface.
+                if (!isMeshPenetrated && !isMacroSubmerged && !isClanging)
                 {
                     if (config.LogPushApartDiagnostics && ShouldLog(_lastPushApartGateLogFrames, trackingId, currentFrame, 60))
                     {
+                        string restingReason = recordedPenetration <= 0.001f ? "Zero Penetration" : "Shallow Penetration";
                         Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                            "[PUSH-APART DIAG] '{0}' ({1}) [SKIPPED - RESTING] | Reason: Shallow Penetration | Penetration: {2:F3}m (Max: {3:F2}m) | Crashes: {4}/s (Min: {5}, Total: {6}) | Speed: {7:F2} m/s (Min: {8:F2} m/s) | Angular: {9:F2} rad/s (Min: {10:F2} rad/s)",
-                            grid.DisplayName, trackingId, penetration, config.PushApartEmbeddedDepth, crashesRate, clangCrashMin, crashesTotal, pushSpeed, config.PushApartMinImpactSpeed, pushAngular, config.PushApartClangAngularThreshold));
+                            "[PUSH-APART DIAG] '{0}' ({1}) [SKIPPED - RESTING] | Reason: {2} | Penetration: {3:F3}m (Threshold: {4:F2}m) | Clangs: {5}/s (Min: {6}, Total: {7}) | Speed: {8:F2} m/s",
+                            grid.DisplayName, trackingId, restingReason, recordedPenetration, config.PushApartEmbeddedDepth, clangRate, clangMin, clangTotal, pushSpeed));
                     }
                     return;
                 }
 
-                // 2. Zero penetration on the surface without Clang and without impact speed = peaceful resting
-                if (penetration <= 0.001f && !isUnderSurface && !isClang && pushSpeed < config.PushApartMinImpactSpeed)
+                // Subterranean multi-subgrid OBB clearance:
+                // Evaluates all mechanical group members (chassis, wheels, plows, tools) along -resolvedDir
+                // so the lowest attached subgrid clears the terrain surface.
+                double clearance = 0.0;
+                if (isMacroSubmerged)
                 {
-                    if (config.LogPushApartDiagnostics && ShouldLog(_lastPushApartGateLogFrames, trackingId, currentFrame, 60))
+                    double maxClearance = 0.0;
+                    _pushMechanicalGroupBuffer ??= new List<MyCubeGrid>();
+                    _pushMechanicalGroupBuffer.Clear();
+                    try
                     {
-                        Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                            "[PUSH-APART DIAG] '{0}' ({1}) [SKIPPED - RESTING] | Reason: Zero Penetration & Low Speed | Penetration: {2:F3}m (Max: {3:F2}m) | Crashes: {4}/s (Min: {5}, Total: {6}) | Speed: {7:F2} m/s (Min: {8:F2} m/s) | Angular: {9:F2} rad/s (Min: {10:F2} rad/s)",
-                            grid.DisplayName, trackingId, penetration, config.PushApartEmbeddedDepth, crashesRate, clangCrashMin, crashesTotal, pushSpeed, config.PushApartMinImpactSpeed, pushAngular, config.PushApartClangAngularThreshold));
+                        GridUtils.GetMechanicalGroupMembers(grid, _pushMechanicalGroupBuffer);
+                        foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
+                        {
+                            if (member == null || member.MarkedForClose || member.Closed) continue;
+                            MatrixD worldMatrix = member.WorldMatrix;
+                            MatrixD invWorld = member.PositionComp.WorldMatrixNormalizedInv;
+                            Vector3D localDir = Vector3D.TransformNormal(-resolvedDir, invWorld);
+
+                            BoundingBox localBox = member.PositionComp.LocalAABB;
+                            Vector3D localSupport = new Vector3D(
+                                localDir.X > 0 ? localBox.Max.X : localBox.Min.X,
+                                localDir.Y > 0 ? localBox.Max.Y : localBox.Min.Y,
+                                localDir.Z > 0 ? localBox.Max.Z : localBox.Min.Z);
+
+                            Vector3D deepestPoint = Vector3D.Transform(localSupport, worldMatrix);
+                            double pointClearance = Vector3D.Dot(surfaceCenter - deepestPoint, resolvedDir);
+                            if (pointClearance > maxClearance) maxClearance = pointClearance;
+                        }
                     }
-                    return;
+                    finally
+                    {
+                        _pushMechanicalGroupBuffer.Clear();
+                    }
+                    clearance = maxClearance + config.PushApartDistance;
                 }
 
-                // Effective penetration depth across both Havok contact depth and OBB collision depth
-                double effectiveDepth = Math.Max((double)penetration, collisionDepth);
-                double depthRequired = effectiveDepth > 0.001 ? effectiveDepth + config.PushApartDistance : config.PushApartDistance;
-
+                double maxNudge = config.PushApartMaxNudgeDistance > 0f ? config.PushApartMaxNudgeDistance : double.MaxValue;
                 double distance;
                 if (hasPriorEscape)
                 {
                     esc.Level = Math.Min(esc.Level + 1, 1000);
                     esc.Frame = currentFrame;
-                    // Further attempts: continue nudging with previous settings (escalating from PushApartDistance)
+                    // Further attempts: continue nudging with escalated distance
                     double escalated = config.PushApartDistance * (esc.Level + 1);
-                    distance = isUnderSurface
-                        ? Math.Min(Math.Max(escalated, depthRequired), config.PushApartMaxNudgeDistance)
-                        : Math.Min(escalated, config.PushApartMaxNudgeDistance);
+                    double surfaceDist = maxNudge < double.MaxValue ? Math.Min(escalated, maxNudge) : escalated;
+                    distance = isMacroSubmerged ? Math.Max(clearance, surfaceDist) : surfaceDist;
 
                     // Rolling blend: 50% prior escape vector + 50% latest resolved vector
                     Vector3D blended = esc.Direction + resolvedDir;
@@ -1451,11 +1469,9 @@ namespace PhysicsOptimizer.Modules
                 }
                 else
                 {
-                    // First shot: depth-aware clearance only for underground grids.
-                    // Surface grids use standard PushApartDistance to prevent artificial sky launches.
-                    distance = isUnderSurface
-                        ? Math.Min(Math.Max((double)config.PushApartDistance, depthRequired), config.PushApartMaxNudgeDistance)
-                        : config.PushApartDistance;
+                    // First shot: clearance for subterranean grids bypasses maxNudge cap; surface grids use PushApartDistance capped by maxNudge
+                    double targetDist = isMacroSubmerged ? Math.Max((double)config.PushApartDistance, clearance) : config.PushApartDistance;
+                    distance = isMacroSubmerged ? targetDist : (maxNudge < double.MaxValue ? Math.Min(targetDist, maxNudge) : targetDist);
 
                     separationDir = resolvedDir;
                     _lastEscapes[grid.EntityId] = new EscapeRecord { Direction = separationDir, Frame = currentFrame, Level = 0 };
@@ -1465,7 +1481,7 @@ namespace PhysicsOptimizer.Modules
                 if (config.LogPushApartDiagnostics)
                 {
                     string underSurfaceInfo = planet != null
-                        ? string.Format(CultureInfo.InvariantCulture, " | UnderSurface: {0} (AltDiff: {1:F2}m)", isUnderSurface, altDiff)
+                        ? string.Format(CultureInfo.InvariantCulture, " | UnderSurface: {0} (AltDiff: {1:F2}m)", isMacroSubmerged, altDiff)
                         : "";
                     string lockInfo = hasPriorEscape ? string.Format(CultureInfo.InvariantCulture, "Blended (Lvl {0})", esc.Level) : "Attempt 1";
 
@@ -1474,14 +1490,21 @@ namespace PhysicsOptimizer.Modules
                         ? (grid.PositionComp.WorldVolume.Center - vsPos).Length()
                         : (_contactStartPositions.TryGetValue(trackingId, out Vector3D sPos) ? (grid.PositionComp.WorldVolume.Center - sPos).Length() : 0.0);
 
+                    double constructRadius = grid.PositionComp.WorldVolume.Radius;
+                    double effectiveMaxDrift = Math.Max((double)config.PushApartMaxDrift, constructRadius * 0.10);
+
                     Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                        "[PUSH-APART DIAG] '{0}' ({1}) [PUSHED] | Attempt: {2}/{3}{4} | Crashes: {5}/s (Min: {6}, Total: {7}) | Contacts: {8}/{9} | Drift: {10:F2}m (Max: {11:F2}m) | Penetration: {12:F3}m (Max: {13:F2}m) | HitDepth: {14:F2}m | Speed: {15:F2} m/s (Min: {16:F2} m/s) | Angular: {17:F2} rad/s (Min: {18:F2} rad/s) | Nudge: {19:F2}m (Base: {20:F2}m, Max: {21:F2}m) | Dir: {22:F3} | Locked: {23}",
+                        "[PUSH-APART DIAG] '{0}' ({1}) [PUSHED] | Attempt: {2}/{3}{4} | Clangs: {5}/s (Min: {6}, Total: {7}) | Contacts: {8}/{9} | Drift: {10:F2}m (Max: {11:F2}m, Radius: {12:F1}m) | Penetration: {13:F3}m (Threshold: {14:F2}m) | OBB Clearance: {15:F2}m | Speed: {16:F2} m/s | Nudge: {17:F2}m (Base: {18:F2}m, Max: {19:F2}m) | Dir: {20:F3} | MacroNormal: {21:F3} | Mode: {22}",
                         grid.DisplayName, trackingId, attempts + 1, config.PushApartMaxAttempts, underSurfaceInfo,
-                        crashesRate, clangCrashMin, crashesTotal, contacts, config.PushApartThreshold, drift, config.PushApartMaxDrift,
-                        penetration, config.PushApartEmbeddedDepth, collisionDepth, pushSpeed, config.PushApartMinImpactSpeed,
-                        pushAngular, config.PushApartClangAngularThreshold, distance, config.PushApartDistance, config.PushApartMaxNudgeDistance,
-                        separationDir, lockInfo));
+                        clangRate, clangMin, clangTotal, contacts, config.PushApartThreshold, drift, effectiveMaxDrift, constructRadius,
+                        recordedPenetration, config.PushApartEmbeddedDepth, clearance, pushSpeed,
+                        distance, config.PushApartDistance, config.PushApartMaxNudgeDistance,
+                        separationDir, resolvedDir, lockInfo));
                 }
+
+                // Reset clang rate tracking so that pre-push violent clanging does not echo into subsequent contacts
+                ResetConstructClangTracking(trackingId, currentFrame);
+
                 EnqueuePush(grid, separationDir, true, distance);
                 return;
             }
@@ -1587,7 +1610,36 @@ namespace PhysicsOptimizer.Modules
                 RunBurialProbe(currentFrame);
             }
 
+            ProcessPendingVoxelArbDebugGps();
             ProcessPushQueue();
+        }
+
+        private void ProcessPendingVoxelArbDebugGps()
+        {
+            if (_pendingVoxelArbDebugGps.IsEmpty) return;
+
+            if (_plugin?.Config?.EnableVoxelNormalArbitratorDebugDraw != true)
+            {
+                _pendingVoxelArbDebugGps.Clear();
+                return;
+            }
+
+            foreach (var kvp in _pendingVoxelArbDebugGps)
+            {
+                if (_pendingVoxelArbDebugGps.TryRemove(kvp.Key, out VoxelArbDebugMarker marker))
+                {
+                    AddCappedDebugGps(
+                        $"VA {marker.GridName} OLD",
+                        "voxel-arb debug: pre-invert force dir",
+                        marker.OldForcePos,
+                        Color.Orange);
+                    AddCappedDebugGps(
+                        $"VA {marker.GridName} NEW",
+                        "voxel-arb debug: post-invert force dir",
+                        marker.NewForcePos,
+                        Color.Cyan);
+                }
+            }
         }
 
         private void ProcessPushQueue()
@@ -1723,7 +1775,7 @@ namespace PhysicsOptimizer.Modules
         }
 
         // --- Capped Debug GPS Draws ---
-        // Shared by the voxel-arbitrator (physics thread) and push-apart (game thread) debug draws.
+        // Dispatched strictly on the game simulation thread to prevent collection concurrency issues.
 
         private const int MaxLiveDebugGpsMarkers = 10;
         private const int DebugGpsTtlSeconds = 10;
@@ -1741,24 +1793,32 @@ namespace PhysicsOptimizer.Modules
         /// Capped debug GPS add visible to all players: at most MaxLiveDebugGpsMarkers live markers
         /// globally (10s TTL), and the previous same-name marker is deleted before re-adding so a
         /// repeatedly-inverting grid holds one marker instead of stacking duplicates.
+        /// Must be called from the main game simulation thread.
         /// </summary>
         private static void AddCappedDebugGps(string name, string description, Vector3D pos, Color color)
         {
-            DateTime now = DateTime.UtcNow;
-            lock (_debugGpsLock)
+            try
             {
-                for (int i = _liveDebugGps.Count - 1; i >= 0; i--)
+                DateTime now = DateTime.UtcNow;
+                lock (_debugGpsLock)
                 {
-                    if (_liveDebugGps[i].ExpiresUtc <= now || _liveDebugGps[i].Name == name)
-                        _liveDebugGps.RemoveAt(i);
+                    for (int i = _liveDebugGps.Count - 1; i >= 0; i--)
+                    {
+                        if (_liveDebugGps[i].ExpiresUtc <= now || _liveDebugGps[i].Name == name)
+                            _liveDebugGps.RemoveAt(i);
+                    }
+
+                    if (_liveDebugGps.Count >= MaxLiveDebugGpsMarkers) return;
+                    _liveDebugGps.Add(new DebugGpsMarker { Name = name, ExpiresUtc = now.AddSeconds(DebugGpsTtlSeconds) });
                 }
 
-                if (_liveDebugGps.Count >= MaxLiveDebugGpsMarkers) return;
-                _liveDebugGps.Add(new DebugGpsMarker { Name = name, ExpiresUtc = now.AddSeconds(DebugGpsTtlSeconds) });
+                RemoveDebugGpsForAll(name);
+                MyVisualScriptLogicProvider.AddGPSForAll(name, description, pos, color, DebugGpsTtlSeconds);
             }
-
-            RemoveDebugGpsForAll(name);
-            MyVisualScriptLogicProvider.AddGPSForAll(name, description, pos, color, DebugGpsTtlSeconds);
+            catch (Exception ex)
+            {
+                Log.Warn(LogSource, $"[Debug GPS] Failed adding GPS marker '{name}': {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -1775,16 +1835,43 @@ namespace PhysicsOptimizer.Modules
 
         private static void RemoveDebugGpsForAll(string name)
         {
-            ICollection<MyPlayer> players = Sandbox.Game.World.MySession.Static?.Players?.GetOnlinePlayers();
-            if (players == null) return;
-
-            foreach (MyPlayer player in players)
+            try
             {
-                IMyGps gps = Sandbox.Game.World.MySession.Static.Gpss.GetGpsByName(player.Identity.IdentityId, name);
-                if (gps != null)
+                ICollection<MyPlayer> players = Sandbox.Game.World.MySession.Static?.Players?.GetOnlinePlayers();
+                if (players == null) return;
+
+                foreach (MyPlayer player in players)
                 {
-                    Sandbox.Game.World.MySession.Static.Gpss.SendDeleteGpsRequest(player.Identity.IdentityId, gps.Hash);
+                    if (player?.Identity == null) continue;
+                    IMyGps gps = Sandbox.Game.World.MySession.Static.Gpss?.GetGpsByName(player.Identity.IdentityId, name);
+                    if (gps != null)
+                    {
+                        Sandbox.Game.World.MySession.Static.Gpss.SendDeleteGpsRequest(player.Identity.IdentityId, gps.Hash);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(LogSource, $"[Debug GPS] Failed removing previous GPS marker '{name}': {ex.Message}");
+            }
+        }
+
+        private static void ClearAllDebugGps()
+        {
+            try
+            {
+                lock (_debugGpsLock)
+                {
+                    for (int i = 0; i < _liveDebugGps.Count; i++)
+                    {
+                        RemoveDebugGpsForAll(_liveDebugGps[i].Name);
+                    }
+                    _liveDebugGps.Clear();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(LogSource, $"[Debug GPS] Error clearing all debug GPS markers: {ex.Message}");
             }
         }
 
@@ -1984,21 +2071,21 @@ namespace PhysicsOptimizer.Modules
                 TrimDictionary(_lastSubgridLogFrames, currentFrame, 600);
                 TrimDictionary(_lastExtremeSpeedLogFrames, currentFrame, 600);
 
-                // Decay or evict construct crash records
-                foreach (var kvp in _constructCrashRecords)
+                // Decay or evict construct clang records
+                foreach (var kvp in _constructClangRecords)
                 {
-                    ConstructCrashRecord rec = kvp.Value;
+                    ConstructClangRecord rec = kvp.Value;
                     if (rec == null) continue;
-                    if (currentFrame > 0 && rec.LastCrashFrame > 0)
+                    if (currentFrame > 0 && rec.LastClangFrame > 0)
                     {
-                        if (currentFrame > rec.LastCrashFrame + 600)
+                        if (currentFrame > rec.LastClangFrame + 600)
                         {
-                            _constructCrashRecords.TryRemove(kvp.Key, out _);
+                            _constructClangRecords.TryRemove(kvp.Key, out _);
                         }
-                        else if (currentFrame > rec.LastCrashFrame + 120)
+                        else if (currentFrame > rec.LastClangFrame + 60)
                         {
-                            rec.LastSecondRate = 0;
-                            rec.WindowCrashes = 0;
+                            rec.CurrentSecondClangs = 0;
+                            rec.PreviousSecondClangs = 0;
                         }
                     }
                 }
@@ -2127,183 +2214,185 @@ namespace PhysicsOptimizer.Modules
 
         public static bool Prefix_RigidBody_ContactPointCallbackImpl(MyGridPhysics __instance, ref HkContactPointEvent value)
         {
-            if (__instance.Entity is MyCubeGrid gridLocal)
+            try
             {
-                UpdateCollisionContext(gridLocal.EntityId, __instance.ClusterToWorld(value.ContactPoint.Position));
-            }
+                if (__instance.Entity is MyCubeGrid gridLocal)
+                {
+                    UpdateCollisionContext(gridLocal.EntityId, __instance.ClusterToWorld(value.ContactPoint.Position));
+                }
 
-            PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
-            bool arbitratorEnabled = config != null && config.EnableVoxelNormalArbitrator;
-            if (config == null)
-                return true;
+                PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
+                bool arbitratorEnabled = config != null && config.EnableVoxelNormalArbitrator;
+                if (config == null)
+                    return true;
 
-            if (__instance.Entity is not MyCubeGrid grid || grid.MarkedForClose || grid.Closed)
-                return true;
+                if (__instance.Entity is not MyCubeGrid grid || grid.MarkedForClose || grid.Closed)
+                    return true;
 
-            MyPhysicsBody rb = value.GetPhysicsBody(0);
-            MyPhysicsBody otherRb = value.GetPhysicsBody(1);
-            if (rb == null || otherRb == null) return true;
+                MyPhysicsBody rb = value.GetPhysicsBody(0);
+                MyPhysicsBody otherRb = value.GetPhysicsBody(1);
+                if (rb == null || otherRb == null) return true;
 
-            bool isVoxel = false;
-            IMyEntity otherEnt = otherRb.Entity;
-            if (otherEnt is MyVoxelBase)
-            {
-                isVoxel = true;
-            }
-            else
-            {
-                IMyEntity selfEnt = rb.Entity;
-                if (selfEnt is MyVoxelBase)
+                bool isVoxel = false;
+                IMyEntity otherEnt = otherRb.Entity;
+                if (otherEnt is MyVoxelBase)
                 {
                     isVoxel = true;
                 }
-            }
-
-            if (isVoxel)
-            {
-                // Wheel subgrids: stamp both wheel and base grid so burial probe / sleep guards can
-                // still rescue wheel-only wedges, while anti-clang/push-apart skip driving false positives.
-                ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
-                if (currentFrame > 0)
+                else
                 {
-                    _lastVoxelContactFrames[grid.EntityId] = currentFrame;
-                    if (IsWheelSubgrid(grid, out long baseGridId) && baseGridId > 0L)
+                    IMyEntity selfEnt = rb.Entity;
+                    if (selfEnt is MyVoxelBase)
                     {
-                        _lastVoxelContactFrames[baseGridId] = currentFrame;
+                        isVoxel = true;
                     }
                 }
 
-                // Havok contact normal points from Body A (index 0) to Body B (index 1).
-                // Separating force on Body A is along -Normal; separating force on Body B is along +Normal.
-                bool gridIsBodyA = rb.Entity == grid;
-                Vector3 gridForceDir = gridIsBodyA ? -value.ContactPoint.Normal : value.ContactPoint.Normal;
-                Vector3 rawForceDir = gridForceDir;
-
-                // Push-apart escape direction source: record the true force direction and impact position
-                // Suspension wheel subgrids are excluded so tire ground-reaction forces never overwrite chassis normals
-                if (!IsWheelSubgrid(grid, out _))
+                if (isVoxel)
                 {
-                    Vector3D contactWorldPos = __instance.ClusterToWorld(value.ContactPoint.Position);
-                    _lastVoxelContactNormals[grid.EntityId] = gridForceDir;
-                    _lastImpactPositions[grid.EntityId] = contactWorldPos;
-                    _lastVoxelPenetrations[grid.EntityId] = value.ContactPoint.Distance;
-                }
-
-                if (arbitratorEnabled)
-                {
-                    Vector3 gravity = __instance.Gravity;
-                    if (gravity.LengthSquared() > 0.01f)
+                    // Wheel subgrids: stamp both wheel and base grid so burial probe / sleep guards can
+                    // still rescue wheel-only wedges, while anti-clang/push-apart skip driving false positives.
+                    ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+                    if (currentFrame > 0)
                     {
-                        Vector3 upVector = -Vector3.Normalize((Vector3)gravity);
-                        float upDot = Vector3.Dot(gridForceDir, upVector);
-
-                        if (upDot < 0f)
+                        _lastVoxelContactFrames[grid.EntityId] = currentFrame;
+                        if (IsWheelSubgrid(grid, out long baseGridId) && baseGridId > 0L)
                         {
-                            // Contact positions arrive in Havok cluster space (origin-offset world); vanilla converts
-                            // every consumer via ClusterToWorld - raw values are shifted by the cluster world anchor.
-                            Vector3D contactPos = __instance.ClusterToWorld(value.ContactPoint.Position);
+                            _lastVoxelContactFrames[baseGridId] = currentFrame;
+                        }
+                    }
 
-                            // Same two-tier rule as push-apart: in pristine voxel regions a gravity-downward normal can
-                            // only be a Keen compression artifact pointing into the planet core, so invert it directly.
-                            // Only carved regions (real cave ceilings are possible) pay for the confirmation raycast.
-                            MyVoxelBase voxelEnt = otherEnt as MyVoxelBase ?? rb.Entity as MyVoxelBase;
-                            bool hitAir = voxelEnt == null || !IsVoxelRegionModified(voxelEnt, contactPos);
-                            if (!hitAir)
+                    // Havok contact normal points from Body A (index 0) to Body B (index 1).
+                    // Separating force on Body A is along -Normal; separating force on Body B is along +Normal.
+                    bool gridIsBodyA = rb.Entity == grid;
+                    Vector3 gridForceDir = gridIsBodyA ? -value.ContactPoint.Normal : value.ContactPoint.Normal;
+                    Vector3 rawForceDir = gridForceDir;
+
+                    // Push-apart escape direction source: record the true force direction and impact position
+                    // Suspension wheel subgrids are excluded so tire ground-reaction forces never overwrite chassis normals
+                    if (!IsWheelSubgrid(grid, out _))
+                    {
+                        Vector3D contactWorldPos = __instance.ClusterToWorld(value.ContactPoint.Position);
+                        _lastVoxelContactNormals[grid.EntityId] = gridForceDir;
+                        _lastImpactPositions[grid.EntityId] = contactWorldPos;
+                        _lastVoxelPenetrations[grid.EntityId] = value.ContactPoint.Distance;
+                    }
+
+                    if (arbitratorEnabled)
+                    {
+                        Vector3 gravity = __instance.Gravity;
+                        if (gravity.LengthSquared() > 0.01f)
+                        {
+                            Vector3 upVector = -Vector3.Normalize((Vector3)gravity);
+                            float upDot = Vector3.Dot(gridForceDir, upVector);
+
+                            if (upDot < 0f)
                             {
-                                hitAir = true; // Assume air above unless raycast hits solid voxel
-                                Vector3D rayStart = contactPos;
-                                Vector3D rayEnd = rayStart + (Vector3D)upVector * 1.5f;
+                                // Contact positions arrive in Havok cluster space (origin-offset world); vanilla converts
+                                // every consumer via ClusterToWorld - raw values are shifted by the cluster world anchor.
+                                Vector3D contactPos = __instance.ClusterToWorld(value.ContactPoint.Position);
 
-                                _voxelHitsCache ??= [];
-                                _voxelHitsCache.Clear();
-                                MyPhysics.CastRay(rayStart, rayEnd, _voxelHitsCache, MyPhysics.CollisionLayers.VoxelCollisionLayer);
-                                for (int i = 0; i < _voxelHitsCache.Count; i++)
+                                // Same two-tier rule as push-apart: in pristine voxel regions a gravity-downward normal can
+                                // only be a Keen compression artifact pointing into the planet core, so invert it directly.
+                                // Only carved regions (real cave ceilings are possible) pay for the confirmation raycast.
+                                MyVoxelBase voxelEnt = otherEnt as MyVoxelBase ?? rb.Entity as MyVoxelBase;
+                                bool hitAir = voxelEnt == null || !IsVoxelRegionModified(voxelEnt, contactPos);
+                                if (!hitAir)
                                 {
-                                    IMyEntity hitEnt = _voxelHitsCache[i].HkHitInfo.GetHitEntity();
-                                    if (hitEnt is MyVoxelBase)
+                                    hitAir = true; // Assume air above unless raycast hits solid voxel
+                                    Vector3D rayStart = contactPos;
+                                    Vector3D rayEnd = rayStart + (Vector3D)upVector * 1.5f;
+
+                                    _voxelHitsCache ??= [];
+                                    _voxelHitsCache.Clear();
+                                    MyPhysics.CastRay(rayStart, rayEnd, _voxelHitsCache, MyPhysics.CollisionLayers.VoxelCollisionLayer);
+                                    for (int i = 0; i < _voxelHitsCache.Count; i++)
                                     {
-                                        hitAir = false;
-                                        break;
+                                        IMyEntity hitEnt = _voxelHitsCache[i].HkHitInfo.GetHitEntity();
+                                        if (hitEnt is MyVoxelBase)
+                                        {
+                                            hitAir = false;
+                                            break;
+                                        }
                                     }
+                                    _voxelHitsCache.Clear();
                                 }
-                                _voxelHitsCache.Clear();
-                            }
 
-                            if (hitAir)
-                            {
-                                Vector3 oldGridForceDir = gridForceDir;
-                                Vector3 newGridForceDir = -gridForceDir;
-
-                                // HkContactPoint wraps native m_handle - calling Flip() executes native HkContactPoint_Flip
-                                // directly on Havok's internal contact data used by the solver.
-                                var cp = value.ContactPoint;
-                                cp.Flip();
-
-                                gridForceDir = newGridForceDir;
-
-                                // Zero friction on inverted/phased contacts to stop Havok friction solver pinning the grid into voxel banks
-                                var props = value.ContactProperties;
-                                props.Friction = 0f;
-
-                                // Modifying velocity in Havok's active solver buffer allows the grid to actively emerge
-                                int bodyIndex = gridIsBodyA ? 0 : 1;
-                                value.AccessVelocities(bodyIndex);
-                                if (__instance.RigidBody != null)
+                                if (hitAir)
                                 {
-                                    float velUp = Vector3.Dot(__instance.RigidBody.LinearVelocity, upVector);
-                                    if (velUp < 0.5f)
+                                    Vector3 oldGridForceDir = gridForceDir;
+                                    Vector3 newGridForceDir = -gridForceDir;
+
+                                    // HkContactPoint wraps native m_handle - calling Flip() executes native HkContactPoint_Flip
+                                    // directly on Havok's internal contact data used by the solver.
+                                    var cp = value.ContactPoint;
+                                    cp.Flip();
+
+                                    gridForceDir = newGridForceDir;
+
+                                    // Zero friction on inverted/phased contacts to stop Havok friction solver pinning the grid into voxel banks
+                                    var props = value.ContactProperties;
+                                    props.Friction = 0f;
+
+                                    // Modifying velocity in Havok's active solver buffer allows the grid to actively emerge
+                                    int bodyIndex = gridIsBodyA ? 0 : 1;
+                                    value.AccessVelocities(bodyIndex);
+                                    if (__instance.RigidBody != null)
                                     {
-                                        __instance.RigidBody.LinearVelocity += upVector * (0.5f - velUp);
+                                        float velUp = Vector3.Dot(__instance.RigidBody.LinearVelocity, upVector);
+                                        if (velUp < 0.5f)
+                                        {
+                                            __instance.RigidBody.LinearVelocity += upVector * (0.5f - velUp);
+                                        }
                                     }
-                                }
-                                value.UpdateVelocities(bodyIndex);
+                                    value.UpdateVelocities(bodyIndex);
 
-                                // If this is a wheel subgrid, apply upward velocity to the base chassis too so the suspension constraint doesn't pin the wheel
-                                if (IsWheelSubgrid(grid, out long baseGridId) && baseGridId > 0L && MyEntities.TryGetEntityById(baseGridId, out MyEntity baseEnt) && baseEnt is MyCubeGrid baseGrid && baseGrid.Physics != null)
-                                {
-                                    float baseVelUp = Vector3.Dot((Vector3)baseGrid.Physics.LinearVelocity, upVector);
-                                    if (baseVelUp < 0.5f)
+                                    // If this is a wheel subgrid, apply upward velocity to the base chassis too so the suspension constraint doesn't pin the wheel
+                                    if (IsWheelSubgrid(grid, out long baseGridId) && baseGridId > 0L && MyEntities.TryGetEntityById(baseGridId, out MyEntity baseEnt) && baseEnt is MyCubeGrid baseGrid && baseGrid.Physics != null)
                                     {
-                                        baseGrid.Physics.LinearVelocity += upVector * (0.5f - baseVelUp);
+                                        float baseVelUp = Vector3.Dot((Vector3)baseGrid.Physics.LinearVelocity, upVector);
+                                        if (baseVelUp < 0.5f)
+                                        {
+                                            baseGrid.Physics.LinearVelocity += upVector * (0.5f - baseVelUp);
+                                        }
                                     }
-                                }
 
-                                PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementVoxelNormalsInverted();
+                                    PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementVoxelNormalsInverted();
 
-                                if (config.EnableDebugLogging && config.LogVoxelNormals)
-                                {
-                                    Log.Info(LogSource, $"[Voxel Arbitrator] Inverted downward normal for grid '{grid.DisplayName}' at {contactPos}.");
-                                }
+                                    if (config.EnableDebugLogging && config.LogVoxelNormals)
+                                    {
+                                        Log.Info(LogSource, $"[Voxel Arbitrator] Inverted downward normal for grid '{grid.DisplayName}' at {contactPos}.");
+                                    }
 
-                                if (config.EnableVoxelNormalArbitratorDebugDraw && grid.PositionComp != null)
-                                {
-                                    Vector3D startPos = contactPos;
-                                    Vector3D endPos = startPos + (Vector3D)newGridForceDir * 5.0;
-                                    AddCappedDebugGps(
-                                        $"VA {grid.DisplayName} OLD",
-                                        $"voxel-arb debug: pre-invert force dir",
-                                        startPos + (Vector3D)oldGridForceDir * 0.5,
-                                        Color.Orange);
-                                    AddCappedDebugGps(
-                                        $"VA {grid.DisplayName} NEW",
-                                        $"voxel-arb debug: post-invert force dir",
-                                        endPos,
-                                        Color.Cyan);
+                                    if (config.EnableVoxelNormalArbitratorDebugDraw && grid.PositionComp != null)
+                                    {
+                                        Vector3D startPos = contactPos;
+                                        _pendingVoxelArbDebugGps[grid.EntityId] = new VoxelArbDebugMarker
+                                        {
+                                            GridName = grid.DisplayName,
+                                            OldForcePos = startPos + (Vector3D)oldGridForceDir * 0.5,
+                                            NewForcePos = startPos + (Vector3D)newGridForceDir * 5.0
+                                        };
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                if (currentFrame > 0 && config.EnablePushApart && !grid.IsStatic)
-                {
-                    MyVoxelBase voxel = (otherRb.Entity as MyVoxelBase) ?? (rb.Entity as MyVoxelBase);
-                    if (voxel != null)
+                    if (currentFrame > 0 && config.EnablePushApart && !grid.IsStatic)
                     {
-                        // Pass raw un-inverted contact normal so arbitrator's upward inversion does not mask embedding
-                        PhysicsOptimizerPlugin.Instance?.GridDefender?.RecordVoxelContactFrame(grid, voxel, config, value.ContactPoint.Distance, rawForceDir);
+                        MyVoxelBase voxel = (otherRb.Entity as MyVoxelBase) ?? (rb.Entity as MyVoxelBase);
+                        if (voxel != null)
+                        {
+                            // Pass raw un-inverted contact normal so arbitrator's upward inversion does not mask embedding
+                            PhysicsOptimizerPlugin.Instance?.GridDefender?.RecordVoxelContactFrame(grid, voxel, config, value.ContactPoint.Distance, rawForceDir);
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, LogSource, "Unexpected error in Prefix_RigidBody_ContactPointCallbackImpl");
             }
 
             return true;

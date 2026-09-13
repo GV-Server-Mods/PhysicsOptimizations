@@ -183,10 +183,10 @@ namespace PhysicsOptimizer
             long inv = DefenseStats?.VoxelNormalsInverted ?? 0;
 
             string offendersStr = "";
-            var offenders = Modules.GridDefender.GetActiveCrashOffenders(minRate: 10, maxResults: 2);
+            var offenders = Modules.GridDefender.GetActiveClangers(minRate: 10, maxResults: 2);
             if (offenders != null && offenders.Count > 0)
             {
-                offendersStr = " | Offenders: " + string.Join(", ", System.Linq.Enumerable.Select(offenders, o => $"'{o.Name}' ({o.Rate}/s)"));
+                offendersStr = " | Clangers: " + string.Join(", ", System.Linq.Enumerable.Select(offenders, o => $"'{o.Name}' ({o.Rate} clangs/s)"));
             }
 
             Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,

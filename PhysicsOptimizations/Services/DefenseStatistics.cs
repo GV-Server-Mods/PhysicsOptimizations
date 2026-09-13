@@ -137,7 +137,7 @@ namespace PhysicsOptimizer.Services
         {
             get
             {
-                var offenders = Modules.GridDefender.GetActiveCrashOffenders(minRate: 5, maxResults: 3);
+                var offenders = Modules.GridDefender.GetActiveClangers(minRate: 5, maxResults: 3);
                 if (offenders == null || offenders.Count == 0) return "None (Clean)";
                 return string.Join(", ", offenders.Select(o => $"'{o.Name}' ({o.Rate}/s)"));
             }
