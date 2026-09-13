@@ -1071,7 +1071,7 @@
                                                                                                  Width="55"
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  VerticalAlignment="Center"
-                                                                                                 ToolTip="Pushes normally require contacts at or above this impact speed in m/s (0 = no gate) to avoid nudging resting or docked grids. Grids physically embedded in voxels (penetrating terrain or downward normal) automatically bypass this gate. Default: 1.0 m/s."/>
+                                                                                                 ToolTip="Pushes normally require contacts at or above this impact speed in m/s (0 = no gate) to avoid nudging resting or docked grids. Grids physically embedded beyond the depth threshold or submerged underground automatically qualify. Default: 1.0 m/s."/>
                                                                                         <TextBlock Text="Max drift while stuck:"
                                                                                                    Foreground="#CCCCCC"
                                                                                                    VerticalAlignment="Center"
@@ -1081,6 +1081,23 @@
                                                                                                  HorizontalContentAlignment="Center"
                                                                                                  VerticalAlignment="Center"
                                                                                                  ToolTip="A grid that moved more than this many meters (0 = no gate) during the contact window is driving, not stuck, and never gets pushed. Wheel-terrain contacts fire every frame of normal driving, so without this gate the plugin micro-teleports moving rovers. Wedged grids drift near zero. Default: 1.5m."/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Embedded depth threshold:"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PushApartEmbeddedDepth, StringFormat={}{0:F2}}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 ToolTip="Physical penetration depth into voxel mesh (meters) required to treat the grid as embedded/wedged. A higher value (e.g. 0.20m) prevents heavy resting vehicles from falsely triggering pushes while catching wedged chassis. Default: 0.20m."/>
+                                                                                        <TextBlock Text="Meters"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="5,0,0,0"/>
                                                                                 </WrapPanel>
 
                                                                                 <CheckBox Content="Enable Push-Apart Debug GPS Markers"

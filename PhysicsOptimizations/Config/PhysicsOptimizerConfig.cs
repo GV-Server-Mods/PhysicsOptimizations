@@ -108,6 +108,7 @@ namespace PhysicsOptimizer.Config
         private bool _enableBurialProbe = true;
         private bool _enablePushApartDebugDraw = false;
         private float _pushApartMinImpactSpeed = 1.0f;
+        private float _pushApartEmbeddedDepth = 0.20f;
         private float _pushApartMaxDrift = 1.5f;
         private float _pushApartMaxNudgeDistance = 2.0f;
         private float _burialProbeRadius = 2.0f;
@@ -314,6 +315,11 @@ namespace PhysicsOptimizer.Config
         {
             get => _pushApartMinImpactSpeed;
             set => SetValue(ref _pushApartMinImpactSpeed, Math.Max(0f, Math.Min(50f, value)));
+        }
+        public float PushApartEmbeddedDepth
+        {
+            get => _pushApartEmbeddedDepth;
+            set => SetValue(ref _pushApartEmbeddedDepth, Math.Max(0.01f, Math.Min(5.0f, value)));
         }
         public float PushApartMaxDrift
         {

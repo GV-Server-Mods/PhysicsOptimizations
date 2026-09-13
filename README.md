@@ -410,6 +410,7 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `ExcludeWheelSubgridsFromPushApart` | `bool` | `true` | When enabled, wheel-terrain contacts do not count toward Active Push-Apart, preventing rovers from being micro-teleported while driving. |
 | `ExcludeWheelSubgridsFromSubgridStabilizer` | `bool` | `true` | When enabled, suspension wheel joints are not stabilized, leaving the suspension solver alone during driving. |
 | `PushApartMinImpactSpeed` | `float` | `1.0` | Pushes only trigger from contacts at or above this impact speed in m/s (0 = no gate); keeps resting/docked grids from being nudged. |
+| `PushApartEmbeddedDepth` | `float` | `0.20` | Physical penetration depth into voxel mesh (meters) required to treat grid as embedded/wedged; prevents heavy resting vehicles from falsely triggering pushes. |
 | `EnableBurialProbe` | `bool` | `true` | Experimental cold-path probe that rescues fully buried grids with no contact callbacks. |
 | `BurialProbeRadius` | `float` | `2.0` | Extra clearance meters (1-10) beyond the grid's bounding sphere before the probe considers it buried. |
 | `AllowMissileDamage` | `bool` | `true` | Allows qualified kinetic torpedoes to inflict deformation damage. |

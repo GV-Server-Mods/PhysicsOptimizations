@@ -104,6 +104,9 @@ namespace PhysicsOptimizer.Modules
         // Push-apart escape direction source: raw voxel contact normal cached per grid, independent of the arbitrator toggle
         private static readonly ConcurrentDictionary<long, Vector3D> _lastVoxelContactNormals = new();
 
+        // Push-apart context tracking: latest Havok contact penetration depth per grid (distance < 0 means penetrating)
+        private static readonly ConcurrentDictionary<long, float> _lastVoxelPenetrations = new();
+
         // Per-voxel-map coarse modification map: Key: voxel EntityId, Value: set of modified 32m region buckets.
         // Tracked from MyVoxelBase.RangeChanged (fires per carve operation), so a drilled planet only records
         // the carved regions - pristine terrain everywhere else keeps the raycast-free push direction fast path.
@@ -131,6 +134,7 @@ namespace PhysicsOptimizer.Modules
         {
             _lastImpactPositions.TryRemove(gridId, out _);
             _lastVoxelContactNormals.TryRemove(gridId, out _);
+            _lastVoxelPenetrations.TryRemove(gridId, out _);
         }
 
         public void Init(PhysicsOptimizerPlugin plugin)
@@ -277,6 +281,7 @@ namespace PhysicsOptimizer.Modules
             _lastExtremeSpeedLogFrames.Clear();
             _lastImpactPositions.Clear();
             _lastVoxelContactNormals.Clear();
+            _lastVoxelPenetrations.Clear();
             _pushApartAttempts.Clear();
             _lastPushApartGiveUpLogFrames.Clear();
             _wheelBaseGridIds.Clear();
@@ -599,6 +604,7 @@ namespace PhysicsOptimizer.Modules
             _lastVoxelContactFrames.TryRemove(id, out _);
             _burialProbeStates.TryRemove(id, out _);
             _lastVoxelContactNormals.TryRemove(id, out _);
+            _lastVoxelPenetrations.TryRemove(id, out _);
             _pushApartAttempts.TryRemove(id, out _);
             _lastPushApartGiveUpLogFrames.TryRemove(id, out _);
             _wheelBaseGridIds.TryRemove(id, out _);
@@ -774,9 +780,13 @@ namespace PhysicsOptimizer.Modules
             // Phase 2: Active Push-Apart (Excludes mechanically/logically connected subgrids)
             bool areConnectedSubgrids = isConnectedSubgrid;
 
-            // Impact-speed gate: resting grids (contacts at ~0 m/s) never arm pushes; only energetic
-            // contacts from driving, docking bumps, or clang oscillation qualify
-            bool impactGateOpen = config.PushApartMinImpactSpeed <= 0f || impactSpeed >= config.PushApartMinImpactSpeed;
+            // Impact-speed & Clang vibration gate: resting grids (contacts at ~0 m/s and 0 rad/s)
+            // never arm pushes; only energetic contacts from driving, docking bumps, hard hits,
+            // or active rotational Clang shuddering (>= 0.5 rad/s) qualify
+            float angularSpeed = grid.Physics?.AngularVelocity.Length() ?? 0f;
+            bool isClangVibrating = angularSpeed >= 0.5f;
+            bool speedGateOpen = config.PushApartMinImpactSpeed <= 0f || impactSpeed >= config.PushApartMinImpactSpeed;
+            bool impactGateOpen = speedGateOpen || isClangVibrating;
 
             // Drift gate: a grid covering ground during the contact window is driving, not stuck -
             // wheel-terrain contacts fire every frame of normal driving, so contact counts alone
@@ -836,6 +846,10 @@ namespace PhysicsOptimizer.Modules
             }
 
             bool isWheelVoxel = otherEntity is MyVoxelBase && IsWheelSubgrid(grid, out _);
+            if (!isWheelVoxel)
+            {
+                _lastVoxelPenetrations[gridEntityId] = distance;
+            }
             bool pushApartAllowed = !isWheelVoxel || !config.ExcludeWheelSubgridsFromPushApart;
 
             if (pushApartAllowed && config.EnablePushApart && contactCount >= config.PushApartThreshold)
@@ -849,15 +863,35 @@ namespace PhysicsOptimizer.Modules
 
                 if (driftGateOpen)
                 {
-                    Vector3 upVector = grid.Physics != null && grid.Physics.Gravity.LengthSquared() > 0.01f
-                        ? -Vector3.Normalize((Vector3)grid.Physics.Gravity)
-                        : Vector3.Up;
+                    Vector3D gridCenter = grid.PositionComp.WorldVolume.Center;
+                    MyPlanet planet = otherEntity as MyPlanet ?? MyGamePruningStructure.GetClosestPlanet(gridCenter);
+                    bool isUnderSurface = false;
+                    if (planet != null)
+                    {
+                        Vector3D core = planet.PositionComp.WorldVolume.Center;
+                        Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref gridCenter);
+                        isUnderSurface = (gridCenter - core).LengthSquared() < (surfacePt - core).LengthSquared();
+                    }
 
-                    bool isEmbedded = distance < -0.01f || Vector3.Dot(gridForceDir, upVector) < 0f;
+                    // A grid is physically embedded if Havok reports contact penetration exceeding the configured threshold
+                    // (default 0.20m), or its center of mass is submerged below the planet heightmap surface.
+                    // Embedded or submerged grids bypass speed/vibration gates entirely and push immediately.
+                    bool isPhysicallyEmbedded = distance < -config.PushApartEmbeddedDepth;
+                    bool isEmbedded = isPhysicallyEmbedded || isUnderSurface;
+
                     float speed = grid.Physics?.LinearVelocity.Length() ?? 0f;
-                    // Non-wheel chassis body in continuous terrain contact with near-zero drift is wedged/stuck
-                    bool isChassisWedged = !isWheelVoxel && driftGateOpen && contactCount >= config.PushApartThreshold;
-                    bool impactGateOpen = isEmbedded || isChassisWedged || config.PushApartMinImpactSpeed <= 0f || speed >= config.PushApartMinImpactSpeed;
+                    float angularSpeed = grid.Physics?.AngularVelocity.Length() ?? 0f;
+
+                    // Energetic impact or active solver torque vibration (Clang shuddering):
+                    // Resting grids have near-zero angular velocity (< 0.05 rad/s) and speed below MinImpactSpeed.
+                    // Clang loops against voxels violently twist with angular velocity spikes (>= 0.5 rad/s).
+                    bool speedImpact = config.PushApartMinImpactSpeed > 0f && speed >= config.PushApartMinImpactSpeed;
+                    bool isClangVibrating = angularSpeed >= 0.5f;
+                    bool isEnergetic = speedImpact || isClangVibrating;
+
+                    // Non-wheel chassis body is wedged if physically embedded/submerged, or experiencing sustained energetic/clang vibration
+                    bool isChassisWedged = !isWheelVoxel && (isEmbedded || isEnergetic) && driftGateOpen && contactCount >= config.PushApartThreshold;
+                    bool impactGateOpen = isEmbedded || isChassisWedged || isEnergetic;
 
                     if (impactGateOpen)
                     {
@@ -1011,6 +1045,10 @@ namespace PhysicsOptimizer.Modules
                         _lastVoxelContactNormals[topGrid.EntityId] = subNormal;
                     }
                 }
+                if (_lastVoxelPenetrations.TryGetValue(grid.EntityId, out float subPen))
+                {
+                    _lastVoxelPenetrations[topGrid.EntityId] = subPen;
+                }
                 TryPushApart(topGrid, otherEntity);
                 return;
             }
@@ -1097,23 +1135,20 @@ namespace PhysicsOptimizer.Modules
                     return;
                 }
 
-                // Direction lock: a grid that re-triggers within ~5s of the last push is still stuck -
-                // reuse the previous escape direction and escalate the distance so repeated positional
-                // teleports accumulate and dig submerged wheels out, instead of re-resolving from scratch
+                // Direction & distance escalation:
+                // Rather than hard-locking to Attempt 1's vector for 5 seconds, each re-trigger re-evaluates
+                // the freshest escape direction and smoothly blends with prior momentum (50/50 rolling average).
+                // Distance escalates up to PushApartMaxNudgeDistance to overcome deep wedges.
                 double distance = config.PushApartDistance;
-                bool isLocked = false;
-                if (_lastEscapes.TryGetValue(grid.EntityId, out EscapeRecord esc) && currentFrame <= esc.Frame + 300)
+                bool hasPriorEscape = _lastEscapes.TryGetValue(grid.EntityId, out EscapeRecord esc) && currentFrame <= esc.Frame + 300;
+
+                if (!TryResolveVoxelEscapeDirection(grid, config, contactVoxel, out Vector3D resolvedDir))
                 {
-                    separationDir = esc.Direction;
-                    esc.Level = Math.Min(esc.Level + 1, 1000);
-                    esc.Frame = currentFrame;
-                    distance = Math.Min(config.PushApartDistance * (esc.Level + 1), config.PushApartMaxNudgeDistance);
-                    _lastEscapes[grid.EntityId] = esc;
-                    isLocked = true;
-                }
-                else
-                {
-                    if (!TryResolveVoxelEscapeDirection(grid, config, contactVoxel, out separationDir))
+                    if (hasPriorEscape && esc.Direction.LengthSquared() > 0.001)
+                    {
+                        resolvedDir = esc.Direction;
+                    }
+                    else
                     {
                         if (ShouldLog(_lastPushApartGiveUpLogFrames, grid.EntityId, currentFrame, 1200))
                         {
@@ -1121,6 +1156,23 @@ namespace PhysicsOptimizer.Modules
                         }
                         return;
                     }
+                }
+
+                if (hasPriorEscape)
+                {
+                    esc.Level = Math.Min(esc.Level + 1, 1000);
+                    esc.Frame = currentFrame;
+                    distance = Math.Min(config.PushApartDistance * (esc.Level + 1), config.PushApartMaxNudgeDistance);
+
+                    // Rolling blend: 50% prior escape vector + 50% latest resolved vector
+                    Vector3D blended = esc.Direction + resolvedDir;
+                    separationDir = blended.LengthSquared() > 0.01 ? Vector3D.Normalize(blended) : resolvedDir;
+                    esc.Direction = separationDir;
+                    _lastEscapes[grid.EntityId] = esc;
+                }
+                else
+                {
+                    separationDir = resolvedDir;
                     _lastEscapes[grid.EntityId] = new EscapeRecord { Direction = separationDir, Frame = currentFrame, Level = 0 };
                 }
 
@@ -1137,7 +1189,14 @@ namespace PhysicsOptimizer.Modules
                         double altDiff = (gridCenter - core).Length() - (surfacePt - core).Length();
                         underSurfaceInfo = string.Format(CultureInfo.InvariantCulture, " | UnderSurface: {0} (AltDiff: {1:F2}m)", altDiff < 0, altDiff);
                     }
-                    Log.Info(LogSource, $"[PUSH-APART DIAG] '{grid.DisplayName}' ({trackingId}) | Attempt: {attempts + 1}/{config.PushApartMaxAttempts}{underSurfaceInfo} | Distance: {distance:F2}m | Dir: {separationDir:F3} | Locked: {isLocked}");
+                    float pushSpeed = grid.Physics?.LinearVelocity.Length() ?? 0f;
+                    float pushAngular = grid.Physics?.AngularVelocity.Length() ?? 0f;
+                    _lastVoxelPenetrations.TryGetValue(trackingId, out float contactDist);
+                    float penetration = contactDist < 0f ? -contactDist : 0f;
+                    string lockInfo = hasPriorEscape ? string.Format(CultureInfo.InvariantCulture, "Blended (Lvl {0})", esc.Level) : "False";
+                    Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
+                        "[PUSH-APART DIAG] '{0}' ({1}) | Attempt: {2}/{3}{4} | Penetration: {5:F3}m (Max: {6:F2}m) | Speed: {7:F2} m/s | Angular: {8:F2} rad/s | Nudge: {9:F2}m | Dir: {10:F3} | Locked: {11}",
+                        grid.DisplayName, trackingId, attempts + 1, config.PushApartMaxAttempts, underSurfaceInfo, penetration, config.PushApartEmbeddedDepth, pushSpeed, pushAngular, distance, separationDir, lockInfo));
                 }
                 EnqueuePush(grid, separationDir, true, distance);
                 return;
@@ -1742,16 +1801,14 @@ namespace PhysicsOptimizer.Modules
                 Vector3 gridForceDir = gridIsBodyA ? -value.ContactPoint.Normal : value.ContactPoint.Normal;
                 Vector3 rawForceDir = gridForceDir;
 
-                // Push-apart escape direction source: record the true force direction pushing on the grid
                 // Push-apart escape direction source: record the true force direction and impact position
-                Vector3D contactWorldPos = __instance.ClusterToWorld(value.ContactPoint.Position);
-                _lastVoxelContactNormals[grid.EntityId] = gridForceDir;
-                _lastImpactPositions[grid.EntityId] = contactWorldPos;
-                if (IsWheelSubgrid(grid, out long wheelBaseId) && wheelBaseId > 0L)
+                // Suspension wheel subgrids are excluded so tire ground-reaction forces never overwrite chassis normals
+                if (!IsWheelSubgrid(grid, out _))
                 {
-                    _lastVoxelContactNormals[wheelBaseId] = gridForceDir;
-                    _lastImpactPositions[wheelBaseId] = __instance.ClusterToWorld(value.ContactPoint.Position);
-                    _lastImpactPositions[wheelBaseId] = contactWorldPos;
+                    Vector3D contactWorldPos = __instance.ClusterToWorld(value.ContactPoint.Position);
+                    _lastVoxelContactNormals[grid.EntityId] = gridForceDir;
+                    _lastImpactPositions[grid.EntityId] = contactWorldPos;
+                    _lastVoxelPenetrations[grid.EntityId] = value.ContactPoint.Distance;
                 }
 
                 if (arbitratorEnabled)
