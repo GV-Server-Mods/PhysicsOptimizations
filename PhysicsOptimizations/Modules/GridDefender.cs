@@ -335,6 +335,8 @@ namespace PhysicsOptimizer.Modules
             _lastPushApartGateLogFrames.Clear();
             _burialProbeStates.Clear();
             _constructClangRecords.Clear();
+            _lastVoxelArbitratorLogFrames.Clear();
+            _pendingVoxelArbDebugGps.Clear();
 
             foreach (var kvp in _voxelRangeHandlers)
             {
@@ -1091,9 +1093,19 @@ namespace PhysicsOptimizer.Modules
                     if (radial.LengthSquared() > 0.001) up = Vector3D.Normalize(radial);
                 }
 
-                MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
-                double sampleRadius = Math.Max(topGrid.PositionComp.WorldVolume.Radius, 3.0);
-                Vector3D terrainNormal = SampleMacroTerrainNormal(planet, center, up, sampleRadius, out surfaceCenter);
+                ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+                Vector3D terrainNormal;
+                if (_macroTerrainCache.TryGetValue(grid.EntityId, out MacroTerrainCacheEntry cache) && cache.Frame == currentFrame)
+                {
+                    terrainNormal = cache.SurfaceNormal;
+                    surfaceCenter = cache.SurfaceCenter;
+                }
+                else
+                {
+                    MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+                    double sampleRadius = Math.Max(topGrid.PositionComp.WorldVolume.Radius, 3.0);
+                    terrainNormal = SampleMacroTerrainNormal(planet, center, up, sampleRadius, out surfaceCenter);
+                }
                 dir = terrainNormal;
 
                 if (config.LogPushApartDiagnostics || config.EnablePushApartDebugDraw)
@@ -2196,12 +2208,9 @@ namespace PhysicsOptimizer.Modules
                         }
                     }
 
-                    // Havok contact normal points from Body A (index 0) to Body B (index 1).
-                    // Separating force on Body A is along -Normal; separating force on Body B is along +Normal.
                     // Havok contact normal points from Body B (index 1) to Body A (index 0).
                     // Separating force on Body A is along +Normal; separating force on Body B is along -Normal.
                     bool gridIsBodyA = rb.Entity == grid;
-                    Vector3 gridForceDir = gridIsBodyA ? -value.ContactPoint.Normal : value.ContactPoint.Normal;
                     Vector3 gridForceDir = gridIsBodyA ? value.ContactPoint.Normal : -value.ContactPoint.Normal;
                     Vector3 rawForceDir = gridForceDir;
 
@@ -2219,13 +2228,10 @@ namespace PhysicsOptimizer.Modules
                         Vector3D contactWorldPos = __instance.ClusterToWorld(value.ContactPoint.Position);
                         _lastVoxelContactNormals[grid.EntityId] = gridForceDir;
                         _lastImpactPositions[grid.EntityId] = contactWorldPos;
-                        _lastVoxelPenetrations[grid.EntityId] = value.ContactPoint.Distance;
                         _lastVoxelPenetrations[grid.EntityId] = havokDist;
                     }
 
                     // Voxel Normal Arbitrator: inspects all colliding grids (including wheels) in gravity to prevent "Voxel-Vice"
-                    // terrain trapping. Reverses downward collision force on the grid (-gridForceDir) and flips the native
-                    // contact normal so Havok's solver resolves outward along the true reflection vector.
                     // terrain trapping. Reverses downward/inward collision forces on the grid and redirects Havok's native
                     // contact normal outward along the macroscopic voxel surface face normal.
                     // For non-wheel grids, friction is zeroed to prevent chassis snagging; wheel subgrids preserve full tire friction
@@ -2288,9 +2294,6 @@ namespace PhysicsOptimizer.Modules
                             float upDot = Vector3.Dot(gridForceDir, upVector);
                             float surfaceDot = Vector3.Dot(gridForceDir, (Vector3)surfaceNormal);
 
-                            // Only trigger when the separating force direction points significantly downward into the planet
-                            // core (upDot < -0.2f) AND the body is actively penetrating the voxel mesh (Distance < -0.01m).
-                            if (upDot < -0.2f && value.ContactPoint.Distance < -0.01f)
                             // Trigger conditions:
                             // 1. Contact is in active contact / penetration (havokDist < 0.05m).
                             // 2. Separating force points inward into the terrain face (surfaceDot < -0.1f) OR downward into the planet (upDot < -0.2f).
@@ -2302,11 +2305,8 @@ namespace PhysicsOptimizer.Modules
                             {
                                 // Contact positions arrive in Havok cluster space (origin-offset world); vanilla converts
                                 // every consumer via ClusterToWorld - raw values are shifted by the cluster world anchor.
-                                Vector3D contactPos = __instance.ClusterToWorld(value.ContactPoint.Position);
-
                                 // Same two-tier rule as push-apart: in pristine voxel regions a gravity-downward normal can
                                 // only be a Keen compression artifact pointing into the planet core, so invert it directly.
-                                // Only carved regions (real cave ceilings are possible) pay for the confirmation raycast.
                                 // Pristine voxel regions cannot have overhangs/cave ceilings on heightmap planets.
                                 // Only carved/drilled regions require the confirmation raycast.
                                 MyVoxelBase voxelEnt = otherEnt as MyVoxelBase ?? rb.Entity as MyVoxelBase;
@@ -2335,45 +2335,20 @@ namespace PhysicsOptimizer.Modules
                                 if (hitAir)
                                 {
                                     Vector3 oldGridForceDir = gridForceDir;
-                                    Vector3 newGridForceDir;
-                                    double altDiff = 0.0;
-                                    bool isSubmerged = false;
 
-                                    // Resolve true macroscopic voxel surface face normal on planets
-                                    MyPlanet planet = (otherEnt as MyPlanet) ?? (rb.Entity as MyPlanet) ?? MyGamePruningStructure.GetClosestPlanet(contactPos);
-                                    if (planet != null)
-                                    {
-                                        Vector3D surfaceNormal = SampleMacroTerrainNormal(planet, contactPos, (Vector3D)upVector, 2.0, out Vector3D surfacePt);
-                                        newGridForceDir = (Vector3)surfaceNormal;
-                                        Vector3D core = planet.PositionComp.WorldVolume.Center;
-                                        altDiff = (contactPos - core).Length() - (surfacePt - core).Length();
-                                        isSubmerged = altDiff < 0;
-                                    }
-                                    else
-                                    {
-                                        newGridForceDir = -gridForceDir;
-                                    }
-
-                                    // Invert the contact normal directly in Havok WITHOUT calling cp.Flip().
+                                    // Mutate Havok contact normal directly without calling cp.Flip().
                                     // Calling Flip() inverts both Normal and signed Distance in native hkContactPoint;
                                     // when Distance < 0 (penetration), Flip() makes Distance > 0, which tricks Havok's solver
                                     // into treating the bodies as separated and blinds Push-Apart into thinking penetration is 0m.
-                                    // Mutate Havok contact normal directly.
-                                    // Mutate Havok contact normal directly without calling cp.Flip().
                                     // To make separating force on grid equal +newGridForceDir:
                                     // Body A separating force is +Normal -> cp.Normal = newGridForceDir.
                                     // Body B separating force is -Normal -> cp.Normal = -newGridForceDir.
                                     var cp = value.ContactPoint;
-                                    cp.Normal = gridIsBodyA ? -newGridForceDir : newGridForceDir;
                                     cp.Normal = gridIsBodyA ? newGridForceDir : -newGridForceDir;
 
                                     gridForceDir = newGridForceDir;
                                     _lastVoxelContactNormals[grid.EntityId] = newGridForceDir;
 
-                                    // Apply outward velocity via Havok's active solver buffer to cancel inward penetration momentum
-                                    // and ensure the grid physically emerges from the terrain.
-                                    // Reflect inward velocity in Havok's active solver buffer to eliminate penetration momentum
-                                    // and ensure the grid rebounds or slides out along the macroscopic surface normal.
                                     // Calculate local contact penetration (havokDist < 0 means penetrating into voxel geometry)
                                     float pen = havokDist < 0f ? -havokDist : 0f;
                                     float localBias = 0f;
@@ -2401,20 +2376,20 @@ namespace PhysicsOptimizer.Modules
                                     HkRigidBody rigidBody = __instance.RigidBody;
                                     if (rigidBody != null)
                                     {
-                                        float velOutward = Vector3.Dot((Vector3)rigidBody.LinearVelocity, newGridForceDir);
-                                        float targetOutward = isSubmerged ? 2.0f : 0.5f;
-                                        if (velOutward < targetOutward)
                                         float velNormal = Vector3.Dot((Vector3)rigidBody.LinearVelocity, newGridForceDir);
                                         if (velNormal < 0f)
                                         {
-                                            rigidBody.LinearVelocity += newGridForceDir * (targetOutward - velOutward);
                                             // velNormal < 0 means the body is penetrating inward against the outward surface normal.
                                             // Reflecting the normal component: -(1 + e) * velNormal cancels inward velocity and adds an outward bounce.
                                             float restitution = isSubmerged ? 0.5f : 0.2f;
                                             rigidBody.LinearVelocity -= newGridForceDir * ((1f + restitution) * velNormal);
-                                            // Dynamic reflection: cancel inward penetration velocity and add modest restitution
-                                            rigidBody.LinearVelocity -= newGridForceDir * (1.2f * velNormal);
                                             velNormal = Vector3.Dot((Vector3)rigidBody.LinearVelocity, newGridForceDir);
+                                        }
+
+                                        // Local contact bias: enforce small separation velocity proportional to contact penetration
+                                        if (localBias > 0f && velNormal < localBias)
+                                        {
+                                            rigidBody.LinearVelocity += newGridForceDir * (localBias - velNormal);
                                         }
                                     }
                                     value.UpdateVelocities(bodyIndex);
@@ -2422,23 +2397,16 @@ namespace PhysicsOptimizer.Modules
                                     if (isWheel && isSubmerged && IsWheelSubgrid(grid, out long baseGridId) && baseGridId > 0L)
                                     {
                                         if (MyEntities.TryGetEntityById(baseGridId, out MyEntity baseEnt) && baseEnt is MyCubeGrid baseGrid && baseGrid.Physics?.RigidBody != null)
-                                        // Local contact bias: enforce small separation velocity proportional to contact penetration
-                                        if (localBias > 0f && velNormal < localBias)
                                         {
-                                            float baseVelOutward = Vector3.Dot((Vector3)baseGrid.Physics.RigidBody.LinearVelocity, newGridForceDir);
-                                            if (baseVelOutward < 2.0f)
                                             HkRigidBody baseRb = baseGrid.Physics.RigidBody;
                                             float baseVelNormal = Vector3.Dot((Vector3)baseRb.LinearVelocity, newGridForceDir);
                                             if (baseVelNormal < 0f)
                                             {
-                                                baseGrid.Physics.RigidBody.LinearVelocity += newGridForceDir * (2.0f - baseVelOutward);
                                                 float restitution = 0.5f;
                                                 baseRb.LinearVelocity -= newGridForceDir * ((1f + restitution) * baseVelNormal);
                                             }
-                                            rigidBody.LinearVelocity += newGridForceDir * (localBias - velNormal);
                                         }
                                     }
-                                    value.UpdateVelocities(bodyIndex);
 
                                     // Only zero friction on non-wheel grids (chassis/armor) to prevent friction-snagging against voxels.
                                     // Wheel subgrids strictly retain tire friction so driving, steering, and traction are preserved.
@@ -2453,14 +2421,9 @@ namespace PhysicsOptimizer.Modules
                                     if ((config.LogVoxelNormals || config.EnableDebugLogging) && ShouldLog(_lastVoxelArbitratorLogFrames, grid.EntityId, currentFrame, 30))
                                     {
                                         float slopeDot = Vector3.Dot(newGridForceDir, upVector);
-                                        float penDepth = value.ContactPoint.Distance < 0f ? -value.ContactPoint.Distance : value.ContactPoint.Distance;
-                                        float penDepth = havokDist < 0f ? -havokDist : 0f;
                                         string subStr = isSubmerged ? " (Submerged)" : "";
                                         Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                                            "[Voxel Arbitrator] '{0}' [{1}] | Depth: {2:F2}m{3} | Pen: {4:F3}m | HavokDot: {5:F2} | SurfaceNormal: {6:F2}, {7:F2}, {8:F2} (SlopeDot: {9:F2})",
-                                            grid.DisplayName, (isWheel ? "WHEEL" : "HULL"), altDiff, subStr, penDepth, upDot, newGridForceDir.X, newGridForceDir.Y, newGridForceDir.Z, slopeDot));
                                             "[Voxel Arbitrator] '{0}' [{1}] | Depth: {2:F2}m{3} | Pen: {4:F3}m | HavokDot: {5:F2} (SurfDot: {6:F2}) | SurfaceNormal: {7:F2}, {8:F2}, {9:F2} (SlopeDot: {10:F2})",
-                                            grid.DisplayName, (isWheel ? "WHEEL" : "HULL"), centerAltDiff, subStr, penDepth, upDot, surfaceDot, newGridForceDir.X, newGridForceDir.Y, newGridForceDir.Z, slopeDot));
                                             grid.DisplayName, (isWheel ? "WHEEL" : "HULL"), centerAltDiff, subStr, pen, upDot, surfaceDot, newGridForceDir.X, newGridForceDir.Y, newGridForceDir.Z, slopeDot));
                                     }
 
@@ -2484,8 +2447,6 @@ namespace PhysicsOptimizer.Modules
                         MyVoxelBase voxel = (otherRb.Entity as MyVoxelBase) ?? (rb.Entity as MyVoxelBase);
                         if (voxel != null)
                         {
-                            // Pass raw un-inverted contact normal so arbitrator's upward inversion does not mask embedding
-                            PhysicsOptimizerPlugin.Instance?.GridDefender?.RecordVoxelContactFrame(grid, voxel, config, value.ContactPoint.Distance, rawForceDir);
                             // Pass raw un-inverted contact normal and real Havok distance so push-apart recognizes embedding accurately
                             PhysicsOptimizerPlugin.Instance?.GridDefender?.RecordVoxelContactFrame(grid, voxel, config, havokDist, rawForceDir);
                         }

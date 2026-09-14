@@ -244,12 +244,15 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 ### ⛰️ System 12: Voxel Normal Arbitrator
 *File: `Modules/GridDefender.cs` (target 7)*
 
-* **The Problem (Voxel-Vice)**: When high-speed rovers compress terrain meshes, Havok frequently calculates inverted contact normals pointing *downward* into the planet core. This pulls the vehicle into the ground, trapping it in continuous solver feedback loops that drop sim-speed to 0.20.
-* **The Fix**: The `RigidBody_ContactPointCallbackImpl` prefix inspects contact events where either body is a voxel and the grid is in gravity (wheel subgrids are strictly excluded to protect driving physics):
-  1. Computes the gravity up-vector and measures the separating contact force direction against it.
-  2. If the normal points significantly downward into the planet core (`dot < -0.2`) and the grid is actively penetrating the voxel mesh (`distance < -0.01m`), it confirms open air above (pristine regions bypass raycast; carved regions raycast 1.5m along gravity-up).
-  3. When confirmed, the arbitrator zeroes contact friction and injects upward separation velocity in the solver buffer, lifting the chassis out of the terrain before Havok can trap it in a feedback loop.
-* **Dual Duty**: The same prefix feeds the global impact-position tracker consumed by Layered Armor Occlusion (System 10).
+* **The Problem (Voxel-Vice)**: When high-speed rovers compress terrain meshes, Havok frequently calculates inverted contact normals pointing *downward* or *inward* into the planet core. This pulls the vehicle into the ground, trapping it in continuous solver feedback loops that drop sim-speed to 0.20.
+* **The Fix**: The `RigidBody_ContactPointCallbackImpl` prefix inspects contact events where either body is a voxel and the grid is in gravity:
+  1. Computes the macroscopic terrain surface face normal via cached 5-point heightmap sampling (`SampleMacroTerrainNormal`) and evaluates grid submersion.
+  2. Evaluates multi-condition wedging triggers: active contact (`havokDist < 0.05m`) combined with inward terrain force (`surfaceDot < -0.1f`), downward core force (`upDot < -0.2f`), or submerged terrain clamping (`surfaceDot < 0.2f`).
+  3. Confirms open air above the contact point (pristine voxel regions bypass raycasting; carved regions perform a 1.5m confirmation raycast along gravity-up).
+  4. Redirects Havok's native contact normal outward along the macroscopic terrain face normal without calling `cp.Flip()` (preserving Havok's true signed penetration distance for Push-Apart).
+  5. Reflects inward velocity in Havok's active solver buffer with restitution and enforces proportional Baumgarte separation contact bias.
+  6. **Wheel Handling**: Wheel subgrids strictly preserve tire friction to maintain steering, traction, and driveability (non-wheel hull friction is zeroed to prevent snagging). A 5cm deadzone allows normal suspension compression while rescuing severe terrain wedges and lifting the base chassis when submerged.
+* **Dual Duty**: The same prefix feeds the global impact-position tracker consumed by Layered Armor Occlusion (System 10) and seeds Push-Apart (System 7) with accurate Havok penetration distances and cached macroscopic terrain normals.
 * **Counter**: Inversions increment `VoxelNormalsInverted`.
 
 ### 🌋 System 13: Explosive Voxel Cutout Suppression
