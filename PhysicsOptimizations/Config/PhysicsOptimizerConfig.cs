@@ -94,13 +94,9 @@ namespace PhysicsOptimizer.Config
         private bool _armorOnlyOcclusion = true;
         private float _voxelDeformationScale = 1.0f;
 
-        // --- Group 4: Anti-Clang, Separation & Voxel Arbitrator ---
-        private bool _enableAntiClangSystem = true;
-        private bool _stopTorsionalDeathSpins = true;
+        // --- Group 4: Separation & Voxel Arbitrator ---
         private bool _enableVoxelNormalArbitrator = true;
         private bool _enablePushApartSeparation = true;
-        private float _impactVelocityDamping = 0.5f;
-        private int _antiClangVibrationThreshold = 8;
         private int _pushApartThreshold = 25;
         private float _pushApartDistance = 0.5f;
         private int _pushApartMaxAttempts = 3;
@@ -116,7 +112,6 @@ namespace PhysicsOptimizer.Config
         private bool _logPushApartDiagnostics = false;
         private bool _logPushApartStationConversion = true;
 
-        private bool _excludeWheelSubgridsFromAntiClang = true;
         private bool _excludeWheelSubgridsFromPushApart = true;
         private bool _excludeWheelSubgridsFromSubgridStabilizer = true;
 
@@ -279,20 +274,8 @@ namespace PhysicsOptimizer.Config
             set => SetValue(ref _voxelDeformationScale, Math.Max(0.0f, Math.Min(1.0f, value)));
         }
 
-        public bool EnableAntiClang { get => _enableAntiClangSystem; set => SetValue(ref _enableAntiClangSystem, value); }
-        public bool StopClangSpinning { get => _stopTorsionalDeathSpins; set => SetValue(ref _stopTorsionalDeathSpins, value); }
         public bool EnableVoxelNormalArbitrator { get => _enableVoxelNormalArbitrator; set => SetValue(ref _enableVoxelNormalArbitrator, value); }
         public bool EnablePushApart { get => _enablePushApartSeparation; set => SetValue(ref _enablePushApartSeparation, value); }
-        public float ImpactVelocityDamping
-        {
-            get => _impactVelocityDamping;
-            set => SetValue(ref _impactVelocityDamping, Math.Max(0.0f, Math.Min(1.0f, value)));
-        }
-        public int AntiClangVibrationThreshold
-        {
-            get => _antiClangVibrationThreshold;
-            set => SetValue(ref _antiClangVibrationThreshold, Math.Max(1, value));
-        }
         public int PushApartThreshold
         {
             get => _pushApartThreshold;
@@ -331,7 +314,6 @@ namespace PhysicsOptimizer.Config
             get => _pushApartMaxNudgeDistance;
             set => SetValue(ref _pushApartMaxNudgeDistance, Math.Max(0.0f, Math.Min(10.0f, value)));
         }
-        public bool ExcludeWheelSubgridsFromAntiClang { get => _excludeWheelSubgridsFromAntiClang; set => SetValue(ref _excludeWheelSubgridsFromAntiClang, value); }
         public bool ExcludeWheelSubgridsFromPushApart { get => _excludeWheelSubgridsFromPushApart; set => SetValue(ref _excludeWheelSubgridsFromPushApart, value); }
         public bool ExcludeWheelSubgridsFromSubgridStabilizer { get => _excludeWheelSubgridsFromSubgridStabilizer; set => SetValue(ref _excludeWheelSubgridsFromSubgridStabilizer, value); }
         public float BurialProbeRadius

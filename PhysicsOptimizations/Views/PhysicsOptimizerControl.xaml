@@ -894,81 +894,6 @@
                                                                 </StackPanel>
                                                         </GroupBox>
 
-                                                        <!-- Anti-Clang & Phasing Prevention -->
-                                                        <GroupBox Header="🌀 Anti-Clang &amp; Phasing Prevention">
-                                                                <StackPanel>
-                                                                        <CheckBox Content="Enable Anti-Clang &amp; Kinetic Absorption System"
-                                                                                  IsChecked="{Binding Config.EnableAntiClang}"
-                                                                                  FontWeight="SemiBold"
-                                                                                  Margin="0,0,0,6"
-                                                                                  ToolTip="Absorbs excess kinetic energy on non-damaging collisions to prevent voxel phasing, rubberbanding, and Havok physics loops."/>
-                                                                        <CheckBox Content="Exclude Suspension Wheel Subgrids from Anti-Clang Damping"
-                                                                                  IsChecked="{Binding Config.ExcludeWheelSubgridsFromAntiClang}"
-                                                                                  Margin="16,2,0,2"
-                                                                                  ToolTip="Suspension wheels are separate physics bodies; damping their spin mid-drive creates false positives. When enabled, wheel-terrain contacts are ignored by anti-clang."/>
-                                                                        <StackPanel IsEnabled="{Binding Config.EnableAntiClang}">
-                                                                                <TextBlock Text="Absorbs excess kinetic energy on non-damaging collisions, arrests rotational death spins, and resolves opposing normal forces in voxels."
-                                                                                           Foreground="#9CA3AF"
-                                                                                           FontSize="11"
-                                                                                           Margin="16,0,0,8"
-                                                                                           TextWrapping="Wrap"/>
-                                                                                <CheckBox Content="Stop Clang Death Spins (Zero out extreme rotational velocity)"
-                                                                                          IsChecked="{Binding Config.StopClangSpinning}"
-                                                                                          Margin="16,2,0,2"
-                                                                                          ToolTip="Instantly zeros out extreme rotational spin (&gt; 4 rad/s) caused by Havok subgrid glitches before grids rip apart."/>
-
-
-                                                                                <Grid Margin="16,2,0,2">
-                                                                                        <Grid.ColumnDefinitions>
-                                                                                                <ColumnDefinition Width="260"/>
-                                                                                                <ColumnDefinition Width="*"/>
-                                                                                        </Grid.ColumnDefinitions>
-                                                                                        <Label Grid.Column="0"
-                                                                                               Content="Impact Velocity Damping (0.0 to 1.0):"
-                                                                                               Padding="0"
-                                                                                               VerticalAlignment="Center"
-                                                                                               ToolTip="Velocity absorbed on protected collisions (0.0 = full bounce, 0.5 = 50% absorbed, 1.0 = dead stop). Stops terrain tunneling."/>
-                                                                                        <Grid Grid.Column="1">
-                                                                                                <Grid.ColumnDefinitions>
-                                                                                                        <ColumnDefinition Width="*"/>
-                                                                                                        <ColumnDefinition Width="60"/>
-                                                                                                </Grid.ColumnDefinitions>
-                                                                                                <Slider Grid.Column="0"
-                                                                                                        Minimum="0.0"
-                                                                                                        Maximum="1.0"
-                                                                                                        Value="{Binding Config.ImpactVelocityDamping}"
-                                                                                                        SmallChange="0.05"
-                                                                                                        LargeChange="0.1"
-                                                                                                        VerticalAlignment="Center"
-                                                                                                        Margin="5,0"
-                                                                                                        ToolTip="Velocity absorbed on protected collisions (0.0 = full bounce, 0.5 = 50% absorbed, 1.0 = dead stop). Stops terrain tunneling."/>
-                                                                                                <TextBox Grid.Column="1"
-                                                                                                         Text="{Binding Config.ImpactVelocityDamping, StringFormat={}{0:F2}}"
-                                                                                                         Width="50"
-                                                                                                         HorizontalContentAlignment="Center"
-                                                                                                         ToolTip="Damage multiplier when impact damage is permitted (e.g., missiles). 1.0 = full damage, 0.0 = zero damage."/>
-                                                                                        </Grid>
-                                                                                </Grid>
-
-                                                                                <WrapPanel Margin="16,2,0,2"
-                                                                                           VerticalAlignment="Center">
-                                                                                        <TextBlock Text="Engage aggressive kinetic damping after"
-                                                                                                   Foreground="#CCCCCC"
-                                                                                                   VerticalAlignment="Center"
-                                                                                                   Margin="0,0,5,0"/>
-                                                                                        <TextBox Text="{Binding Config.AntiClangVibrationThreshold}"
-                                                                                                 Width="55"
-                                                                                                 HorizontalContentAlignment="Center"
-                                                                                                 Margin="0,0,5,0"
-                                                                                                 VerticalAlignment="Center"
-                                                                                                 ToolTip="Consecutive collision frames before aggressive damping engages to stop physics vibrations and grinding. Default: 8 frames."/>
-                                                                                        <TextBlock Text="Continuous Contact Frames."
-                                                                                                   Foreground="#CCCCCC"
-                                                                                                   VerticalAlignment="Center"/>
-                                                                                </WrapPanel>
-                                                                        </StackPanel>
-                                                                </StackPanel>
-                                                        </GroupBox>
 
                                                         <!-- Active Push-Apart -->
                                                         <GroupBox Header="🧲 Active Push-Apart (Anti-Stuck Separation)">
@@ -1362,9 +1287,6 @@
                                                                            FontWeight="Bold"
                                                                            Foreground="#64B5F6"/>
                                                                 <TextBlock Text="{Binding DefenseStats.VoxelNormalsInverted, StringFormat={}- Dual-Sided Clamps Inverted: {0:N0}}"/>
-                                                                <TextBlock Text="{Binding DefenseStats.ClangVibrationsArrested, StringFormat={}- Clang Vibrations Arrested: {0:N0}}"
-                                                                           FontWeight="Bold"
-                                                                           Foreground="#FFEB3B"/>
                                                                 <TextBlock Text="{Binding DefenseStats.GridsSeparated, StringFormat={}- Grids Nudged Apart: {0:N0}}"
                                                                            FontWeight="Bold"
                                                                            Foreground="#00E676"/>

@@ -68,10 +68,7 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine("* Layered Armor Occlusion:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Armor-Only Occlusion: {1})", cfg.EnableLayeredArmorOcclusion, cfg.ArmorOnlyOcclusion));
             sb.AppendLine();
-            sb.AppendLine("* Anti-Clang & Kinetic Absorption System:");
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Stop Spins: {1} | Arbitrator: {2} | Exclude Wheels: {3})", cfg.EnableAntiClang, cfg.StopClangSpinning, cfg.EnableVoxelNormalArbitrator, cfg.ExcludeWheelSubgridsFromAntiClang));
-            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Impact Velocity Damping: {0:F2} | Vibration Threshold: {1} frames", cfg.ImpactVelocityDamping, cfg.AntiClangVibrationThreshold));
-            sb.AppendLine();
+
             sb.AppendLine("* Active Push-Apart Separation:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Distance: {1:F2}m after {2} frames)", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartThreshold));
             sb.AppendLine();
@@ -113,7 +110,7 @@ namespace PhysicsOptimizer.Commands
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Low-Speed Blocked: {0:N0} | Voxel Crashes: {1:N0} | Ramming: {2:N0}", d.LowSpeedBlocked, d.VoxelCrashesBlocked, d.RammingBlocked));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - PMW Torpedo Impacts Allowed: {0:N0} | Piloted Buggy Saves: {1:N0}", d.MissileHitsAllowed, d.PilotedBuggySaves));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Layered Armor Hits Saved: {0:N0} | Dual-Sided Clamps Inverted: {1:N0}", d.ArmorHitsOccluded, d.VoxelNormalsInverted));
-                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Clang Vibrations Arrested: {0:N0} | Grids Nudged Apart: {1:N0}", d.ClangVibrationsArrested, d.GridsSeparated));
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Grids Nudged Apart: {0:N0}", d.GridsSeparated));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Thruster Obstructions Burned: {0:N0} | Voxel Cutouts Prevented: {1:N0}", d.ThrusterObstructionsVaporized, d.VoxelCutoutsPrevented));
 
                 var offenders = Modules.GridDefender.GetActiveClangers(minRate: 1, maxResults: 5);
@@ -166,7 +163,7 @@ namespace PhysicsOptimizer.Commands
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Proximity merge complete: eliminated {0} redundant floating entities.", eliminated));
         }
 
-        [Command("toggle", "Toggles an individual optimization or feature. Usage: !phys toggle <all|wheels|mask|parkedsleep|sleep|ore|subgrids|utilitymask|toi|discretelarge|discretesmall|pmw|armor|anticlang|pushapart|normal|thruster|thrustermode|cutout|debug|telemetry|wheelanticlang|wheelpushapart|wheelstabilizer>")]
+        [Command("toggle", "Toggles an individual optimization or feature. Usage: !phys toggle <all|wheels|mask|parkedsleep|sleep|ore|subgrids|utilitymask|toi|discretelarge|discretesmall|pmw|armor|pushapart|pushstation|normal|voxelarbdebug|thruster|thrustermode|cutout|debug|telemetry|wheelpushapart|wheelstabilizer>")]
         [Permission(MyPromoteLevel.Admin)]
         public void Toggle(string featureName)
         {
@@ -251,10 +248,6 @@ namespace PhysicsOptimizer.Commands
                     cfg.EnableLayeredArmorOcclusion = !cfg.EnableLayeredArmorOcclusion;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Layered Armor Occlusion is now {0}.", cfg.EnableLayeredArmorOcclusion ? "ENABLED" : "DISABLED");
                     break;
-                case "anticlang":
-                    cfg.EnableAntiClang = !cfg.EnableAntiClang;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Anti-Clang System is now {0}.", cfg.EnableAntiClang ? "ENABLED" : "DISABLED");
-                    break;
                 case "pushapart":
                 case "push":
                     cfg.EnablePushApart = !cfg.EnablePushApart;
@@ -299,11 +292,6 @@ namespace PhysicsOptimizer.Commands
                     cfg.SuppressAllVoxelExplosionDamage = !cfg.SuppressAllVoxelExplosionDamage;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Voxel Cutout Explosion Suppression is now {0}.", cfg.SuppressAllVoxelExplosionDamage ? "ENABLED" : "DISABLED");
                     break;
-                case "wheelanticlang":
-                case "excludewheelanticlang":
-                    cfg.ExcludeWheelSubgridsFromAntiClang = !cfg.ExcludeWheelSubgridsFromAntiClang;
-                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Wheel subgrid exclusion from Anti-Clang is now {0}.", cfg.ExcludeWheelSubgridsFromAntiClang ? "ENABLED" : "DISABLED");
-                    break;
                 case "wheelpushapart":
                 case "excludewheelpushapart":
                     cfg.ExcludeWheelSubgridsFromPushApart = !cfg.ExcludeWheelSubgridsFromPushApart;
@@ -321,7 +309,7 @@ namespace PhysicsOptimizer.Commands
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Converting to static station on push-apart give up is now {0}.", cfg.ConvertToStaticOnPushApartGiveUp ? "ENABLED" : "DISABLED");
                     break;
                 default:
-                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, anticlang, pushapart, pushstation, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry.", featureName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, pushapart, pushstation, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry, wheelpushapart, wheelstabilizer.", featureName));
                     return;
             }
 

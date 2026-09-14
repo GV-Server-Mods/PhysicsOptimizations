@@ -20,7 +20,6 @@ namespace PhysicsOptimizer.Services
         private long _stationBlocked;
         private long _debrisBlocked;
         private long _cooldownThrottled;
-        private long _clangVibrationsArrested;
         private long _gridsSeparated;
         private long _armorHitsOccluded;
         private long _voxelNormalsInverted;
@@ -82,11 +81,6 @@ namespace PhysicsOptimizer.Services
         /// Total deformations throttled by cooldown frames.
         /// </summary>
         public long CooldownThrottled => Interlocked.Read(ref _cooldownThrottled);
-
-        /// <summary>
-        /// Total high-frequency physics oscillations / death spins dampened by Anti-Clang.
-        /// </summary>
-        public long ClangVibrationsArrested => Interlocked.Read(ref _clangVibrationsArrested);
 
         /// <summary>
         /// Total persistent stuck/phased grid pairs separated via Push-Apart.
@@ -183,14 +177,6 @@ namespace PhysicsOptimizer.Services
         }
 
         /// <summary>
-        /// Increments the count of arrested Clang vibrations / death spins.
-        /// </summary>
-        public void IncrementClangArrested()
-        {
-            Interlocked.Increment(ref _clangVibrationsArrested);
-        }
-
-        /// <summary>
         /// Increments the count of grids separated via Push-Apart.
         /// </summary>
         public void IncrementGridsSeparated()
@@ -255,7 +241,6 @@ namespace PhysicsOptimizer.Services
             OnPropertyChanged(nameof(StationBlocked));
             OnPropertyChanged(nameof(DebrisBlocked));
             OnPropertyChanged(nameof(CooldownThrottled));
-            OnPropertyChanged(nameof(ClangVibrationsArrested));
             OnPropertyChanged(nameof(GridsSeparated));
             OnPropertyChanged(nameof(ArmorHitsOccluded));
             OnPropertyChanged(nameof(VoxelNormalsInverted));
@@ -271,7 +256,7 @@ namespace PhysicsOptimizer.Services
                    $"Low-Speed Blocked: {LowSpeedBlocked:N0}, Voxel Crashes: {VoxelCrashesBlocked:N0}, Ramming: {RammingBlocked:N0}\n" +
                    $"PMW Torpedoes Allowed: {MissileHitsAllowed:N0}, Piloted Buggy Saves: {PilotedBuggySaves:N0}\n" +
                    $"Layered Armor Saved: {ArmorHitsOccluded:N0}, Voxel Normals Inverted: {VoxelNormalsInverted:N0}\n" +
-                   $"Clang Vibrations Arrested: {ClangVibrationsArrested:N0}, Grids Nudged Apart: {GridsSeparated:N0}\n" +
+                   $"Grids Nudged Apart: {GridsSeparated:N0}\n" +
                    $"Thruster Obstructions Vaporized: {ThrusterObstructionsVaporized:N0}, Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}\n" +
                    $"Active Clang Offenders: {ActiveCollisionOffendersSummary}";
         }
@@ -292,7 +277,6 @@ namespace PhysicsOptimizer.Services
             Interlocked.Exchange(ref _stationBlocked, 0);
             Interlocked.Exchange(ref _debrisBlocked, 0);
             Interlocked.Exchange(ref _cooldownThrottled, 0);
-            Interlocked.Exchange(ref _clangVibrationsArrested, 0);
             Interlocked.Exchange(ref _gridsSeparated, 0);
             Interlocked.Exchange(ref _armorHitsOccluded, 0);
             Interlocked.Exchange(ref _voxelNormalsInverted, 0);

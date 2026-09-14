@@ -179,8 +179,8 @@ namespace PhysicsOptimizer
             int cont = Telemetry.ContinuousTOIGridsCount;
             long blk = DefenseStats?.TotalBlocked ?? 0;
             long pmw = DefenseStats?.MissileHitsAllowed ?? 0;
-            long arr = DefenseStats?.ClangVibrationsArrested ?? 0;
             long inv = DefenseStats?.VoxelNormalsInverted ?? 0;
+            long sep = DefenseStats?.GridsSeparated ?? 0;
 
             string offendersStr = "";
             var offenders = Modules.GridDefender.GetActiveClangers(minRate: 10, maxResults: 2);
@@ -190,8 +190,8 @@ namespace PhysicsOptimizer
             }
 
             Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Clang: {10} Arr, {11} Inv{12}",
-                speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, arr, inv, offendersStr));
+                "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Fixes: {10} Invert, {11} Nudge{12}",
+                speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, inv, sep, offendersStr));
         }
 
         public override void Dispose()
