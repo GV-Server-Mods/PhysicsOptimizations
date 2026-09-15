@@ -571,14 +571,6 @@ namespace PhysicsOptimizer.Services
 
         public string GetDiagnosticSummary()
         {
-            return $"Evaluated Collisions: {TotalEvaluated:N0} (Blocked: {TotalBlocked:N0} [{BlockRatio:F1}%], Allowed: {TotalAllowed:N0})\n" +
-                   $"Low-Speed Blocked: {LowSpeedBlocked:N0}, Voxel Crashes: {VoxelCrashesBlocked:N0}, Ramming: {RammingBlocked:N0}\n" +
-                   $"PMW Torpedoes Allowed: {MissileHitsAllowed:N0}, Piloted Buggy Saves: {PilotedBuggySaves:N0}\n" +
-                   $"Layered Armor Saved: {ArmorHitsOccluded:N0}, Voxel Normals Inverted: {VoxelNormalsInverted:N0}\n" +
-                   $"Grids Nudged Apart: {GridsSeparated:N0}\n" +
-                   $"Hot Path: Contacts {ContactCallbacks:N0}, Arb Raycasts {VoxelArbitratorRaycasts:N0}, Pushes {PushApartActionsExecuted:N0}\n" +
-                   $"Thruster Obstructions Vaporized: {ThrusterObstructionsVaporized:N0}, Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}\n" +
-                   $"Active Clang Offenders: {ActiveCollisionOffendersSummary}";
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"Evaluated Collisions: {TotalEvaluated:N0} (Blocked: {TotalBlocked:N0} [{BlockRatio:F1}%], Allowed: {TotalAllowed:N0})");
             sb.AppendLine($"Low-Speed Blocked: {LowSpeedBlocked:N0}, Voxel Crashes: {VoxelCrashesBlocked:N0}, Ramming: {RammingBlocked:N0}");
