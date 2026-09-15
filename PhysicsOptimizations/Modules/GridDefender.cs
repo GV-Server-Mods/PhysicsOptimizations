@@ -50,6 +50,7 @@ namespace PhysicsOptimizer.Modules
             public string TargetName;
             public float InitialSpeed;
             public int ImpactCount;
+            public bool NotificationSent;
         }
 
         private struct PushApartAction
@@ -69,14 +70,74 @@ namespace PhysicsOptimizer.Modules
             public int Level;
         }
 
+        public sealed class ClangOffender
+        {
+            public long ConstructId { get; set; }
+            public string DisplayName { get; set; }
+            public int TotalClangs { get; set; }
+            public int PeakRate { get; set; }
+            public int CurrentRate { get; set; }
+            public DateTime LastClangUtc { get; set; }
+            public Vector3D LastPosition { get; set; }
+            public int ZoneNumber { get; set; }
+            public string ZoneName { get; set; }
+            public double DistanceKm { get; set; }
+            public string Direction { get; set; }
+            public const int ActiveClangThreshold = 5;
+            public bool IsActive => CurrentRate >= ActiveClangThreshold;
+            public string LocationDisplay => $"{ZoneName} ({DistanceKm:F1} km {Direction})";
+            public string StatusDisplay
+            {
+                get
+                {
+                    if (CurrentRate >= 15) return $"🔥 CRITICAL: {CurrentRate}/s";
+                    if (CurrentRate >= ActiveClangThreshold) return $"⚡ CLANG: {CurrentRate}/s";
+                    if (CurrentRate > 0) return $"🟢 CONTACT: {CurrentRate}/s";
+                    return $"💤 IDLE ({FormatTimeAgo(LastClangUtc)})";
+                }
+            }
+            public string StatusColor
+            {
+                get
+                {
+                    if (CurrentRate >= 15) return "#EF4444";
+                    if (CurrentRate >= ActiveClangThreshold) return "#F59E0B";
+                    if (CurrentRate > 0) return "#10B981";
+                    return "#9CA3AF";
+                }
+            }
+            public string SummaryText => $"{TotalClangs:N0} clangs | Peak: {PeakRate:N0}/s | {LocationDisplay}";
+
+            private static string FormatTimeAgo(DateTime dt)
+            {
+                var diff = DateTime.UtcNow - dt;
+                if (diff.TotalSeconds < 60) return $"{Math.Max(1, (int)diff.TotalSeconds)}s ago";
+                if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+                return $"{(int)diff.TotalHours}h ago";
+            }
+        }
+
+        public sealed class PhysicsIncident
+        {
+            public DateTime UtcTime { get; set; }
+            public string Icon { get; set; }
+            public string Message { get; set; }
+            public string FormattedTime => UtcTime.ToLocalTime().ToString("HH:mm:ss");
+            public string FullText => $"{FormattedTime} {Icon} {Message}";
+        }
+
         private sealed class ConstructClangRecord
         {
+            public long ConstructId;
             public string DisplayName;
             public int TotalClangs;
+            public int PeakRate;
             public int CurrentSecondClangs;
             public int PreviousSecondClangs;
             public ulong CurrentSecondStartFrame;
             public ulong LastClangFrame;
+            public DateTime LastClangUtc;
+            public Vector3D LastPosition;
         }
 
         private struct VoxelArbDebugMarker
@@ -227,6 +288,21 @@ namespace PhysicsOptimizer.Modules
         {
             return ((long)(uint)x << 42) | ((long)(uint)y << 21) | (uint)z;
         }
+
+        public static int CachedModifiedVoxelBucketsCount
+        {
+            get
+            {
+                int total = 0;
+                foreach (var dict in _modifiedVoxelRegions.Values)
+                {
+                    total += dict.Count;
+                }
+                return total;
+            }
+        }
+
+        public static int CachedMacroTerrainCount => _macroTerrainCache.Count;
 
         /// <summary>True if the 32m region around worldPos was carved/drilled at some point (per RangeChanged tracking).</summary>
         private static bool IsVoxelRegionModified(MyVoxelBase voxel, Vector3D worldPos)
@@ -388,6 +464,81 @@ namespace PhysicsOptimizer.Modules
             return false;
         }
 
+        public static readonly Vector3D CrossroadsTower = new Vector3D(62495.55, 28019.04, 37195.71);
+        private const double Zone0RadiusSq = 20000.0 * 20000.0;
+        private const double Zone1RadiusSq = 35000.0 * 35000.0;
+        private const double Zone2RadiusSq = 50000.0 * 50000.0;
+
+        public static string GetKharakZone(Vector3D pos, out int zoneNumber, out double distanceKm, out string compassDir)
+        {
+            double distSq = Vector3D.DistanceSquared(pos, CrossroadsTower);
+            double dist = Math.Sqrt(distSq);
+            distanceKm = dist / 1000.0;
+
+            Vector3D diff = pos - CrossroadsTower;
+            compassDir = GetBearing(diff.X, diff.Z);
+
+            if (distSq <= Zone0RadiusSq)
+            {
+                zoneNumber = 0;
+                return "Zone 0 (Starter Hub)";
+            }
+            if (distSq <= Zone1RadiusSq)
+            {
+                zoneNumber = 1;
+                return "Zone 1 (Salvage)";
+            }
+            if (distSq <= Zone2RadiusSq)
+            {
+                zoneNumber = 2;
+                return "Zone 2 (Contested)";
+            }
+            zoneNumber = 3;
+            return "Zone 3 (Deep Desert)";
+        }
+
+        private static string GetBearing(double dx, double dz)
+        {
+            double angle = Math.Atan2(dx, -dz) * (180.0 / Math.PI);
+            if (angle < 0) angle += 360.0;
+            if (angle >= 337.5 || angle < 22.5) return "N";
+            if (angle < 67.5) return "NE";
+            if (angle < 112.5) return "E";
+            if (angle < 157.5) return "SE";
+            if (angle < 202.5) return "S";
+            if (angle < 247.5) return "SW";
+            if (angle < 292.5) return "W";
+            return "NW";
+        }
+
+        private static readonly ConcurrentQueue<PhysicsIncident> _incidentQueue = new();
+        private const int MaxIncidentHistory = 10;
+
+        public static void RecordIncident(string icon, string message)
+        {
+            _incidentQueue.Enqueue(new PhysicsIncident
+            {
+                UtcTime = DateTime.UtcNow,
+                Icon = icon,
+                Message = message
+            });
+            while (_incidentQueue.Count > MaxIncidentHistory)
+            {
+                _incidentQueue.TryDequeue(out _);
+            }
+        }
+
+        public static List<PhysicsIncident> GetRecentIncidents(int maxResults = 5)
+        {
+            var arr = _incidentQueue.ToArray();
+            var list = new List<PhysicsIncident>(arr.Length);
+            for (int i = arr.Length - 1; i >= 0 && list.Count < maxResults; i--)
+            {
+                list.Add(arr[i]);
+            }
+            return list;
+        }
+
         private static void RecordBlockedClang(MyCubeGrid grid, ulong currentFrame)
         {
             if (grid == null || currentFrame == 0) return;
@@ -395,13 +546,21 @@ namespace PhysicsOptimizer.Modules
             long constructId = topGrid.EntityId;
             ConstructClangRecord record = _constructClangRecords.GetOrAdd(constructId, id => new ConstructClangRecord
             {
+                ConstructId = id,
                 DisplayName = topGrid.DisplayName,
                 CurrentSecondStartFrame = currentFrame,
-                LastClangFrame = currentFrame
+                LastClangFrame = currentFrame,
+                LastClangUtc = DateTime.UtcNow,
+                LastPosition = topGrid.PositionComp?.GetPosition() ?? Vector3D.Zero
             });
 
             record.DisplayName = topGrid.DisplayName;
             record.LastClangFrame = currentFrame;
+            record.LastClangUtc = DateTime.UtcNow;
+            if (topGrid.PositionComp != null)
+            {
+                record.LastPosition = topGrid.PositionComp.GetPosition();
+            }
             Interlocked.Increment(ref record.TotalClangs);
 
             if (currentFrame >= record.CurrentSecondStartFrame + 60)
@@ -421,6 +580,18 @@ namespace PhysicsOptimizer.Modules
             else
             {
                 record.CurrentSecondClangs++;
+            }
+
+            if (record.CurrentSecondClangs > record.PeakRate)
+            {
+                record.PeakRate = record.CurrentSecondClangs;
+            }
+
+            if (record.CurrentSecondClangs == 10)
+            {
+                GetKharakZone(record.LastPosition, out int zNum, out double distKm, out string dir);
+                string zName = zNum == 0 ? "Z0 Hub" : zNum == 1 ? "Z1 Salvage" : zNum == 2 ? "Z2 Contested" : "Z3 Deep";
+                RecordIncident("🚨", $"Clang surge on '{record.DisplayName}' (10/s in {zName} - {distKm:F1}km {dir}).");
             }
         }
 
@@ -460,6 +631,206 @@ namespace PhysicsOptimizer.Modules
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Instantly dampens linear and angular velocity and deactivates physics across an entire mechanical construct.
+        /// Must be invoked on the game simulation thread.
+        /// </summary>
+        public static List<ClangOffender> GetSessionTopClangers(int maxResults = 20)
+        {
+            if (_constructClangRecords.IsEmpty) return new List<ClangOffender>(0);
+            ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+            var list = new List<ClangOffender>(_constructClangRecords.Count);
+
+            foreach (var kvp in _constructClangRecords)
+            {
+                ConstructClangRecord rec = kvp.Value;
+                if (rec == null || rec.TotalClangs <= 0) continue;
+
+                int currentRate = GetConstructClangRate(kvp.Key, currentFrame);
+                GetKharakZone(rec.LastPosition, out int zoneNum, out double distKm, out string dir);
+
+                list.Add(new ClangOffender
+                {
+                    ConstructId = rec.ConstructId,
+                    DisplayName = rec.DisplayName ?? "Unknown Construct",
+                    TotalClangs = rec.TotalClangs,
+                    PeakRate = Math.Max(rec.PeakRate, currentRate),
+                    CurrentRate = currentRate,
+                    LastClangUtc = rec.LastClangUtc,
+                    LastPosition = rec.LastPosition,
+                    ZoneNumber = zoneNum,
+                    ZoneName = zoneNum == 0 ? "Z0 Hub" : zoneNum == 1 ? "Z1 Salvage" : zoneNum == 2 ? "Z2 Contested" : "Z3 Deep",
+                    DistanceKm = distKm,
+                    Direction = dir
+                });
+            }
+
+            list.Sort((a, b) =>
+            {
+                if (a.IsActive != b.IsActive) return a.IsActive ? -1 : 1;
+                if (a.IsActive) return b.CurrentRate.CompareTo(a.CurrentRate);
+                return b.TotalClangs.CompareTo(a.TotalClangs);
+            });
+
+            if (list.Count > maxResults)
+            {
+                list.RemoveRange(maxResults, list.Count - maxResults);
+            }
+
+            return list;
+        }
+
+        public static void ClearClangRecords()
+        {
+            _constructClangRecords.Clear();
+        }
+
+        public static bool DampenConstruct(long constructId)
+        {
+            if (!MyEntities.TryGetEntityById(constructId, out MyEntity ent) || ent is not MyCubeGrid grid)
+            {
+                return false;
+            }
+
+            var group = new List<MyCubeGrid>();
+            GridUtils.GetMechanicalGroupMembers(grid, group);
+
+            foreach (var member in group)
+            {
+                if (member == null || member.MarkedForClose || member.Closed) continue;
+                if (member.Physics != null)
+                {
+                    member.Physics.LinearVelocity = Vector3.Zero;
+                    member.Physics.AngularVelocity = Vector3.Zero;
+                    if (member.Physics.RigidBody != null)
+                    {
+                        member.Physics.RigidBody.LinearVelocity = Vector3.Zero;
+                        member.Physics.RigidBody.AngularVelocity = Vector3.Zero;
+                        member.Physics.RigidBody.Deactivate();
+                    }
+                }
+            }
+
+            ResetConstructClangTracking(constructId, MySandboxGame.Static?.SimulationFrameCounter ?? 0);
+            RecordIncident("🛑", $"Dampened construct '{grid.DisplayName}' and deactivated rigid bodies.");
+            return true;
+        }
+
+        /// <summary>
+        /// Dampens all active clangers currently detected by the defense engine.
+        /// Must be invoked on the game simulation thread.
+        /// </summary>
+        public static bool NudgeConstruct(long constructId, float distanceMeters = 1.0f)
+        {
+            if (!MyEntities.TryGetEntityById(constructId, out MyEntity ent) || ent is not MyCubeGrid grid)
+            {
+                return false;
+            }
+
+            MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+            Vector3D pos = topGrid.PositionComp.GetPosition();
+
+            Vector3D upDir = Vector3D.Up;
+            var planet = MyGamePruningStructure.GetClosestPlanet(pos);
+            if (planet != null)
+            {
+                Vector3D grav = planet.Components?.Get<MyGravityProviderComponent>()?.GetWorldGravity(pos) ?? Vector3D.Zero;
+                if (grav.LengthSquared() > 0.0001)
+                {
+                    upDir = -Vector3D.Normalize(grav);
+                }
+            }
+
+            Vector3D offset = upDir * distanceMeters;
+            var group = new List<MyCubeGrid>();
+            GridUtils.GetMechanicalGroupMembers(topGrid, group);
+
+            foreach (var member in group)
+            {
+                if (member == null || member.MarkedForClose || member.Closed) continue;
+                var currentPos = member.PositionComp.GetPosition();
+                member.PositionComp.SetPosition(currentPos + offset);
+                if (member.Physics != null)
+                {
+                    member.Physics.LinearVelocity = Vector3.Zero;
+                    member.Physics.AngularVelocity = Vector3.Zero;
+                    if (member.Physics.RigidBody != null)
+                    {
+                        member.Physics.RigidBody.LinearVelocity = Vector3.Zero;
+                        member.Physics.RigidBody.AngularVelocity = Vector3.Zero;
+                    }
+                }
+            }
+
+            RecordIncident("🚀", $"Nudged '{topGrid.DisplayName}' +{distanceMeters:F1}m along gravity up-vector.");
+            return true;
+        }
+
+        public static bool AnchorConstruct(long constructId)
+        {
+            if (!MyEntities.TryGetEntityById(constructId, out MyEntity ent) || ent is not MyCubeGrid grid)
+            {
+                return false;
+            }
+
+            MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+            if (topGrid.IsStatic) return false;
+
+            topGrid.OnConvertedToStationRequest();
+            if (topGrid.Physics != null)
+            {
+                topGrid.Physics.LinearVelocity = Vector3.Zero;
+                topGrid.Physics.AngularVelocity = Vector3.Zero;
+            }
+
+            RecordIncident("⚓", $"Converted base grid '{topGrid.DisplayName}' to Static Station.");
+            return true;
+        }
+
+        public static bool DepowerConstruct(long constructId)
+        {
+            if (!MyEntities.TryGetEntityById(constructId, out MyEntity ent) || ent is not MyCubeGrid grid)
+            {
+                return false;
+            }
+
+            var group = new List<MyCubeGrid>();
+            GridUtils.GetMechanicalGroupMembers(grid, group);
+            int shutOffCount = 0;
+
+            foreach (var member in group)
+            {
+                if (member == null || member.MarkedForClose || member.Closed) continue;
+                foreach (var block in member.GetFatBlocks<Sandbox.Game.Entities.MyCubeBlock>())
+                {
+                    if (block is Sandbox.ModAPI.IMyPowerProducer power && power.Enabled)
+                    {
+                        power.Enabled = false;
+                        shutOffCount++;
+                    }
+                }
+            }
+
+            RecordIncident("🔌", $"Depowered '{grid.DisplayName}' ({shutOffCount} power producers shut off).");
+            return true;
+        }
+
+        public static int DampenAllClangers()
+        {
+            var clangers = GetActiveClangers(minRate: 1, maxResults: 50);
+            if (clangers == null || clangers.Count == 0) return 0;
+
+            int dampenedCount = 0;
+            foreach (var clanger in clangers)
+            {
+                if (DampenConstruct(clanger.Id))
+                {
+                    dampenedCount++;
+                }
+            }
+            return dampenedCount;
         }
 
         private static int GetConstructClangRate(long constructId, ulong currentFrame)
@@ -608,7 +979,11 @@ namespace PhysicsOptimizer.Modules
                         }
                     }
 
-                    Interlocked.Increment(ref engagement.ImpactCount);
+                    if (Interlocked.Increment(ref engagement.ImpactCount) == 1 && !engagement.NotificationSent)
+                    {
+                        engagement.NotificationSent = true;
+                        ChatNotificationService.SendPmwStrikeNotification(missileObj, targetObj, engagement.InitialSpeed, config);
+                    }
 
                     if (gridQualifies && !gridInMissile) RegisterActiveMissile(grid, engagement);
                     if (otherQualifies && !otherInMissile) RegisterActiveMissile(targetGrid, engagement);
@@ -1462,6 +1837,7 @@ namespace PhysicsOptimizer.Modules
             });
 
             _plugin?.DefenseStats?.IncrementGridsSeparated();
+            RecordIncident("🚨", $"Push-Apart nudged '{grid.DisplayName}' +{distance:F1}m out of voxels.");
 
             // Clear cached contact context for the pushed grid so old coordinates cannot poison future frames
             _lastImpactPositions.TryRemove(grid.EntityId, out _);
@@ -1496,6 +1872,10 @@ namespace PhysicsOptimizer.Modules
             _lastDeformationFrames[grid.EntityId] = currentFrame;
 
             stats?.IncrementAllowed(isMissile: isMissile);
+            if (isMissile)
+            {
+                RecordIncident("🎯", $"PMW torpedo impact confirmed on '{grid.DisplayName}'.");
+            }
             return true;
         }
 
@@ -1597,6 +1977,7 @@ namespace PhysicsOptimizer.Modules
                             {
                                 Log.Warn(LogSource, $"[PUSH-APART STATION] Executing station conversion for construct '{grid.DisplayName}' ({_pushMechanicalGroupBuffer.Count} members)...");
                             }
+                            RecordIncident("⚓", $"Push-apart limit reached: converted '{grid.DisplayName}' to Static Station.");
 
                             foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
                             {
@@ -1652,6 +2033,8 @@ namespace PhysicsOptimizer.Modules
                                 _pushApartAttempts.TryRemove(member.EntityId, out _);
                                 _lastEscapes.TryRemove(member.EntityId, out _);
                             }
+
+                            ChatNotificationService.SendPushApartNotification(grid, 0, true, config, MySandboxGame.Static?.SimulationFrameCounter ?? 0);
                         }
                         finally
                         {
@@ -1693,6 +2076,7 @@ namespace PhysicsOptimizer.Modules
                         }
 
                         PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementPushApartActionsExecuted();
+                        ChatNotificationService.SendPushApartNotification(grid, action.Distance, false, config, MySandboxGame.Static?.SimulationFrameCounter ?? 0);
                     }
                     finally
                     {

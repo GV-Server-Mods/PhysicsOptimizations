@@ -12,6 +12,53 @@ namespace PhysicsOptimizer.Services
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
         }
 
+        private PhysicsOptimizerPlugin _plugin;
+
+        public void Init(PhysicsOptimizerPlugin plugin)
+        {
+            _plugin = plugin;
+        }
+
+        public bool IsRigidBodySleepEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableRigidBodySleep;
+        public bool IsWheelOptimizerEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableWheelOptimizer;
+        public bool IsOreMergeEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableOreMerge;
+        public bool IsSubgridStabilizerEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableSubgridStabilizer;
+        public bool IsAdaptiveCollisionEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAdaptiveCollision;
+
+        // Progress bar percentages (0 to 100)
+        public double DynamicSleepRatioPercent => (IsRigidBodySleepEnabled && TrackedGridsCount > 0) ? (double)GridsCurrentlyForcedSleep / TrackedGridsCount * 100.0 : 0.0;
+        public double SleepingWheelsRatioPercent => (IsWheelOptimizerEnabled && TotalRoverWheelsCount > 0) ? (double)SleepingWheelsCount / TotalRoverWheelsCount * 100.0 : 0.0;
+        public double StabilizedJointsRatioPercent => (IsSubgridStabilizerEnabled && TrackedSubgridConstraints > 0) ? (double)StabilizedSubgridConstraints / TrackedSubgridConstraints * 100.0 : 0.0;
+
+        // Formatted display strings for UI
+        public string RigidBodiesDisplay => IsRigidBodySleepEnabled
+            ? $"{ActiveRigidBodies:N0} Act / {SleepingRigidBodies:N0} Slp"
+            : "[Disabled]";
+
+        public string DynamicGridsSleepDisplay => IsRigidBodySleepEnabled
+            ? $"{GridsCurrentlyForcedSleep:N0} / {TrackedGridsCount:N0} ({ForcedSleepEventsTotal:N0} events)"
+            : "[Disabled]";
+
+        public string MergedOreDisplay => IsOreMergeEnabled
+            ? $"{OreStacksMergedTotal:N0} ({OreEntitiesEliminatedTotal:N0} eliminated)"
+            : "[Disabled]";
+
+        public string RoversDisplay => IsWheelOptimizerEnabled
+            ? $"{TrackedRoversCount:N0} (Parked Asleep: {ParkedRoversAsleep:N0})"
+            : "[Disabled]";
+
+        public string SleepingWheelsDisplay => IsWheelOptimizerEnabled
+            ? $"{SleepingWheelsCount:N0} / {TotalRoverWheelsCount:N0} sleeping"
+            : "[Disabled]";
+
+        public string SubgridJointsDisplay => IsSubgridStabilizerEnabled
+            ? $"{StabilizedSubgridConstraints:N0} / {TrackedSubgridConstraints:N0} dampened"
+            : "[Disabled]";
+
+        public string AdaptiveTOIDisplay => IsAdaptiveCollisionEnabled
+            ? $"{DiscreteTOIGridsCount:N0} Disc / {ContinuousTOIGridsCount:N0} Cont"
+            : "[Disabled]";
+
         // Live gauges
         private float _serverSimulationSpeed = 1.0f;
         private int _activeRigidBodies;
@@ -208,6 +255,30 @@ namespace PhysicsOptimizer.Services
                    $"Merged Ore Stacks: {OreStacksMergedTotal}, Eliminated: {OreEntitiesEliminatedTotal}\n" +
                    $"Subgrid Constraints Stabilized: {StabilizedSubgridConstraints}/{TrackedSubgridConstraints}\n" +
                    $"TOI Grids Discrete: {DiscreteTOIGridsCount}, Continuous: {ContinuousTOIGridsCount}";
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "Sim Speed: {0:F2} TPS", ServerSimulationSpeed));
+
+            sb.AppendLine(IsRigidBodySleepEnabled
+                ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "Active Bodies: {0:N0}, Sleeping: {1:N0} (Forced Sleep: {2:N0}/{3:N0}, {4:N0} events)", ActiveRigidBodies, SleepingRigidBodies, GridsCurrentlyForcedSleep, TrackedGridsCount, ForcedSleepEventsTotal)
+                : "Rigid Body Sleep: [Disabled]");
+
+            sb.AppendLine(IsWheelOptimizerEnabled
+                ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "Rovers: {0:N0}, Parked Asleep: {1:N0}, Sleeping Wheels: {2:N0}/{3:N0}", TrackedRoversCount, ParkedRoversAsleep, SleepingWheelsCount, TotalRoverWheelsCount)
+                : "Wheel Optimizer: [Disabled]");
+
+            sb.AppendLine(IsOreMergeEnabled
+                ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "Merged Ore Stacks: {0:N0}, Eliminated: {1:N0}", OreStacksMergedTotal, OreEntitiesEliminatedTotal)
+                : "Ore Merge: [Disabled]");
+
+            sb.AppendLine(IsSubgridStabilizerEnabled
+                ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "Subgrid Constraints Stabilized: {0:N0}/{1:N0}", StabilizedSubgridConstraints, TrackedSubgridConstraints)
+                : "Subgrid Stabilizer: [Disabled]");
+
+            sb.Append(IsAdaptiveCollisionEnabled
+                ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "TOI Grids Discrete: {0:N0}, Continuous: {1:N0}", DiscreteTOIGridsCount, ContinuousTOIGridsCount)
+                : "Adaptive Collision: [Disabled]");
+
+            return sb.ToString();
         }
 
         public void ResetLiveCounters()

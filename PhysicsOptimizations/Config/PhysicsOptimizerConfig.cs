@@ -26,6 +26,13 @@ namespace PhysicsOptimizer.Config
         private bool _logMissileDefense = false;
         private bool _logVoxelNormals = false;
 
+        // --- Chat & Notification Settings ---
+        private bool _enableHourlyChatDigest = true;
+        private bool _enablePushApartPlayerNotification = true;
+        private bool _enablePmwFactionTelemetry = true;
+        private int _chatNotificationCooldownSeconds = 30;
+        private int _uiRefreshIntervalMs = 500;
+
         // --- Module 1: Wheel & Suspension ---
         private bool _enableWheelOptimizer = true;
         private bool _enableWheelCollisionFilter = true;
@@ -130,6 +137,20 @@ namespace PhysicsOptimizer.Config
         public bool LogThrusterClearance { get => _logThrusterClearance; set => SetValue(ref _logThrusterClearance, value); }
         public bool LogMissileDefense { get => _logMissileDefense; set => SetValue(ref _logMissileDefense, value); }
         public bool LogVoxelNormals { get => _logVoxelNormals; set => SetValue(ref _logVoxelNormals, value); }
+
+        public bool EnableHourlyChatDigest { get => _enableHourlyChatDigest; set => SetValue(ref _enableHourlyChatDigest, value); }
+        public bool EnablePushApartPlayerNotification { get => _enablePushApartPlayerNotification; set => SetValue(ref _enablePushApartPlayerNotification, value); }
+        public bool EnablePmwFactionTelemetry { get => _enablePmwFactionTelemetry; set => SetValue(ref _enablePmwFactionTelemetry, value); }
+        public int ChatNotificationCooldownSeconds
+        {
+            get => _chatNotificationCooldownSeconds;
+            set => SetValue(ref _chatNotificationCooldownSeconds, Math.Max(5, Math.Min(3600, value)));
+        }
+        public int UiRefreshIntervalMs
+        {
+            get => _uiRefreshIntervalMs;
+            set => SetValue(ref _uiRefreshIntervalMs, Math.Max(100, Math.Min(5000, value)));
+        }
 
         public bool EnableWheelOptimizer { get => _enableWheelOptimizer; set => SetValue(ref _enableWheelOptimizer, value); }
         public bool EnableWheelCollisionFilter { get => _enableWheelCollisionFilter; set => SetValue(ref _enableWheelCollisionFilter, value); }

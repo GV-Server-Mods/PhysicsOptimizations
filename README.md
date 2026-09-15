@@ -431,7 +431,12 @@ Every optimizer module shares this consolidated tab: Wheel Optimizer (symmetrica
 Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), voxel normal force arbitrator, PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, and voxel cutout suppression.
 
 ### Tab 3: Live Telemetry
-A global diagnostics strip (debug logging, console telemetry heartbeat, push-apart diagnostics, and the push-apart / voxel-arbitrator debug GPS markers) sits above real-time gauges updating at 2Hz across 4 operational cards (Havok Simulation Health, Rover & Subgrid Status, Collision Defense & PMWs, Armor & Voxel Protection) plus manual admin action buttons (**Sleep All Grids**, **Wake All Grids**, **Merge Ore Now**, **Reset Gauges**).
+A diagnostics strip (debug logging, console telemetry heartbeat, push-apart diagnostics, push-apart/voxel-arbitrator debug GPS markers, and player chat alert toggles) sits above real-time gauges updating at a configurable UI rate (default 500ms) across 4 operational cards:
+- **Card A (Havok Simulation Health)**: Sim speed, active/sleeping bodies, sleeping dynamic grids, ore merge stats, and real-time hot-path rates (Havok contacts/s, arbitrator raycasts/s, push actions/s, GC delta counts & heap memory).
+- **Card B (Rover & Subgrid Status)**: Tracked rovers, parked rovers asleep, sleeping wheels, stabilized subgrid joints, and Discrete/Continuous TOI distribution.
+- **Card C (Collision Defense & PMWs)**: Total evaluations, crashes blocked, defense block ratio, PMW torpedo impacts allowed, piloted buggy saves, and an **Active Clang Culprits** inspection box with one-click `[Copy GPS]` button.
+- **Card D (Armor & Voxel Protection)**: Layered armor blocks saved, voxel normals inverted, grids nudged apart, thruster obstructions burned, voxel cutouts prevented, and live cache tracking (carved voxel 32m regions and macro terrain surface entries).
+- **Bottom Action Strip**: Quick solver interventions: **Sleep All Grids**, **Wake All Grids**, **Merge Ore Now**, **Copy Diagnostic Summary**, **🚨 Dampen All Clangers**, and **Reset Counters**.
 
 ---
 

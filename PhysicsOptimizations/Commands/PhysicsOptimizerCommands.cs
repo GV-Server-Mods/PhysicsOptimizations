@@ -367,6 +367,26 @@ namespace PhysicsOptimizer.Commands
             Plugin?.DefenseStats?.Reset();
             Context.Respond("[PhysicsOptimizer] Live telemetry and defense counters reset.");
         }
+
+        [Command("dampen", "Dampens velocities and arrests physics on all active clangers or a specific grid ID.")]
+        [Permission(MyPromoteLevel.Admin)]
+        public void Dampen(long gridId = 0L)
+        {
+            if (gridId != 0L)
+            {
+                bool success = Modules.GridDefender.DampenConstruct(gridId);
+                Context.Respond(success
+                    ? string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Successfully dampened construct {0}.", gridId)
+                    : string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Grid {0} not found or closed.", gridId));
+            }
+            else
+            {
+                int count = Modules.GridDefender.DampenAllClangers();
+                Context.Respond(count > 0
+                    ? string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Dampened velocities across {0} active clanger constructs.", count)
+                    : "[PhysicsOptimizer] No active clangers detected above threshold.");
+            }
+        }
     }
 }
 

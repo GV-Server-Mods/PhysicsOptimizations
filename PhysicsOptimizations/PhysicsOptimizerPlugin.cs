@@ -58,6 +58,7 @@ namespace PhysicsOptimizer
 
             LoadConfig();
             Telemetry = new OptimizationTelemetry();
+            Telemetry.Init(this);
             DefenseStats = new DefenseStatistics();
 
             InitializeOptimizers();
@@ -171,6 +172,19 @@ namespace PhysicsOptimizer
             {
                 EmitConsoleTelemetryHeartbeat();
             }
+
+            // Hourly Defense Digest (every 216,000 frames = 1 hour at 60 TPS)
+            if (Config.EnableHourlyChatDigest && _frameCounter > 0 && _frameCounter % 216000UL == 0 && DefenseStats != null)
+            {
+                DefenseStats.GetHourlyDigest(out long hourBlk, out long allBlk, out long hourSep, out long allSep, out _, out _);
+                ChatNotificationService.SendHourlyDefenseDigest(hourBlk, allBlk, hourSep, allSep);
+            }
+
+            // Prune expired cooldowns periodically (every 10s)
+            if (_frameCounter % 600UL == 0)
+            {
+                ChatNotificationService.PruneExpiredCooldowns(_frameCounter);
+            }
         }
 
         private void EmitConsoleTelemetryHeartbeat()
@@ -204,13 +218,16 @@ namespace PhysicsOptimizer
             int gc0 = GC.CollectionCount(0);
             int gc1 = GC.CollectionCount(1);
             int gc2 = GC.CollectionCount(2);
-            string gcStr = _prevGc0 < 0
-                ? string.Format(CultureInfo.InvariantCulture, "{0}/{1}/{2}", gc0, gc1, gc2)
-                : string.Format(CultureInfo.InvariantCulture, "{0}/{1}/{2}", gc0 - _prevGc0, gc1 - _prevGc1, gc2 - _prevGc2);
+            int dGc0 = _prevGc0 < 0 ? gc0 : gc0 - _prevGc0;
+            int dGc1 = _prevGc1 < 0 ? gc1 : gc1 - _prevGc1;
+            int dGc2 = _prevGc2 < 0 ? gc2 : gc2 - _prevGc2;
+            string gcStr = string.Format(CultureInfo.InvariantCulture, "{0}/{1}/{2}", dGc0, dGc1, dGc2);
             _prevGc0 = gc0;
             _prevGc1 = gc1;
             _prevGc2 = gc2;
             double managedMb = GC.GetTotalMemory(false) / 1048576.0;
+
+            DefenseStats?.UpdateRates(cbRate, arRate, psRate, dGc0, dGc1, dGc2, managedMb);
 
             string offendersStr = "";
             var offenders = Modules.GridDefender.GetActiveClangers(minRate: 10, maxResults: 2);
