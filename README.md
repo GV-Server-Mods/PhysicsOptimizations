@@ -5,7 +5,7 @@
 * **Plugin Type**: Torch Dedicated Server Plugin (.NET Framework 4.8, x64, WPF UI)
 * **Target Environment**: Space Engineers Dedicated Servers / Torch (Universal Standalone Plugin, battle-tested on GV: Deserts of Kharak)
 * **Package**: `GVK_PhysicsOptimizations.zip` (plugin DLL + PDB + manifest)
-* **Version**: 2.0.0 (in-log and command branding; `manifest.xml` / `.csproj` `<Version>` fields still read 1.0.0 - bump at next release)
+* **Version**: 2.0.0 (in-log branding, `manifest.xml`, and `.csproj` `<Version>` all read 2.0.0)
 
 ---
 
@@ -563,6 +563,12 @@ Parallel ray fans (1/5/9 rays per flame) previously applied full damage per ray 
 Sleep All / Wake All / Merge Ore buttons dispatch through `MySandboxGame.Static.Invoke` and report back on the WPF dispatcher. `MyEntities`/Havok calls from the Torch UI thread race the simulation loop; console commands (`!phys ...`) already ran on the game thread.
 
 ---
+
+### Havok contact-point coupling (engine version pinned)
+
+The Voxel Normal Arbitrator, Push-Apart, and Layered Armor Occlusion read raw Havok contact data in `RigidBody_ContactPointCallbackImpl`, including `HkContactPoint.NormalAndDistance.W` (byte 28) because `HavokWrapper.dll`'s `HkContactPoint.Distance` property has a `[FieldOffset(20)]` layout bug that aliases `Normal.Y`. These offsets and the `AccessVelocities`/`UpdateVelocities` solver-buffer contract are pinned to the game build this plugin ships against. Re-verify before promoting to a new SE major/minor release.
+
+`EnableVoxelNormalArbitrator` defaults to `true`; it is the only feature that performs per-voxel-contact work (planet reflection, `GetClosestPlanet`, and - only in modified voxel regions - a confirmation raycast) amortized by the per-frame `_macroTerrainCache`. If profiling shows the contact path dominating sim cost under heavy rover combat, A/B this toggle first, alongside the `Hot:` counters now emitted in the console heartbeat.
 
 ## 11. License & Credits
 

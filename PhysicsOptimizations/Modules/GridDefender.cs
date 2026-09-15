@@ -1702,6 +1702,8 @@ namespace PhysicsOptimizer.Modules
 
                             _consecutiveContactFrames[member.EntityId] = 0;
                         }
+
+                        PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementPushApartActionsExecuted();
                     }
                     finally
                     {
@@ -2162,12 +2164,19 @@ namespace PhysicsOptimizer.Modules
         {
             try
             {
-                if (__instance.Entity is MyCubeGrid gridLocal)
+                PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementContactCallbacks();
+
+                PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
+
+                // Contact context feeds Layered Armor Occlusion and Push-Apart only; skip the per-contact
+                // dictionary write when both are disabled.
+                if (config != null && config.Enabled && config.EnableGridDefender &&
+                    (config.EnableLayeredArmorOcclusion || config.EnablePushApart) &&
+                    __instance.Entity is MyCubeGrid gridLocal)
                 {
                     UpdateCollisionContext(gridLocal.EntityId, __instance.ClusterToWorld(value.ContactPoint.Position));
                 }
 
-                PhysicsOptimizerConfig config = PhysicsOptimizerPlugin.Instance?.Config;
                 bool arbitratorEnabled = config != null && config.EnableVoxelNormalArbitrator;
                 if (config == null)
                     return true;
@@ -2320,6 +2329,7 @@ namespace PhysicsOptimizer.Modules
                                     _voxelHitsCache ??= [];
                                     _voxelHitsCache.Clear();
                                     MyPhysics.CastRay(rayStart, rayEnd, _voxelHitsCache, MyPhysics.CollisionLayers.VoxelCollisionLayer);
+                                    PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementVoxelArbitratorRaycasts();
                                     for (int i = 0; i < _voxelHitsCache.Count; i++)
                                     {
                                         IMyEntity hitEnt = _voxelHitsCache[i].HkHitInfo.GetHitEntity();

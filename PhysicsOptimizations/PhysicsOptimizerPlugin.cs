@@ -24,11 +24,19 @@ namespace PhysicsOptimizer
 
         public static PhysicsOptimizerPlugin Instance { get; private set; }
 
-        private Persistent<PhysicsOptimizerConfig> _config;
+        private volatile Persistent<PhysicsOptimizerConfig> _config;
         private PhysicsOptimizerControl _control;
         private ulong _frameCounter;
         private ulong _logTickCounter;
         private readonly object _configLock = new();
+
+        // Heartbeat rate-trackers (deltas between telemetry lines) and GC baselines.
+        private long _prevContactCallbacks;
+        private long _prevVoxelArbRaycasts;
+        private long _prevPushApartExecuted;
+        private int _prevGc0 = -1;
+        private int _prevGc1 = -1;
+        private int _prevGc2 = -1;
 
         public PhysicsOptimizerConfig Config => _config?.Data;
         public OptimizationTelemetry Telemetry { get; private set; }
@@ -182,6 +190,28 @@ namespace PhysicsOptimizer
             long inv = DefenseStats?.VoxelNormalsInverted ?? 0;
             long sep = DefenseStats?.GridsSeparated ?? 0;
 
+            double seconds = Math.Max(1, Config?.ConsoleTelemetryIntervalSeconds ?? 30);
+            long cb = DefenseStats?.ContactCallbacks ?? 0;
+            long ar = DefenseStats?.VoxelArbitratorRaycasts ?? 0;
+            long ps = DefenseStats?.PushApartActionsExecuted ?? 0;
+            double cbRate = (cb - _prevContactCallbacks) / seconds;
+            double arRate = (ar - _prevVoxelArbRaycasts) / seconds;
+            double psRate = (ps - _prevPushApartExecuted) / seconds;
+            _prevContactCallbacks = cb;
+            _prevVoxelArbRaycasts = ar;
+            _prevPushApartExecuted = ps;
+
+            int gc0 = GC.CollectionCount(0);
+            int gc1 = GC.CollectionCount(1);
+            int gc2 = GC.CollectionCount(2);
+            string gcStr = _prevGc0 < 0
+                ? string.Format(CultureInfo.InvariantCulture, "{0}/{1}/{2}", gc0, gc1, gc2)
+                : string.Format(CultureInfo.InvariantCulture, "{0}/{1}/{2}", gc0 - _prevGc0, gc1 - _prevGc1, gc2 - _prevGc2);
+            _prevGc0 = gc0;
+            _prevGc1 = gc1;
+            _prevGc2 = gc2;
+            double managedMb = GC.GetTotalMemory(false) / 1048576.0;
+
             string offendersStr = "";
             var offenders = Modules.GridDefender.GetActiveClangers(minRate: 10, maxResults: 2);
             if (offenders != null && offenders.Count > 0)
@@ -190,8 +220,8 @@ namespace PhysicsOptimizer
             }
 
             Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
-                "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Fixes: {10} Invert, {11} Nudge{12}",
-                speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, inv, sep, offendersStr));
+                "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Fixes: {10} Invert, {11} Nudge | Hot: {12:F0} cb/s, {13:F1} ar/s, {14:F2} push/s | GC: {15} ({16:F0} MB){17}",
+                speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, inv, sep, cbRate, arRate, psRate, gcStr, managedMb, offendersStr));
         }
 
         public override void Dispose()
@@ -215,18 +245,25 @@ namespace PhysicsOptimizer
             var configPath = Path.Combine(StoragePath, "PhysicsOptimizer.cfg");
             try
             {
-                _config = Persistent<PhysicsOptimizerConfig>.Load(configPath);
-                if (_config.Data == null)
+                var loaded = Persistent<PhysicsOptimizerConfig>.Load(configPath);
+                if (loaded.Data == null)
                 {
                     Log.Warn(LogSource, "Config loaded as null, creating new default config.");
-                    _config = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
+                    loaded = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
+                }
+                lock (_configLock)
+                {
+                    _config = loaded;
                 }
                 Log.Info(LogSource, $"Loaded config from {configPath}");
             }
             catch (Exception ex)
             {
                 Log.Error(ex, LogSource, "Error loading configuration.");
-                _config = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
+                lock (_configLock)
+                {
+                    _config = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
+                }
             }
         }
 

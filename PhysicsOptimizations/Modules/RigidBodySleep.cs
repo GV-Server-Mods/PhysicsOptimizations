@@ -228,9 +228,11 @@ namespace PhysicsOptimizer.Modules
             }
 
             var landingSystem = grid.GridSystems?.LandingSystem;
-            if (landingSystem != null && (landingSystem.IsParked || landingSystem.Locked == VRage.MyMultipleEnabledEnum.AllEnabled || landingSystem.Locked == VRage.MyMultipleEnabledEnum.Mixed))
+            if (landingSystem != null && (landingSystem.Locked == VRage.MyMultipleEnabledEnum.AllEnabled || landingSystem.Locked == VRage.MyMultipleEnabledEnum.Mixed))
             {
-                return true; // Locked landing gears/feet
+                // Locked gear is sleep-safe only when attached to terrain or a static grid; a gear
+                // locked to another dynamic grid (trailer, docked ship, carrier deck) must stay awake.
+                return IsLockedToImmovable(landingSystem);
             }
 
             // Check if thrusters are actively firing against gravity (holding mid-air hover)
@@ -244,6 +246,27 @@ namespace PhysicsOptimizer.Modules
             }
 
             // If no thrusters fighting gravity and stationary, it's a wreck, debris, or landed grid at rest on voxels
+            return true;
+        }
+
+        /// <summary>
+        /// True when every locked landing gear is attached to terrain or a static grid (sleep-safe),
+        /// false when any gear is locked to another dynamic grid.
+        /// </summary>
+        private static bool IsLockedToImmovable(MyGridLandingSystem landingSystem)
+        {
+            var attached = landingSystem.GetAttachedEntities();
+            if (attached == null || attached.Count == 0) return false;
+
+            foreach (var entity in attached)
+            {
+                if (entity is MyCubeGrid grid && !grid.IsStatic)
+                {
+                    return false; // locked to a dynamic grid (trailer/docked ship) - keep awake
+                }
+                // Attached to a voxel or static grid: immovable and sleep-safe.
+            }
+
             return true;
         }
 

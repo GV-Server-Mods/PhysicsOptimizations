@@ -27,6 +27,11 @@ namespace PhysicsOptimizer.Services
         private long _voxelCutoutsPrevented;
         private long _pilotedBuggySaves;
 
+        // Hot-path invocation counters (surfaced as per-second rates in the console heartbeat).
+        private long _contactCallbacks;
+        private long _voxelArbitratorRaycasts;
+        private long _pushApartActionsExecuted;
+
         /// <summary>
         /// Total number of collision events processed by the defense engine.
         /// </summary>
@@ -225,6 +230,45 @@ namespace PhysicsOptimizer.Services
         }
 
         /// <summary>
+        /// Total raw Havok contact-point callbacks seen (the hottest unstepped path).
+        /// </summary>
+        public long ContactCallbacks => Interlocked.Read(ref _contactCallbacks);
+
+        /// <summary>
+        /// Total voxel-collision-layer raycasts fired by the Voxel Normal Arbitrator (modified-voxel regions only).
+        /// </summary>
+        public long VoxelArbitratorRaycasts => Interlocked.Read(ref _voxelArbitratorRaycasts);
+
+        /// <summary>
+        /// Total queued push-apart actions actually applied to a grid.
+        /// </summary>
+        public long PushApartActionsExecuted => Interlocked.Read(ref _pushApartActionsExecuted);
+
+        /// <summary>
+        /// Increments the raw contact-callback counter (called once per Havok contact point).
+        /// </summary>
+        public void IncrementContactCallbacks()
+        {
+            Interlocked.Increment(ref _contactCallbacks);
+        }
+
+        /// <summary>
+        /// Increments the arbitrator voxel-raycast counter.
+        /// </summary>
+        public void IncrementVoxelArbitratorRaycasts()
+        {
+            Interlocked.Increment(ref _voxelArbitratorRaycasts);
+        }
+
+        /// <summary>
+        /// Increments the applied-push counter.
+        /// </summary>
+        public void IncrementPushApartActionsExecuted()
+        {
+            Interlocked.Increment(ref _pushApartActionsExecuted);
+        }
+
+        /// <summary>
         /// Notifies the WPF UI of property changes across all telemetry metrics.
         /// </summary>
         public void NotifyAll()
@@ -247,6 +291,9 @@ namespace PhysicsOptimizer.Services
             OnPropertyChanged(nameof(ThrusterObstructionsVaporized));
             OnPropertyChanged(nameof(VoxelCutoutsPrevented));
             OnPropertyChanged(nameof(PilotedBuggySaves));
+            OnPropertyChanged(nameof(ContactCallbacks));
+            OnPropertyChanged(nameof(VoxelArbitratorRaycasts));
+            OnPropertyChanged(nameof(PushApartActionsExecuted));
             OnPropertyChanged(nameof(ActiveCollisionOffendersSummary));
         }
 
@@ -257,6 +304,7 @@ namespace PhysicsOptimizer.Services
                    $"PMW Torpedoes Allowed: {MissileHitsAllowed:N0}, Piloted Buggy Saves: {PilotedBuggySaves:N0}\n" +
                    $"Layered Armor Saved: {ArmorHitsOccluded:N0}, Voxel Normals Inverted: {VoxelNormalsInverted:N0}\n" +
                    $"Grids Nudged Apart: {GridsSeparated:N0}\n" +
+                   $"Hot Path: Contacts {ContactCallbacks:N0}, Arb Raycasts {VoxelArbitratorRaycasts:N0}, Pushes {PushApartActionsExecuted:N0}\n" +
                    $"Thruster Obstructions Vaporized: {ThrusterObstructionsVaporized:N0}, Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}\n" +
                    $"Active Clang Offenders: {ActiveCollisionOffendersSummary}";
         }
@@ -283,6 +331,9 @@ namespace PhysicsOptimizer.Services
             Interlocked.Exchange(ref _thrusterObstructionsVaporized, 0);
             Interlocked.Exchange(ref _voxelCutoutsPrevented, 0);
             Interlocked.Exchange(ref _pilotedBuggySaves, 0);
+            Interlocked.Exchange(ref _contactCallbacks, 0);
+            Interlocked.Exchange(ref _voxelArbitratorRaycasts, 0);
+            Interlocked.Exchange(ref _pushApartActionsExecuted, 0);
 
             NotifyAll();
         }
