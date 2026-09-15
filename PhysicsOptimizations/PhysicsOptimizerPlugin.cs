@@ -255,6 +255,7 @@ namespace PhysicsOptimizer
                 {
                     _config = loaded;
                 }
+                ResetDebugOnlyDiagnostics();
                 Log.Info(LogSource, $"Loaded config from {configPath}");
             }
             catch (Exception ex)
@@ -264,6 +265,36 @@ namespace PhysicsOptimizer
                 {
                     _config = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
                 }
+            }
+        }
+
+        /// <summary>
+        /// Debug-only diagnostics never persist across restarts: verbose logging and both debug GPS
+        /// marker draws are forced off on load, then written back so a stale config file cannot
+        /// leave them running in normal play. Re-enabling at runtime lasts for that session only.
+        /// </summary>
+        private void ResetDebugOnlyDiagnostics()
+        {
+            PhysicsOptimizerConfig cfg = Config;
+            if (cfg == null) return;
+
+            if (!cfg.EnableDebugLogging && !cfg.EnableVoxelNormalArbitratorDebugDraw && !cfg.EnablePushApartDebugDraw) return;
+
+            cfg.EnableDebugLogging = false;
+            cfg.EnableVoxelNormalArbitratorDebugDraw = false;
+            cfg.EnablePushApartDebugDraw = false;
+            Log.Info(LogSource, "Debug-only diagnostics (verbose logging, push-apart and voxel-arbitrator debug GPS markers) reset to off.");
+
+            try
+            {
+                lock (_configLock)
+                {
+                    _config.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(ex, LogSource, "Could not persist debug diagnostic defaults; runtime state is unaffected.");
             }
         }
 

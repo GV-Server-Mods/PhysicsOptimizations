@@ -101,13 +101,11 @@ namespace PhysicsOptimizer.Config
         private float _pushApartDistance = 0.5f;
         private int _pushApartMaxAttempts = 3;
         private bool _convertToStaticOnPushApartGiveUp = true;
-        private bool _enableBurialProbe = true;
         private bool _enablePushApartDebugDraw = false;
         private int _pushApartClangRateThreshold = 500;
         private float _pushApartEmbeddedDepth = 0.20f;
         private float _pushApartMaxDrift = 1.5f;
         private float _pushApartMaxNudgeDistance = 2.0f;
-        private float _burialProbeRadius = 2.0f;
         private bool _enableVoxelNormalArbitratorDebugDraw = false;
         private bool _logPushApartDiagnostics = false;
         private bool _logPushApartStationConversion = true;
@@ -292,7 +290,6 @@ namespace PhysicsOptimizer.Config
             set => SetValue(ref _pushApartMaxAttempts, Math.Max(0, Math.Min(1000, value)));
         }
         public bool ConvertToStaticOnPushApartGiveUp { get => _convertToStaticOnPushApartGiveUp; set => SetValue(ref _convertToStaticOnPushApartGiveUp, value); }
-        public bool EnableBurialProbe { get => _enableBurialProbe; set => SetValue(ref _enableBurialProbe, value); }
         public bool EnablePushApartDebugDraw { get => _enablePushApartDebugDraw; set => SetValue(ref _enablePushApartDebugDraw, value); }
         public int PushApartClangRateThreshold
         {
@@ -316,11 +313,6 @@ namespace PhysicsOptimizer.Config
         }
         public bool ExcludeWheelSubgridsFromPushApart { get => _excludeWheelSubgridsFromPushApart; set => SetValue(ref _excludeWheelSubgridsFromPushApart, value); }
         public bool ExcludeWheelSubgridsFromSubgridStabilizer { get => _excludeWheelSubgridsFromSubgridStabilizer; set => SetValue(ref _excludeWheelSubgridsFromSubgridStabilizer, value); }
-        public float BurialProbeRadius
-        {
-            get => _burialProbeRadius;
-            set => SetValue(ref _burialProbeRadius, Math.Max(1f, Math.Min(10f, value)));
-        }
         public bool EnableVoxelNormalArbitratorDebugDraw { get => _enableVoxelNormalArbitratorDebugDraw; set => SetValue(ref _enableVoxelNormalArbitratorDebugDraw, value); }
         public bool LogPushApartDiagnostics { get => _logPushApartDiagnostics; set => SetValue(ref _logPushApartDiagnostics, value); }
         public bool LogPushApartStationConversion { get => _logPushApartStationConversion; set => SetValue(ref _logPushApartStationConversion, value); }

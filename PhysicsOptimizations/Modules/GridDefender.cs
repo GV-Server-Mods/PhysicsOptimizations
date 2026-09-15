@@ -62,13 +62,6 @@ namespace PhysicsOptimizer.Modules
             public bool ConvertToStatic;
         }
 
-        private sealed class BurialProbeState
-        {
-            public Vector3D LastPosition;
-            public int StationarySweeps;
-        }
-
-
         private sealed class EscapeRecord
         {
             public Vector3D Direction;
@@ -114,7 +107,6 @@ namespace PhysicsOptimizer.Modules
         private readonly ConcurrentDictionary<long, ulong> _lastVoxelContactFrameTracker = new();
         private readonly ConcurrentDictionary<long, Vector3D> _voxelContactStartPositions = new();
         private readonly ConcurrentDictionary<long, ulong> _lastPushApartGateLogFrames = new();
-        private readonly ConcurrentDictionary<long, BurialProbeState> _burialProbeStates = new();
         private readonly ConcurrentDictionary<long, int> _pushApartAttempts = new();
         private readonly ConcurrentDictionary<long, EscapeRecord> _lastEscapes = new();
 
@@ -333,7 +325,6 @@ namespace PhysicsOptimizer.Modules
             _lastVoxelContactFrameTracker.Clear();
             _voxelContactStartPositions.Clear();
             _lastPushApartGateLogFrames.Clear();
-            _burialProbeStates.Clear();
             _constructClangRecords.Clear();
             _lastVoxelArbitratorLogFrames.Clear();
             _pendingVoxelArbDebugGps.Clear();
@@ -732,7 +723,6 @@ namespace PhysicsOptimizer.Modules
             _lastExtremeSpeedLogFrames.TryRemove(id, out _);
             _lastVoxelArbitratorLogFrames.TryRemove(id, out _);
             _lastVoxelContactFrames.TryRemove(id, out _);
-            _burialProbeStates.TryRemove(id, out _);
             _lastVoxelContactNormals.TryRemove(id, out _);
             _lastVoxelPenetrations.TryRemove(id, out _);
             _macroTerrainCache.TryRemove(id, out _);
@@ -1548,7 +1538,6 @@ namespace PhysicsOptimizer.Modules
             if (currentFrame % 600 == 0)
             {
                 TrimOldFrames(currentFrame);
-                RunBurialProbe(currentFrame);
             }
 
             ProcessPendingVoxelArbDebugGps();
@@ -1819,142 +1808,6 @@ namespace PhysicsOptimizer.Modules
         }
 
 
-        /// <summary>
-        /// Cold-path burial probe: grids stationary for 2+ sweeps (about 20s) confined by voxel
-        /// material get an active rescue push - 3+ solid sides for silent burials, relaxed to 2
-        /// sides when terrain contact was seen within ~60s (cliff wedges). Covers grids where
-        /// Havok emits no contact callbacks, so contact-driven push-apart never fires.
-        /// </summary>
-        private void RunBurialProbe(ulong currentFrame)
-        {
-            PhysicsOptimizerConfig config = _plugin?.Config;
-            if (config == null || !config.EnableBurialProbe || !config.EnablePushApart) return;
-
-            foreach (MyEntity entity in MyEntities.GetEntities())
-            {
-                if (entity is not MyCubeGrid grid || grid.IsStatic || grid.MarkedForClose || grid.Closed || grid.Physics?.RigidBody == null) continue;
-
-                // Burial probe only runs on the main chassis/topgrid of a construct - never on subgrids or wheels
-                if (IsWheelSubgrid(grid, out _) || (GridUtils.GetMainGrid(grid) ?? grid) != grid) continue;
-
-                long id = grid.EntityId;
-                Vector3D pos = grid.PositionComp.GetPosition();
-
-                if (!_burialProbeStates.TryGetValue(id, out BurialProbeState state))
-                {
-                    _burialProbeStates[id] = new BurialProbeState { LastPosition = pos, StationarySweeps = 0 };
-                    continue;
-                }
-
-                if (Vector3D.DistanceSquared(pos, state.LastPosition) > 0.25)
-                {
-                    state.LastPosition = pos;
-                    state.StationarySweeps = 0;
-                    continue;
-                }
-
-                state.LastPosition = pos;
-                state.StationarySweeps++;
-                if (state.StationarySweeps < 2) continue;
-
-                // Contact-driven push-apart owns grids that are actively grinding; probe is for silent burials
-                if (HadRecentVoxelContact(id)) continue;
-
-                // Silent burials require solid terrain confinement on 3+ horizontal sides.
-                // Grids resting on the surface are filtered out by IsGridBuried.
-                int minSolidSides = 3;
-                if (IsGridBuried(grid, config, minSolidSides))
-                {
-                    if (!TryResolveVoxelEscapeDirection(grid, config, null, out Vector3D escapeDir))
-                    {
-                        escapeDir = grid.Physics.Gravity.LengthSquared() > 0.1f ? -Vector3D.Normalize(grid.Physics.Gravity) : Vector3D.Up;
-                    }
-
-                    EnqueuePush(grid, escapeDir, voxelPush: true, config.PushApartDistance);
-                    state.StationarySweeps = 0;
-
-                    if (config.EnableDebugLogging)
-                    {
-                        Log.Info(LogSource, $"[BURIAL PROBE] Queued rescue push for buried grid '{grid.DisplayName}'.");
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Burial test: checks whether a stationary grid is solidly confined by voxel material (silent burial).
-        /// Grids on the planet surface (center of mass above terrain heightmap) are never considered buried.
-        /// Underground or asteroid grids use OBB support extents and must be confined on 3+ horizontal sides to qualify.
-        /// </summary>
-        private static bool IsGridBuried(MyCubeGrid grid, PhysicsOptimizerConfig config, int minSolidSides)
-        {
-            Vector3D center = grid.PositionComp.WorldVolume.Center;
-
-            MyPlanet planet = MyGamePruningStructure.GetClosestPlanet(center);
-            if (planet != null)
-            {
-                Vector3D core = planet.PositionComp.WorldVolume.Center;
-                Vector3D surfacePt = planet.GetClosestSurfacePointGlobal(ref center);
-                double centerDist = (center - core).Length();
-                double surfaceDist = (surfacePt - core).Length();
-                bool isUnderSurface = centerDist < surfaceDist;
-
-                // Surface construct: Center of mass is on or above the planet heightmap surface.
-                // It is resting or driving on terrain under open air, not buried underground.
-                if (!isUnderSurface)
-                {
-                    return false;
-                }
-            }
-
-            Vector3D up = grid.Physics != null && grid.Physics.Gravity.LengthSquared() > 0.1f
-                ? -Vector3D.Normalize(grid.Physics.Gravity)
-                : Vector3D.Up;
-
-            if (planet != null && (grid.Physics == null || grid.Physics.Gravity.LengthSquared() <= 0.1f))
-            {
-                Vector3D core = planet.PositionComp.WorldVolume.Center;
-                Vector3D radial = center - core;
-                if (radial.LengthSquared() > 0.001) up = Vector3D.Normalize(radial);
-            }
-
-            // Construct true horizontal tangent basis perpendicular to up vector
-            Vector3D tangent1 = Vector3D.CalculatePerpendicularVector(up);
-            Vector3D tangent2 = Vector3D.Cross(up, tangent1);
-
-            Vector3D[] horizontalDirs = { tangent1, -tangent1, tangent2, -tangent2 };
-            int solidSides = 0;
-
-            // Use Oriented Bounding Box (OBB) rather than spherical radius for tight clearance checks
-            MatrixD worldMatrix = grid.WorldMatrix;
-            MatrixD invWorld = grid.PositionComp.WorldMatrixNormalizedInv;
-            BoundingBox localBox = grid.PositionComp.LocalAABB;
-
-            for (int i = 0; i < horizontalDirs.Length; i++)
-            {
-                Vector3D dir = horizontalDirs[i];
-
-                // Sample OBB support point along dir to find actual construct surface in that direction
-                Vector3D localDir = Vector3D.TransformNormal(dir, invWorld);
-                Vector3D localSupport = new Vector3D(
-                    localDir.X > 0 ? localBox.Max.X : localBox.Min.X,
-                    localDir.Y > 0 ? localBox.Max.Y : localBox.Min.Y,
-                    localDir.Z > 0 ? localBox.Max.Z : localBox.Min.Z);
-                Vector3D obbSurfacePoint = Vector3D.Transform(localSupport, worldMatrix);
-
-                // Raycast from outside clearance margin inward to the OBB surface
-                Vector3D from = obbSurfacePoint + dir * (config.BurialProbeRadius + 2.0);
-                Vector3D to = obbSurfacePoint;
-                MyPhysics.HitInfo? hit = MyPhysics.CastRay(from, to, MyPhysics.CollisionLayers.VoxelCollisionLayer);
-                if (hit.HasValue && hit.Value.HkHitInfo.GetHitEntity() is MyVoxelBase)
-                {
-                    solidSides++;
-                }
-            }
-
-            return solidSides >= minSolidSides;
-        }
-
         private void TrimOldFrames(ulong currentFrame)
         {
             try
@@ -2205,7 +2058,7 @@ namespace PhysicsOptimizer.Modules
 
                 if (isVoxel)
                 {
-                    // Wheel subgrids: stamp both wheel and base grid so burial probe / sleep guards can
+                    // Wheel subgrids: stamp both wheel and base grid so sleep guards can
                     // still rescue wheel-only wedges, while anti-clang/push-apart skip driving false positives.
                     ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
                     if (currentFrame > 0)

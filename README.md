@@ -27,7 +27,7 @@ The plugin is built from exactly **13 Torch PatchManager patch targets** across 
 * 🛡️ **Layered Armor Occlusion**: A `MyDamageSystem` before-damage handler that shields interior components behind true structural armor blocks from spherical deformation damage bleed.
 * 🔥 **Instant Thruster Clearance & Vaporization** (own module, `ThrusterClearance`): Replaces expensive volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. External grids (landing pads) receive immunity in Optimized mode, while illegally buried thrusters instantly vaporize their own obstructing blocks.
 * ⛰️ **Voxel Normal Arbitrator & Cutout Suppression**: Eliminates "Voxel-Vice" terrain trapping by detecting inverted downward contact normals against voxels and correcting them, and suppresses explosive voxel carving to preserve planetary terrain.
-* 🎪 **Active Push-Apart & Burial Probe**: Detects physically embedded or wedged grids, and translates them out of terrain or overlapping grids along the resolved escape vector or gravity up-vector.
+* 🎪 **Active Push-Apart**: Detects physically embedded or wedged grids, and translates them out of terrain or overlapping grids along the resolved escape vector or gravity up-vector.
 * ⚡ **Zero Hot-Path Allocations**: Zero memory allocations in simulation loops with stepped evaluation intervals (30-120 frames), atomic telemetry updates, pooled collections, and deterministic entity eviction on despawn.
 
 ---
@@ -36,7 +36,7 @@ The plugin is built from exactly **13 Torch PatchManager patch targets** across 
 
 ```mermaid
 graph TD
-    UI[WPF 7-Tab Dashboard<br/>Wheel - Sleep - Ore - Subgrid - TOI - Defender - Telemetry] --> Plugin
+    UI[WPF 3-Tab Dashboard<br/>Physics Optimizations - Grid Defender - Live Telemetry] --> Plugin
     CFG[(PhysicsOptimizer.cfg)] --> Plugin
     Plugin[PhysicsOptimizerPlugin<br/>Torch lifecycle + 60Hz frame dispatcher] --> Tel[Live Telemetry + Defense Statistics]
     Plugin --> Audit[PatchConflictAudit<br/>first-tick conflict scan of all 13 targets]
@@ -197,12 +197,11 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 
 **Global Voxel Fakes**: While `SuppressAllVoxelExplosionDamage` is on, the engine holds `MyFakes.DEFORMATION_EXPLOSIONS = false`, disabling Keen's deformation-carving path globally, and restores the vanilla flag on dispose.
 
-### 🧲 System 8: Active Push-Apart & Burial Probe
+### 🧲 System 8: Active Push-Apart
 *File: `Modules/GridDefender.cs`*
 
 * **Contact Frame Tracking**: Consecutive-frame contact counts are tracked per grid (reset when frames skip).
 * **Active Push-Apart** (`PushApartThreshold`, default 25 contact frames): Separation is queued (never applied inline on the physics thread path) and drained on the plugin's cache sweep. Grid-on-grid pushes fire along the center-to-center direction; grid-on-voxel pushes pick an escape direction in two tiers: on **unmodified voxel regions** (per-region RangeChanged tracking reports them pristine) it is a zero-raycast fast path - the cached contact normal is accepted directly, with any gravity-downward normal reversed as pointing into the planet core (same correction rule as the Normal Force Arbitrator), falling back to the gravity up-vector. On **modified voxel regions** (tracked per carve operation via `MyVoxelBase.RangeChanged` into coarse 32m buckets, so a drilled planet only pays raycasts near actual carving; drilled caves/cutouts have real ceilings) every candidate is raycast-confirmed: contact normal, then gravity-up, then 4 world horizontals - so grids wedged against cliff faces escape sideways instead of staircasing skyward. Each push moves the group by `PushApartDistance` (default 0.5m) with a small 0.8 m/s separation velocity and zeroed angular velocity. Escape direction is sanity-checked against the contact-to-grid-center vector (normals pointing into terrain are flipped), direction is locked across repeated failed rescues with distance escalating 1x to 3x up to `PushApartMaxNudgeDistance` (default 2.0m) to dig out submerged wheels, and gravity-up is the unconditional final fallback - a stuck grid always receives an escape direction and is never pushed downward. An escape-attempt cap (`PushApartMaxAttempts`, default 3, 0 = disabled) stands down pushes on grids that stay voxel-embedded after repeated attempts (budget refunds once voxel contact is lost). Suspension wheel subgrids are skipped when `ExcludeWheelSubgridsFromPushApart` is enabled to prevent normal driving from being treated as stuck. Mechanically/logically connected subgrids and static grids are excluded. Each push is applied to the **entire mechanical group** (wheels are separate physics bodies - moving only the main grid leaves wheels buried), wakes every member's rigid body before applying velocity, and resets the group's contact counters so wheels do not re-clang.
-* **Burial Probe** (Experimental, `EnableBurialProbe`): Cold-path check (once per ~10s) for grids stationary ~20s+ confined by voxel material (physics raycasts within `BurialProbeRadius`, default 2m, beyond the bounding sphere): 3+ of 4 horizontal sides for silent burials, relaxed to 2 sides when voxel contact was seen within ~60s (cliff wedges). Fully buried grids emit no contact callbacks, so contact-driven push-apart can never fire for them - the probe queues a rescue push along the gravity up-vector instead. Covers embedded spawns, cliff-wedged rovers, and underground stations converted to ship.
 * **Memory Hygiene**: All frame trackers and missile engagements are evicted via `MyEntities.OnEntityRemove` plus a cold-path sweep every 600 frames.
 
 ### 🚀 System 9: PMW Kinetic Manager & Piloted Exemption
@@ -303,7 +302,7 @@ All commands require `Admin` permission level (`MyPromoteLevel.Admin`) and work 
 | `thruster` | Thruster Clearance Engine. |
 | `thrustermode` | Cycles `ThrusterDamageMode` between `Optimized` and `VanillaLike`. |
 | `cutout` | Voxel cutout explosion suppression. |
-| `debug` | Verbose debug logging. |
+| `debug` | Verbose debug logging. Reset to off on every plugin load. |
 | `telemetry` (`telem`) | Periodic console telemetry heartbeat. |
 | `wheelanticlang` | Exclude suspension wheel subgrids from Anti-Clang damping. |
 | `wheelpushapart` | Exclude suspension wheel subgrids from Active Push-Apart. |
@@ -313,7 +312,7 @@ All commands require `Admin` permission level (`MyPromoteLevel.Admin`) and work 
 
 ## 7. Complete Configuration Reference (`PhysicsOptimizer.cfg`)
 
-Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\PhysicsOptimizer.cfg` via the Torch `Persistent<T>` serializer. Defaults below match the shipped code exactly.
+Configuration persists to `Instance\PhysicsOptimizer.cfg` under the Torch server folder via the Torch `Persistent<T>` serializer. Defaults below match the shipped code exactly. Debug-only diagnostics (`EnableDebugLogging` and both debug GPS marker draws) are additionally forced off on every plugin load, so enabling them at runtime lasts for the current session only.
 
 ### General & Logging
 | Setting | Type | Default | Description |
@@ -406,8 +405,6 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 | `ExcludeWheelSubgridsFromSubgridStabilizer` | `bool` | `true` | When enabled, suspension wheel joints are not stabilized, leaving the suspension solver alone during driving. |
 | `PushApartMinImpactSpeed` | `float` | `1.0` | Pushes only trigger from contacts at or above this impact speed in m/s (0 = no gate); keeps resting/docked grids from being nudged. |
 | `PushApartEmbeddedDepth` | `float` | `0.20` | Physical penetration depth into voxel mesh (meters) required to treat grid as embedded/wedged; prevents heavy resting vehicles from falsely triggering pushes. |
-| `EnableBurialProbe` | `bool` | `true` | Experimental cold-path probe that rescues fully buried grids with no contact callbacks. |
-| `BurialProbeRadius` | `float` | `2.0` | Extra clearance meters (1-10) beyond the grid's bounding sphere before the probe considers it buried. |
 | `AllowMissileDamage` | `bool` | `true` | Allows qualified kinetic torpedoes to inflict deformation damage. |
 | `ExemptPilotedFromMissileStatus` | `bool` | `true` | Actively piloted vehicles (`IsControlled`) are never treated as PMWs. |
 | `SmallGridMissileMinBlocks` | `int` | `4` | Minimum blocks to qualify as a small grid PMW. |
@@ -423,30 +420,18 @@ Configuration persists to `Torch\Plugins\Storage\PhysicsOptimizer\<storage-id>\P
 
 ---
 
-## 8. Torch WPF Server Interface (7-Tab Dashboard)
+## 8. Torch WPF Server Interface (3-Tab Dashboard)
 
-The Torch server window hosts the plugin's management UI across 7 dedicated tabs matching the canonical architecture:
+The Torch server window hosts the plugin's management UI across 3 tabs:
 
-### Tab 1: Wheel Optimizer
-Sliders and toggles for symmetrical wheel well collision filtering and parked rover suspension sleeping.
+### Tab 1: Physics Optimizations
+Every optimizer module shares this consolidated tab: Wheel Optimizer (symmetrical wheel well collision filtering, parked rover suspension sleeping), Rigid Body Sleep (linear/angular velocity thresholds, idle countdown), Ore Merge (proximity radius, interval tick rate, floating object density), Subgrid Stabilizer (joint angular velocity threshold, motionless frame window, small utility subgrid collision masking), Adaptive Collision (discrete demotion / continuous promotion speed thresholds, grid-size overrides, terrain altitude floor, dynamic grid proximity bubbles), and Thruster Clearance.
 
-### Tab 2: Rigid Body Sleep
-Velocity thresholds (linear and angular) and idle countdown duration for deactivating motionless dynamic grids into Havok sleep mode.
+### Tab 2: Grid Defender
+Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), voxel normal force arbitrator, PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, and voxel cutout suppression.
 
-### Tab 3: Ore Merge
-Proximity merging radius, interval tick rate, and local floating object density thresholds.
-
-### Tab 4: Subgrid Stabilizer
-Joint angular velocity threshold and motionless frame window for constraint stabilization, plus small utility subgrid collision masking.
-
-### Tab 5: Adaptive Collision
-Speed thresholds (discrete demotion / continuous promotion), grid-size discrete overrides, terrain altitude floor, and dynamic grid proximity safety bubbles.
-
-### Tab 6: Grid Defender
-Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, Burial Probe (Experimental), and voxel cutout suppression. Thruster clearance controls live on their own **Thruster Clearance** tab.
-
-### Tab 7: Telemetry & Actions
-Real-time gauges updating at 2Hz across 4 operational cards (Havok Simulation Health, Rover & Subgrid Status, Collision Defense & PMWs, Armor & Voxel Protection) plus manual admin action buttons (**Sleep All Grids**, **Wake All Grids**, **Merge Ore Now**, **Reset Gauges**).
+### Tab 3: Live Telemetry
+A global diagnostics strip (debug logging, console telemetry heartbeat, push-apart diagnostics, and the push-apart / voxel-arbitrator debug GPS markers) sits above real-time gauges updating at 2Hz across 4 operational cards (Havok Simulation Health, Rover & Subgrid Status, Collision Defense & PMWs, Armor & Voxel Protection) plus manual admin action buttons (**Sleep All Grids**, **Wake All Grids**, **Merge Ore Now**, **Reset Gauges**).
 
 ---
 

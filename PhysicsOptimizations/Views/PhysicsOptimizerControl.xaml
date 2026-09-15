@@ -706,10 +706,6 @@
                                                                                   IsChecked="{Binding Config.EnableVoxelNormalArbitrator}"
                                                                                   Margin="16,2,0,2"
                                                                                   ToolTip="Evaluates Havok contact point normals relative to Body A vs Body B orientation. If the effective force normal on the grid points downward into voxels, it inverts the normal upward and injects upward separating velocity directly into Havok's active solver step. Fully independent of Push-Apart: either feature can be toggled alone."/>
-                                                                        <CheckBox Content="Enable Voxel Arbitrator Debug GPS Markers"
-                                                                                  IsChecked="{Binding Config.EnableVoxelNormalArbitratorDebugDraw}"
-                                                                                  Margin="16,2,0,2"
-                                                                                  ToolTip="Spawns a GPS marker pair at each contact point where the arbitrator flips a downward normal: orange = pre-invert force direction on the grid, cyan = post-invert force direction on the grid. Auto-expires after 10 seconds. Capped at 10 live markers server-wide (one pair per grid - re-inversions refresh instead of stacking). Markers are visible to all players. Debug tool - leave off in normal play."/>
 
                                                                         <!-- Fallback Velocity Gates & Damage Rate Limits -->
                                                                         <Border Background="#1E293B"
@@ -1037,28 +1033,6 @@
                                                                                                    Foreground="#FFFFFF"
                                                                                                    VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
-
-                                                                                <CheckBox Content="Enable Burial Probe (Experimental)"
-                                                                                          IsChecked="{Binding Config.EnableBurialProbe}"
-                                                                                          Margin="16,4,0,2"
-                                                                                          ToolTip="Cold-path probe (once per ~10s) for grids stationary 20s+: if voxel material confines the grid on 3+ horizontal sides, it is pushed out along the gravity up-vector. Covers fully buried grids where Havok emits no contact callbacks (e.g. underground station converted to ship, rover spawned embedded). Default: Checked."/>
-                                                                                <WrapPanel Margin="16,2,0,2"
-                                                                                           IsEnabled="{Binding Config.EnableBurialProbe}"
-                                                                                           VerticalAlignment="Center">
-                                                                                        <TextBlock Text="Check for surrounding voxel confinement within"
-                                                                                                   Foreground="#FFFFFF"
-                                                                                                   VerticalAlignment="Center"
-                                                                                                   Margin="0,0,5,0"/>
-                                                                                        <TextBox Text="{Binding Config.BurialProbeRadius, StringFormat={}{0:F1}}"
-                                                                                                 Width="55"
-                                                                                                 HorizontalContentAlignment="Center"
-                                                                                                 VerticalAlignment="Center"
-                                                                                                 Margin="0,0,5,0"
-                                                                                                 ToolTip="Extra meters of clearance around the grid's bounding sphere (1-10m) before the probe considers the grid buried. Lower = fewer false positives near terrain. Default: 2.0m."/>
-                                                                                        <TextBlock Text="meters of grid hull."
-                                                                                                   Foreground="#FFFFFF"
-                                                                                                   VerticalAlignment="Center"/>
-                                                                                </WrapPanel>
                                                                         </StackPanel>
                                                                 </StackPanel>
                                                         </GroupBox>
@@ -1163,6 +1137,19 @@
                                                                           IsChecked="{Binding Config.EnablePushApartDebugDraw}"
                                                                           VerticalAlignment="Center"
                                                                           ToolTip="Spawns a bright GPS marker pair at each applied push origin and end (5m apart): magenta = voxel push, yellow = grid push. Auto-expires after 10 seconds. Capped at 10 live markers server-wide (one pair per grid - re-pushes refresh instead of stacking). Debug tool - leave off in normal play. Default: Unchecked."/>
+                                                        </WrapPanel>
+                                                        <WrapPanel Orientation="Horizontal"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="0,4,0,0">
+                                                                <TextBlock Text="Voxel Arbitrator Diagnostics:"
+                                                                           FontWeight="SemiBold"
+                                                                           Foreground="#9CA3AF"
+                                                                           VerticalAlignment="Center"
+                                                                           Margin="0,0,14,0"/>
+                                                                <CheckBox Content="Enable Voxel Arbitrator Debug GPS Markers"
+                                                                          IsChecked="{Binding Config.EnableVoxelNormalArbitratorDebugDraw}"
+                                                                          VerticalAlignment="Center"
+                                                                          ToolTip="Spawns a GPS marker pair at each contact point where the arbitrator flips a downward normal: orange = pre-invert force direction on the grid, cyan = post-invert force direction on the grid. Auto-expires after 10 seconds. Capped at 10 live markers server-wide (one pair per grid - re-inversions refresh instead of stacking). Markers are visible to all players. Debug tool - leave off in normal play. Default: Unchecked."/>
                                                         </WrapPanel>
                                                 </StackPanel>
                                         </Border>
