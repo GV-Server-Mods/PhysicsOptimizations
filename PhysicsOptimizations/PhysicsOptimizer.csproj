@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <AssemblyName>GVK.PhysicsOptimizations</AssemblyName>
-    <RootNamespace>GVK.PhysicsOptimizations</RootNamespace>
+    <AssemblyName>PhysicsOptimizer</AssemblyName>
+    <RootNamespace>PhysicsOptimizer</RootNamespace>
     <LangVersion>latest</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
     <UseWPF>true</UseWPF>
     <OutputPath>bin\$(Configuration)\</OutputPath>
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
     <!-- Change this path to your local Torch Server directory -->
     <TorchDir>C:\SE_GVK_S10</TorchDir>
   </PropertyGroup>
@@ -36,6 +36,10 @@
     </Reference>
     <Reference Include="Sandbox.Common">
       <HintPath>$(TorchDir)\DedicatedServer64\Sandbox.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Sandbox.RenderDirect">
+      <HintPath>$(TorchDir)\DedicatedServer64\Sandbox.RenderDirect.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="VRage">

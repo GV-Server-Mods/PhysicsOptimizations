@@ -2,49 +2,106 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Threading;
 using System.Windows.Controls;
-using NLog;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Multiplayer;
 using Torch;
 using Torch.API;
 using Torch.API.Plugins;
+using Torch.API.Session;
 using Torch.Managers.PatchManager;
 using VRage.Game.Entity;
-using GVK.PhysicsOptimizations.Config;
-using GVK.PhysicsOptimizations.Modules;
-using GVK.PhysicsOptimizations.Patches;
-using GVK.PhysicsOptimizations.Services;
-using GVK.PhysicsOptimizations.Views;
+using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Modules;
+using PhysicsOptimizer.Services;
+using PhysicsOptimizer.Views;
+using PhysicsOptimizer.Utils;
 
-namespace GVK.PhysicsOptimizations
+namespace PhysicsOptimizer
 {
-    /// <summary>
-    /// Main Torch server plugin entry point for GVK Physics Optimizations.
-    /// Manages physics modules, configuration, telemetry, and native Torch method patches.
-    /// </summary>
+    public enum ServerLifecycleState
+    {
+        Offline,
+        Starting,
+        Online,
+        Stopping
+    }
+
     public class PhysicsOptimizerPlugin : TorchPluginBase, IWpfPlugin
     {
-        public static readonly ILogger Log = LogManager.GetLogger("GVK.PhysicsOptimizer");
+        private const string LogSource = "Plugin";
 
         public static PhysicsOptimizerPlugin Instance { get; private set; }
 
-        private Persistent<PhysicsOptimizerConfig> _config;
+        private volatile Persistent<PhysicsOptimizerConfig> _config;
         private PhysicsOptimizerControl _control;
         private ulong _frameCounter;
+        private ulong _logTickCounter;
         private readonly object _configLock = new();
+
+        // Heartbeat rate-trackers (deltas between telemetry lines) and GC baselines.
+        private long _prevContactCallbacks;
+        private long _prevVoxelArbRaycasts;
+        private long _prevPushApartExecuted;
+        private int _prevGc0 = -1;
+        private int _prevGc1 = -1;
+        private int _prevGc2 = -1;
 
         public PhysicsOptimizerConfig Config => _config?.Data;
         public OptimizationTelemetry Telemetry { get; private set; }
+        public DefenseStatistics DefenseStats { get; private set; }
 
-        public WheelOptimizerModule WheelOptimizer { get; private set; }
-        public RigidBodySleepModule SleepManager { get; private set; }
-        public FloatingObjectModule OreOptimizer { get; private set; }
-        public SubgridStabilizerModule SubgridStabilizer { get; private set; }
-        public AdaptiveCollisionModule AdaptiveCollision { get; private set; }
+        public WheelOptimizer WheelOptimizer { get; private set; }
+        public RigidBodySleep RigidBodySleep { get; private set; }
+        public OreMerge OreMerge { get; private set; }
+        public SubgridStabilizer SubgridStabilizer { get; private set; }
+        public AdaptiveCollision AdaptiveCollision { get; private set; }
+        public GridDefender GridDefender { get; private set; }
 
-        private readonly List<IPhysicsModule> _modules = [];
+        private readonly List<IPhysicsOptimizer> _optimizers = [];
+
+        public static ServerLifecycleState GetServerLifecycleState()
+        {
+            try
+            {
+                var torch = Instance?.Torch;
+                if (torch != null)
+                {
+                    if (torch is ITorchServer server)
+                    {
+                        if (server.State == ServerState.Stopped || server.State == ServerState.Error)
+                            return ServerLifecycleState.Offline;
+
+                        if (server.State == ServerState.Starting)
+                            return ServerLifecycleState.Starting;
+                    }
+
+                    var session = torch.CurrentSession;
+                    if (session == null)
+                        return ServerLifecycleState.Offline;
+
+                    if (session.State == TorchSessionState.Loading)
+                        return ServerLifecycleState.Starting;
+
+                    if (session.State == TorchSessionState.Unloading || session.State == TorchSessionState.Unloaded)
+                        return ServerLifecycleState.Stopping;
+
+                    if (session.State != TorchSessionState.Loaded)
+                        return ServerLifecycleState.Offline;
+                }
+
+                if (Sandbox.Game.World.MySession.Static == null || Sandbox.MySandboxGame.Static == null)
+                    return ServerLifecycleState.Offline;
+
+                return ServerLifecycleState.Online;
+            }
+            catch
+            {
+                return ServerLifecycleState.Offline;
+            }
+        }
+
+        public static bool IsServerOnline => GetServerLifecycleState() == ServerLifecycleState.Online;
 
         public override void Init(ITorchBase torch)
         {
@@ -52,31 +109,44 @@ namespace GVK.PhysicsOptimizations
             Instance = this;
 
             LoadConfig();
-            Telemetry = new();
+            Telemetry = new OptimizationTelemetry();
+            Telemetry.Init(this);
+            DefenseStats = new DefenseStatistics();
 
-            InitializeModules();
+            InitializeOptimizers();
+
             RegisterPatches();
 
             MyEntities.OnEntityAdd += OnEntityAdded;
             MyEntities.OnEntityRemove += OnEntityRemoved;
 
-            Log.Info("[PhysicsOptimizer] Plugin v1.0.0 initialized successfully. Havok optimization engine is ACTIVE.");
+            if (torch?.Managers?.GetManager(typeof(ITorchSessionManager)) is ITorchSessionManager sessionMgr)
+            {
+                sessionMgr.SessionStateChanged += OnSessionStateChanged;
+            }
+
+            Log.Info(LogSource, "Plugin v2.0.0 initialized successfully. Unified Havok engine is ACTIVE.");
         }
 
-        private void InitializeModules()
+        private void InitializeOptimizers()
         {
-            WheelOptimizer = new();
-            SleepManager = new();
-            OreOptimizer = new();
-            SubgridStabilizer = new();
-            AdaptiveCollision = new();
+            WheelOptimizer = new WheelOptimizer();
+            RigidBodySleep = new RigidBodySleep();
+            OreMerge = new OreMerge();
+            SubgridStabilizer = new SubgridStabilizer();
+            AdaptiveCollision = new AdaptiveCollision();
+            GridDefender = new GridDefender();
 
-            _modules.Clear();
-            _modules.AddRange([WheelOptimizer, SleepManager, OreOptimizer, SubgridStabilizer, AdaptiveCollision]);
+            _optimizers.Add(WheelOptimizer);
+            _optimizers.Add(RigidBodySleep);
+            _optimizers.Add(OreMerge);
+            _optimizers.Add(SubgridStabilizer);
+            _optimizers.Add(AdaptiveCollision);
+            _optimizers.Add(GridDefender);
 
-            foreach (var module in _modules)
+            foreach (var optimizer in _optimizers)
             {
-                module.Init(this);
+                optimizer.Init(this);
             }
         }
 
@@ -86,194 +156,268 @@ namespace GVK.PhysicsOptimizations
             {
                 if (Torch.Managers.GetManager(typeof(PatchManager)) is PatchManager patchManager)
                 {
+                    PatchConflictAudit.CapturePatchManager(patchManager);
                     var ctx = patchManager.AcquireContext();
-                    MotorSuspensionPatch.Patch(ctx);
-                    CockpitInputWakePatch.Patch(ctx);
-                    GridDamageWakePatch.Patch(ctx);
+
+                    WheelOptimizer.RegisterPatches(ctx);
+                    RigidBodySleep.RegisterPatches(ctx);
+                    SubgridStabilizer.RegisterPatches(ctx);
+                    GridDefender.RegisterPatches(ctx);
+                    ThrusterClearance.RegisterPatches(ctx);
+
                     patchManager.Commit();
-                    Log.Info("[PhysicsOptimizer] All patches successfully registered with Torch PatchManager.");
+                    Log.Info(LogSource, "All patches successfully registered with Torch PatchManager.");
                 }
                 else
                 {
-                    Log.Error("[PhysicsOptimizer] Torch PatchManager not found! Unable to register physics patches.");
+                    Log.Warn(LogSource, "Torch PatchManager not found. Optimizations requiring patches will not function.");
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[PhysicsOptimizer] Error registering Torch patches!");
+                Log.Error(ex, LogSource, "Critical error during patch registration.");
+            }
+        }
+
+        private void OnEntityAdded(MyEntity entity)
+        {
+            foreach (var optimizer in _optimizers)
+            {
+                optimizer.OnEntityAdded(entity);
+            }
+        }
+
+        private void OnEntityRemoved(MyEntity entity)
+        {
+            if (entity != null)
+            {
+                PlayerRescueService.OnEntityRemoved(entity.EntityId);
+            }
+
+            foreach (var optimizer in _optimizers)
+            {
+                optimizer.OnEntityRemoved(entity);
             }
         }
 
         public override void Update()
         {
             base.Update();
+            PatchConflictAudit.RunOnce();
 
-            if (Config == null || !Config.Enabled)
-            {
-                return;
-            }
+            // Flush coalesced repeat summaries every 10s, even when optimizations are disabled.
+            _logTickCounter++;
+            if (_logTickCounter % 600UL == 0UL) Log.FlushRepeats();
+
+            if (Config == null || !Config.Enabled) return;
 
             _frameCounter++;
 
-            for (int i = 0; i < _modules.Count; i++)
+            if (Sync.ServerSimulationRatio > 0f)
             {
-                _modules[i].Update(_frameCounter);
+                Telemetry?.UpdateServerSimulationSpeed(Sync.ServerSimulationRatio);
             }
 
-            // Update Server Sim Speed in telemetry every second
-            if (_frameCounter % 60 == 0 && Telemetry != null)
+            if (Config.EnablePhysicsOptimizations)
             {
-                Telemetry.UpdateServerSimulationSpeed(Sync.ServerSimulationRatio);
+                WheelOptimizer?.Update(_frameCounter);
+                RigidBodySleep?.Update(_frameCounter);
+                OreMerge?.Update(_frameCounter);
+                SubgridStabilizer?.Update(_frameCounter);
+                AdaptiveCollision?.Update(_frameCounter);
             }
 
-            // Periodic 1-line telemetry heartbeat on Torch console
-            if (Config.EnablePeriodicConsoleTelemetry && Telemetry != null)
+            GridDefender?.Update(_frameCounter);
+            PlayerRescueService.Update(_frameCounter);
+
+            int intervalTicks = Math.Max(1, Config.ConsoleTelemetryIntervalSeconds) * 60;
+            if (Config.EnablePeriodicConsoleTelemetry && _frameCounter % (ulong)intervalTicks == 0)
             {
-                ulong intervalFrames = (ulong)(Math.Max(5, Config.ConsoleTelemetryIntervalSeconds) * 60);
-                if (_frameCounter % intervalFrames == 0)
-                {
-                    Log.Info(string.Format(
-                        CultureInfo.InvariantCulture,
-                        "[PhysicsOptimizer Telemetry] Sim: {0:F2} | Bodies: {1} Active, {2} Asleep | Rovers: {3}/{4} Asleep ({5}/{6} wheels) | Sleeping Grids: {7}/{8} | Subgrids: {9}/{10} Stabilized | Discrete TOI: {11}/{12} | Floating: {13} (Merged: {14} stacks, {15} removed)",
-                        Telemetry.ServerSimulationSpeed,
-                        Telemetry.ActiveRigidBodies,
-                        Telemetry.SleepingRigidBodies,
-                        Telemetry.ParkedRoversAsleep,
-                        Telemetry.TrackedRoversCount,
-                        Telemetry.SleepingWheelsCount,
-                        Telemetry.TotalRoverWheelsCount,
-                        Telemetry.GridsCurrentlyForcedSleep,
-                        Telemetry.TrackedGridsCount,
-                        Telemetry.StabilizedSubgridConstraints,
-                        Telemetry.TrackedSubgridConstraints,
-                        Telemetry.DiscreteTOIGridsCount,
-                        Telemetry.TrackedTOIGridsCount,
-                        Telemetry.ActiveFloatingObjectsCount,
-                        Telemetry.OreStacksMergedTotal,
-                        Telemetry.OreEntitiesEliminatedTotal));
-                }
+                EmitConsoleTelemetryHeartbeat();
             }
+
+            // Hourly Defense Digest (every 216,000 frames = 1 hour at 60 TPS)
+            if (Config.EnableHourlyChatDigest && _frameCounter > 0 && _frameCounter % 216000UL == 0 && DefenseStats != null)
+            {
+                DefenseStats.GetHourlyDigest(out long hourBlk, out long allBlk, out long hourSep, out long allSep, out _, out _);
+                ChatNotificationService.SendHourlyDefenseDigest(hourBlk, allBlk, hourSep, allSep);
+            }
+
+            // Prune expired cooldowns periodically (every 10s)
+            if (_frameCounter % 600UL == 0)
+            {
+                ChatNotificationService.PruneExpiredCooldowns(_frameCounter);
+            }
+        }
+
+        private void EmitConsoleTelemetryHeartbeat()
+        {
+            if (Telemetry == null) return;
+
+            float speed = Telemetry.ServerSimulationSpeed;
+            int act = Telemetry.ActiveRigidBodies;
+            int slp = Telemetry.SleepingRigidBodies;
+            int parked = Telemetry.ParkedRoversAsleep;
+            int rovers = Telemetry.TrackedRoversCount;
+            int whl = Telemetry.SleepingWheelsCount;
+            int disc = Telemetry.DiscreteTOIGridsCount;
+            int cont = Telemetry.ContinuousTOIGridsCount;
+            long blk = DefenseStats?.TotalBlocked ?? 0;
+            long pmw = DefenseStats?.MissileHitsAllowed ?? 0;
+            long inv = DefenseStats?.VoxelNormalsInverted ?? 0;
+            long sep = DefenseStats?.GridsSeparated ?? 0;
+
+            double seconds = Math.Max(1, Config?.ConsoleTelemetryIntervalSeconds ?? 30);
+            long cb = DefenseStats?.ContactCallbacks ?? 0;
+            long ar = DefenseStats?.VoxelArbitratorRaycasts ?? 0;
+            long ps = DefenseStats?.PushApartActionsExecuted ?? 0;
+            double cbRate = (cb - _prevContactCallbacks) / seconds;
+            double arRate = (ar - _prevVoxelArbRaycasts) / seconds;
+            double psRate = (ps - _prevPushApartExecuted) / seconds;
+            _prevContactCallbacks = cb;
+            _prevVoxelArbRaycasts = ar;
+            _prevPushApartExecuted = ps;
+
+            int gc0 = GC.CollectionCount(0);
+            int gc1 = GC.CollectionCount(1);
+            int gc2 = GC.CollectionCount(2);
+            int dGc0 = _prevGc0 < 0 ? gc0 : gc0 - _prevGc0;
+            int dGc1 = _prevGc1 < 0 ? gc1 : gc1 - _prevGc1;
+            int dGc2 = _prevGc2 < 0 ? gc2 : gc2 - _prevGc2;
+            string gcStr = string.Format(CultureInfo.InvariantCulture, "{0}/{1}/{2}", dGc0, dGc1, dGc2);
+            _prevGc0 = gc0;
+            _prevGc1 = gc1;
+            _prevGc2 = gc2;
+            double managedMb = GC.GetTotalMemory(false) / 1048576.0;
+
+            DefenseStats?.UpdateRates(cbRate, arRate, psRate, dGc0, dGc1, dGc2, managedMb);
+
+            string offendersStr = "";
+            var offenders = Modules.GridDefender.GetActiveClangers(minRate: 10, maxResults: 2);
+            if (offenders != null && offenders.Count > 0)
+            {
+                offendersStr = " | Clangers: " + string.Join(", ", System.Linq.Enumerable.Select(offenders, o => $"'{o.Name}' ({o.Rate} clangs/s)"));
+            }
+
+            Log.Info(LogSource, string.Format(CultureInfo.InvariantCulture,
+                "[PhysOpt Heartbeat] Sim: {0:F2} | Bodies: {1} Act, {2} Slp | Rovers: {3}/{4} Slp ({5} whl) | TOI: {6} Disc, {7} Cont | Def: {8} Blk ({9} PMW) | Fixes: {10} Invert, {11} Nudge | Hot: {12:F0} cb/s, {13:F1} ar/s, {14:F2} push/s | GC: {15} ({16:F0} MB){17}",
+                speed, act, slp, parked, rovers, whl, disc, cont, blk, pmw, inv, sep, cbRate, arRate, psRate, gcStr, managedMb, offendersStr));
+        }
+
+        public override void Dispose()
+        {
+            if (Torch?.Managers?.GetManager(typeof(ITorchSessionManager)) is ITorchSessionManager sessionMgr)
+            {
+                sessionMgr.SessionStateChanged -= OnSessionStateChanged;
+            }
+
+            MyEntities.OnEntityAdd -= OnEntityAdded;
+            MyEntities.OnEntityRemove -= OnEntityRemoved;
+            Log.FlushRepeats();
+
+            foreach (var optimizer in _optimizers)
+            {
+                optimizer.Dispose();
+            }
+            _optimizers.Clear();
+
+            base.Dispose();
+            Instance = null;
+        }
+
+        private void OnSessionStateChanged(ITorchSession session, TorchSessionState newState)
+        {
+            if (newState != TorchSessionState.Loaded)
+            {
+                Telemetry?.UpdateServerSimulationSpeed(0f);
+            }
+            Telemetry?.NotifyAllPropertiesChanged();
+            DefenseStats?.NotifyAll();
         }
 
         public void LoadConfig()
         {
+            var configPath = Path.Combine(StoragePath, "PhysicsOptimizer.cfg");
             try
             {
-                string configPath = Path.Combine(StoragePath, "PhysicsOptimizer.cfg");
-                _config = Persistent<PhysicsOptimizerConfig>.Load(configPath);
-                if (_config?.Data == null)
+                var loaded = Persistent<PhysicsOptimizerConfig>.Load(configPath);
+                if (loaded.Data == null)
                 {
-                    _config = new(configPath, new());
-                    _config.Save();
+                    Log.Warn(LogSource, "Config loaded as null, creating new default config.");
+                    loaded = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
                 }
-
-                NotifyConfigUpdated();
+                lock (_configLock)
+                {
+                    _config = loaded;
+                }
+                ResetDebugOnlyDiagnostics();
+                Log.Info(LogSource, $"Loaded config from {configPath}");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[PhysicsOptimizer] Failed to load configuration file! Creating default config.");
-                _config = new(Path.Combine(StoragePath, "PhysicsOptimizer.cfg"), new());
-                NotifyConfigUpdated();
+                Log.Error(ex, LogSource, "Error loading configuration.");
+                lock (_configLock)
+                {
+                    _config = new Persistent<PhysicsOptimizerConfig>(configPath, new PhysicsOptimizerConfig());
+                }
             }
         }
 
-        public void SaveConfig(bool async = true)
+        /// <summary>
+        /// Debug-only diagnostics never persist across restarts: verbose logging and both debug GPS
+        /// marker draws are forced off on load, then written back so a stale config file cannot
+        /// leave them running in normal play. Re-enabling at runtime lasts for that session only.
+        /// </summary>
+        private void ResetDebugOnlyDiagnostics()
         {
-            if (async)
-            {
-                ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    lock (_configLock)
-                    {
-                        InternalSaveConfig();
-                    }
-                });
-            }
-            else
+            PhysicsOptimizerConfig cfg = Config;
+            if (cfg == null) return;
+
+            if (!cfg.EnableDebugLogging && !cfg.EnableVoxelNormalArbitratorDebugDraw && !cfg.EnablePushApartDebugDraw) return;
+
+            cfg.EnableDebugLogging = false;
+            cfg.EnableVoxelNormalArbitratorDebugDraw = false;
+            cfg.EnablePushApartDebugDraw = false;
+            Log.Info(LogSource, "Debug-only diagnostics (verbose logging, push-apart and voxel-arbitrator debug GPS markers) reset to off.");
+
+            try
             {
                 lock (_configLock)
                 {
-                    InternalSaveConfig();
+                    _config.Save();
                 }
-            }
-        }
-
-        private void InternalSaveConfig()
-        {
-            try
-            {
-                _config?.Save();
-                NotifyConfigUpdated();
-                Log.Info("[PhysicsOptimizer] Configuration saved.");
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "[PhysicsOptimizer] Failed to save configuration file!");
+                Log.Warn(ex, LogSource, "Could not persist debug diagnostic defaults; runtime state is unaffected.");
             }
         }
 
-        private void OnEntityAdded(MyEntity entity)
+        public void SaveConfig()
         {
-            if (entity == null) return;
-            for (int i = 0; i < _modules.Count; i++)
+            try
             {
-                _modules[i].OnEntityAdded(entity);
-            }
-        }
+                lock (_configLock)
+                {
+                    _config.Save();
+                }
 
-        private void OnEntityRemoved(MyEntity entity)
-        {
-            if (entity == null) return;
-            for (int i = 0; i < _modules.Count; i++)
-            {
-                _modules[i].OnEntityRemoved(entity);
-            }
-        }
+                foreach (var optimizer in _optimizers)
+                {
+                    optimizer.UpdateConfig(Config);
+                }
 
-        private void NotifyConfigUpdated()
-        {
-            if (Config == null) return;
-            for (int i = 0; i < _modules.Count; i++)
+                Log.Info(LogSource, "Configuration saved successfully.");
+            }
+            catch (Exception ex)
             {
-                _modules[i].UpdateConfig(Config);
+                Log.Error(ex, LogSource, "Error saving configuration.");
             }
         }
 
         public UserControl GetControl()
         {
-            return _control ??= new(this);
-        }
-
-        public override void Dispose()
-        {
-            try
-            {
-                MyEntities.OnEntityAdd -= OnEntityAdded;
-                MyEntities.OnEntityRemove -= OnEntityRemoved;
-
-                SaveConfig(async: false);
-
-                for (int i = 0; i < _modules.Count; i++)
-                {
-                    _modules[i].Dispose();
-                }
-                _modules.Clear();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "[PhysicsOptimizer] Error during Dispose.");
-            }
-
-            base.Dispose();
-            _control = null;
-            Telemetry = null;
-            WheelOptimizer = null;
-            SleepManager = null;
-            OreOptimizer = null;
-            SubgridStabilizer = null;
-            AdaptiveCollision = null;
-            Instance = null;
+            return _control ??= new PhysicsOptimizerControl(this);
         }
     }
 }
-

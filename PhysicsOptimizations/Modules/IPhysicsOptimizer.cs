@@ -1,9 +1,9 @@
-using GVK.PhysicsOptimizations.Config;
+using PhysicsOptimizer.Config;
 using VRage.Game.Entity;
 
-namespace GVK.PhysicsOptimizations.Modules
+namespace PhysicsOptimizer.Modules
 {
-    public interface IPhysicsModule
+    public interface IPhysicsOptimizer
     {
         string Name { get; }
         bool IsEnabled { get; }
@@ -16,5 +16,3 @@ namespace GVK.PhysicsOptimizations.Modules
         void OnEntityRemoved(MyEntity entity);
     }
 }
-
-
