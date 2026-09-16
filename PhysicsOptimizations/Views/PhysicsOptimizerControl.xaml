@@ -1043,7 +1043,7 @@
                                                                         </StackPanel>
                                                                 </StackPanel>
                                                         </GroupBox>
- 
+
                                                         <!-- Vehicle Self-Rescue (!unstuckit) -->
                                                         <GroupBox Header="🛟 Vehicle Self-Rescue (!unstuckit, !rescue)">
                                                                 <StackPanel>
@@ -1187,6 +1187,28 @@
                                                                                           IsChecked="{Binding Config.PlayerRescueUprightFlipped}"
                                                                                           Margin="16,2,0,4"
                                                                                           ToolTip="Rotates inverted rovers right-side-up during rescue. Disabled by default so players must rely on gyroscopes and rover engineering. Default: Unchecked."/>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Max static OBB subterranean depth"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescueMaxStaticObbDepthMeters, StringFormat={}{0:F1}}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Maximum subterranean OBB penetration depth allowed for static vehicle self-rescue or Terminal conversion. Prevents rescuing static stations or deeply buried structures. Default: 4.0m."/>
+                                                                                        <TextBlock Text="meters (blocks true stations/bunkers)."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <CheckBox Content="Enable Terminal 'Convert to Ship' Auto-Rescue for Stranded Vehicles"
+                                                                                          IsChecked="{Binding Config.EnableTerminalConvertToShipAutoRescue}"
+                                                                                          Margin="16,2,0,4"
+                                                                                          ToolTip="When players click 'Convert to Ship' in the Terminal on a static rover or aircraft resting within ~1m of voxels, automatically lifts and converts it to dynamic. Default: Checked."/>
                                                                         </StackPanel>
                                                                 </StackPanel>
                                                         </GroupBox>
@@ -1479,7 +1501,7 @@
 
                                                                                 <TextBlock Margin="0,2,0,2">
                                                                                         <Run Text="- Forced Grid Sleep: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.DynamicGridsSleepDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.DynamicGridsSleepColor, Mode=OneWay}"/>
@@ -1494,14 +1516,14 @@
 
                                                                                 <TextBlock Margin="0,2,0,0">
                                                                                         <Run Text="- Rigid Bodies: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.RigidBodiesDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.RigidBodiesColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                                 <TextBlock Margin="0,2,0,0">
                                                                                         <Run Text="- Merged Ore: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.MergedOreDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.MergedOreColor, Mode=OneWay}"/>
@@ -1516,14 +1538,14 @@
                                                                                            Margin="0,0,0,2"/>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Havok Contacts: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.ContactCallbacksDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.ContactCallbacksColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Voxel Raycasts: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.VoxelRaycastsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.VoxelRaycastsColor, Mode=OneWay}"/>
@@ -1538,7 +1560,7 @@
                                                                         <StackPanel>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Tracked Rovers: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.RoversDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.RoversColor, Mode=OneWay}"/>
@@ -1546,7 +1568,7 @@
 
                                                                                 <TextBlock Margin="0,4,0,2">
                                                                                         <Run Text="- Sleeping Wheels: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.SleepingWheelsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.SleepingWheelsColor, Mode=OneWay}"/>
@@ -1561,7 +1583,7 @@
 
                                                                                 <TextBlock Margin="0,2,0,2">
                                                                                         <Run Text="- Subgrid Joints: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.SubgridJointsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.SubgridJointsColor, Mode=OneWay}"/>
@@ -1576,7 +1598,7 @@
 
                                                                                 <TextBlock Margin="0,2,0,0">
                                                                                         <Run Text="- Adaptive TOI: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.AdaptiveTOIDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.AdaptiveTOIColor, Mode=OneWay}"/>
@@ -1591,14 +1613,14 @@
                                                                         <StackPanel>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Evaluated Collisions: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.EvaluatedCollisionsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.EvaluatedCollisionsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Crashes Blocked: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.TotalBlockedDisplay, Mode=OneWay}"
                                                                                              FontWeight="Bold"
                                                                                              Foreground="#4CAF50"/>
@@ -1610,21 +1632,21 @@
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- PMW Torpedo Impacts: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.MissileHitsAllowedDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.MissileHitsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Internal Blocks Saved: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.ArmorHitsOccludedDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.ArmorHitsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Grids Nudged Apart: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.GridsSeparatedDisplay, Mode=OneWay}"
                                                                                              FontWeight="Bold"
                                                                                              Foreground="#00E676"/>
@@ -1648,21 +1670,21 @@
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Dual Clamps Inverted: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.VoxelNormalsInvertedDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.VoxelNormalsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Thruster Blocks Burned: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.ThrusterObstructionsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.ThrusterObstructionsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                                 <TextBlock>
                                                                                         <Run Text="- Voxel Cutouts Prevented: "
-                                                                                                        Foreground="#9CA3AF"/>
+                                                                                             Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.VoxelCutoutsPreventedDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.VoxelCutoutsColor, Mode=OneWay}"/>

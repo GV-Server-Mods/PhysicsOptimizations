@@ -131,6 +131,8 @@ namespace PhysicsOptimizer.Config
         private bool _playerRescueRequireNearTerrainOrContact = true;
         private bool _playerRescueUprightFlipped = false;
         private float _playerRescueOnFootMaxDistanceMeters = 50.0f;
+        private float _playerRescueMaxStaticObbDepthMeters = 4.0f;
+        private bool _enableTerminalConvertToShipAutoRescue = true;
 
         // --- Speed Gates & Rate Limits (Fallback) ---
         private float _minDrivingVelocity = 10.0f;
@@ -389,6 +391,12 @@ namespace PhysicsOptimizer.Config
             get => _playerRescueOnFootMaxDistanceMeters;
             set => SetValue(ref _playerRescueOnFootMaxDistanceMeters, Math.Max(1.0f, Math.Min(500.0f, value)));
         }
+        public float PlayerRescueMaxStaticObbDepthMeters
+        {
+            get => _playerRescueMaxStaticObbDepthMeters;
+            set => SetValue(ref _playerRescueMaxStaticObbDepthMeters, Math.Max(0.5f, Math.Min(20.0f, value)));
+        }
+        public bool EnableTerminalConvertToShipAutoRescue { get => _enableTerminalConvertToShipAutoRescue; set => SetValue(ref _enableTerminalConvertToShipAutoRescue, value); }
 
         public float MinDrivingVelocity
         {

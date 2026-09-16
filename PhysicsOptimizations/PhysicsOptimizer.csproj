@@ -38,6 +38,10 @@
       <HintPath>$(TorchDir)\DedicatedServer64\Sandbox.Common.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="SpaceEngineers.Game">
+      <HintPath>$(TorchDir)\DedicatedServer64\SpaceEngineers.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Sandbox.RenderDirect">
       <HintPath>$(TorchDir)\DedicatedServer64\Sandbox.RenderDirect.dll</HintPath>
       <Private>False</Private>
@@ -84,7 +88,8 @@
     <RemoveDir Directories="$(StagingDir)" />
     <MakeDir Directories="$(StagingDir)" />
     <Copy SourceFiles="$(TargetDir)$(TargetName).dll" DestinationFolder="$(StagingDir)" />
-    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(StagingDir)" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="$(StagingDir)"
+      Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
     <Copy SourceFiles="$(ProjectDir)manifest.xml" DestinationFolder="$(StagingDir)" />
     <Delete Files="$(ZipPath)" Condition="Exists('$(ZipPath)')" />
     <ZipDirectory SourceDirectory="$(StagingDir)" DestinationFile="$(ZipPath)" Overwrite="true" />

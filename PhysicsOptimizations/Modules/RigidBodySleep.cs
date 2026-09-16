@@ -164,7 +164,7 @@ namespace PhysicsOptimizer.Modules
                 {
                     foreach (var kvp in _trackers)
                     {
-                        if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed)
+                        if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed || g.IsStatic)
                         {
                             _cleanupBuffer.Add(kvp.Key);
                         }

@@ -227,7 +227,7 @@ namespace PhysicsOptimizer.Modules
             {
                 foreach (var kvp in _trackedQualities)
                 {
-                    if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed)
+                    if (!kvp.Value.GridRef.TryGetTarget(out var g) || g.MarkedForClose || g.Closed || g.IsStatic)
                     {
                         _cleanupBuffer.Add(kvp.Key);
                     }
@@ -244,6 +244,21 @@ namespace PhysicsOptimizer.Modules
             _plugin?.Telemetry?.UpdateTOITelemetry(totalTracked, discreteCount, Math.Max(0, totalTracked - discreteCount));
         }
 
+        /// <summary>
+        /// Resets collidable quality of a grid to its original quality or Moving (discrete),
+        /// removing it from adaptive collision tracking. Safe to call across lifecycle transitions.
+        /// </summary>
+        public void ResetGridQuality(long gridEntityId)
+        {
+            if (_trackedQualities.TryRemove(gridEntityId, out var state))
+            {
+                if (state.GridRef.TryGetTarget(out var grid) && grid.Physics?.RigidBody != null)
+                {
+                    grid.Physics.RigidBody.Quality = state.OriginalQuality != HkCollidableQualityType.Invalid ? state.OriginalQuality : HkCollidableQualityType.Moving;
+                }
+            }
+        }
+
         public void OnEntityAdded(MyEntity entity)
         {
         }
@@ -251,13 +266,7 @@ namespace PhysicsOptimizer.Modules
         public void OnEntityRemoved(MyEntity entity)
         {
             if (entity == null) return;
-            if (_trackedQualities.TryRemove(entity.EntityId, out var state))
-            {
-                if (state.IsDiscrete && state.GridRef.TryGetTarget(out var grid) && grid.Physics?.RigidBody != null)
-                {
-                    grid.Physics.RigidBody.Quality = state.OriginalQuality != HkCollidableQualityType.Invalid ? state.OriginalQuality : HkCollidableQualityType.Moving;
-                }
-            }
+            ResetGridQuality(entity.EntityId);
         }
 
         public void RestoreAllGridQualities()

@@ -25,7 +25,6 @@ namespace PhysicsOptimizer.Services
         /// Sends a clean 3-second cyan HUD toast to the pilots/controllers of a nudged grid, or its owner if unpiloted.
         /// Strictly rate-limited per grid to prevent notification spam during repeated nudge attempts.
         /// </summary>
-        public static void SendPushApartNotification(MyCubeGrid grid, double distance, bool convertedToStatic, PhysicsOptimizerConfig config, ulong currentFrame)
         public static void SendPushApartNotification(MyCubeGrid grid, double distance, bool convertedToStatic, PhysicsOptimizerConfig config, ulong currentFrame, bool isRescue = false)
         {
             if (grid == null || config == null || !config.EnablePushApartPlayerNotification) return;
@@ -33,7 +32,6 @@ namespace PhysicsOptimizer.Services
             long gridId = grid.EntityId;
             ulong cooldownTicks = (ulong)Math.Max(5, config.ChatNotificationCooldownSeconds) * 60UL;
 
-            if (_pushApartToastCooldowns.TryGetValue(gridId, out ulong lastFrame) && currentFrame < lastFrame + cooldownTicks)
             if (!isRescue && _pushApartToastCooldowns.TryGetValue(gridId, out ulong lastFrame) && currentFrame < lastFrame + cooldownTicks)
             {
                 return;
@@ -41,9 +39,6 @@ namespace PhysicsOptimizer.Services
             _pushApartToastCooldowns[gridId] = currentFrame;
 
             string gridName = grid.DisplayName ?? "Vehicle";
-            string toastMsg = convertedToStatic
-                ? string.Format(CultureInfo.InvariantCulture, "[Physics] '{0}' anchored to terrain to prevent Clang", gridName)
-                : string.Format(CultureInfo.InvariantCulture, "[Physics] Nudged '{0}' to surface", gridName);
             string toastMsg;
             if (isRescue)
             {

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Sandbox.Game.Entities;
 using VRage.Game;
@@ -125,6 +126,60 @@ namespace PhysicsOptimizer.Utils
                 }
             }
             return main;
+        }
+
+        [ThreadStatic]
+        private static List<MyCubeGrid> _vehicleCheckBuffer;
+
+        /// <summary>
+        /// Determines whether the grid construct is a mobile vehicle (rover, aircraft, lander, or small-grid vehicle)
+        /// using fast O(1) subsystem queries without block allocations or iteration.
+        /// Genuine static stations, asteroid bases, and bunkers return false.
+        /// </summary>
+        public static bool IsRoverOrAircraftOrVehicle(MyCubeGrid grid)
+        {
+            if (grid == null || grid.MarkedForClose || grid.Closed) return false;
+
+            _vehicleCheckBuffer ??= new List<MyCubeGrid>();
+            _vehicleCheckBuffer.Clear();
+            try
+            {
+                GetMechanicalGroupMembers(grid, _vehicleCheckBuffer);
+                foreach (var member in _vehicleCheckBuffer)
+                {
+                    if (member == null || member.MarkedForClose || member.Closed) continue;
+
+                    // 1. Rover suspensions
+                    if (member.GridSystems?.WheelSystem != null && member.GridSystems.WheelSystem.WheelCount > 0)
+                    {
+                        return true;
+                    }
+
+                    // 2. Landing gear (aircraft, shuttles, landers)
+                    if (member.GridSystems?.LandingSystem != null && member.GridSystems.LandingSystem.TotalGearCount > 0)
+                    {
+                        return true;
+                    }
+
+                    // 3. Thrusters (aircraft, flyers)
+                    if (member.Components?.Get<Sandbox.Game.GameSystems.MyEntityThrustComponent>()?.ThrustCount > 0)
+                    {
+                        return true;
+                    }
+
+                    // 4. Small-grid vehicle with cockpit/controller
+                    if (member.GridSizeEnum == MyCubeSize.Small && member.GridSystems?.ControlSystem?.GetControllers()?.Count > 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            finally
+            {
+                _vehicleCheckBuffer.Clear();
+            }
+
+            return false;
         }
     }
 }

@@ -436,10 +436,25 @@ namespace PhysicsOptimizer.Services
                 return;
             }
 
-            if (topGrid.IsStatic)
+            if (topGrid.IsStatic && !isAdmin && !GridUtils.IsRoverOrAircraftOrVehicle(topGrid))
             {
-                context.Respond("[Rescue] Static stations cannot be rescued.");
+                context.Respond("[Rescue] Static stations cannot be rescued. Only rovers and aircraft/vehicles can be rescued.");
                 return;
+            }
+
+            Vector3D center = topGrid.PositionComp.WorldVolume.Center;
+            MyPlanet planet = MyGamePruningStructure.GetClosestPlanet(center);
+            if (planet != null && !isAdmin)
+            {
+                Vector3D planetCore = planet.PositionComp.WorldVolume.Center;
+                Vector3D surfacePoint = planet.GetClosestSurfacePointGlobal(ref center);
+                double centerDist = (center - planetCore).Length();
+                double surfaceDist = (surfacePoint - planetCore).Length();
+                if (centerDist < surfaceDist)
+                {
+                    context.Respond("[Rescue] Vehicle center is below the terrain heightmap. Please use Faction Hangar to store and re-place it above ground.");
+                    return;
+                }
             }
 
             // ADMIN BYPASS: execute immediately without barriers
@@ -553,7 +568,9 @@ namespace PhysicsOptimizer.Services
             {
                 string msg = isAdmin
                     ? string.Format(CultureInfo.InvariantCulture, "[Rescue] Admin rescue push applied to '{0}' (+{1:F1}m).", topGrid.DisplayName, dist)
-                    : string.Format(CultureInfo.InvariantCulture, "[Rescue] Rescue push applied to '{0}' (+{1:F1}m). Velocities stabilized.", topGrid.DisplayName, dist);
+                    : topGrid.IsStatic
+                        ? string.Format(CultureInfo.InvariantCulture, "[Rescue] Rescue push applied to '{0}' (+{1:F1}m) and converted to dynamic ship. Velocities stabilized.", topGrid.DisplayName, dist)
+                        : string.Format(CultureInfo.InvariantCulture, "[Rescue] Rescue push applied to '{0}' (+{1:F1}m). Velocities stabilized.", topGrid.DisplayName, dist);
                 context?.Respond(msg);
             }
             else
@@ -678,7 +695,10 @@ namespace PhysicsOptimizer.Services
                     {
                         _playerCooldownsUtc[steamId] = DateTime.UtcNow;
                         _gridCooldownsUtc[grid.EntityId] = DateTime.UtcNow;
-                        MyVisualScriptLogicProvider.ShowNotification("[Rescue] Vehicle rescue complete. Velocities stabilized.", 4000, "Green", pending.IdentityId);
+                        string successMsg = grid.IsStatic
+                            ? "[Rescue] Vehicle rescued and converted to dynamic ship. Velocities stabilized."
+                            : "[Rescue] Vehicle rescue complete. Velocities stabilized.";
+                        MyVisualScriptLogicProvider.ShowNotification(successMsg, 4000, "Green", pending.IdentityId);
                     }
                     else
                     {

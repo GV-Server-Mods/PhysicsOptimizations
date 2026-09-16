@@ -61,6 +61,7 @@ namespace PhysicsOptimizer.Modules
             public Vector3D StartPos;
             public bool VoxelPush;
             public bool ConvertToStatic;
+            public bool ConvertToDynamic;
             public bool IsRescue;
             public bool IsAdminRescue;
         }
@@ -1802,7 +1803,6 @@ namespace PhysicsOptimizer.Modules
                 SeparationDir = separationDir,
                 Distance = (float)distance,
                 StartPos = grid.PositionComp.WorldVolume.Center,
-                VoxelPush = voxelPush
                 VoxelPush = voxelPush,
                 IsRescue = false,
                 IsAdminRescue = false
@@ -1842,9 +1842,9 @@ namespace PhysicsOptimizer.Modules
                 return false;
             }
 
-            if (topGrid.IsStatic)
+            if (topGrid.IsStatic && !isAdmin && !GridUtils.IsRoverOrAircraftOrVehicle(topGrid))
             {
-                failureReason = "Static stations cannot be rescued.";
+                failureReason = "Static stations cannot be rescued. Only rovers and aircraft/vehicles can be rescued.";
                 return false;
             }
 
@@ -1875,6 +1875,12 @@ namespace PhysicsOptimizer.Modules
                 double surfaceDist = (surfaceCenter - planetCore).Length();
                 bool isMacroSubmerged = centerDist < surfaceDist;
 
+                if (isMacroSubmerged && !isAdmin)
+                {
+                    failureReason = "Vehicle center is below the terrain heightmap. Please use Faction Hangar to store and re-place it above ground.";
+                    return false;
+                }
+
                 double maxClearance = 0.0;
                 _pushMechanicalGroupBuffer ??= new List<MyCubeGrid>();
                 _pushMechanicalGroupBuffer.Clear();
@@ -1902,6 +1908,14 @@ namespace PhysicsOptimizer.Modules
                 finally
                 {
                     _pushMechanicalGroupBuffer.Clear();
+                }
+
+                if (topGrid.IsStatic && !isAdmin && maxClearance > (config?.PlayerRescueMaxStaticObbDepthMeters ?? 4.0f))
+                {
+                    failureReason = string.Format(CultureInfo.InvariantCulture,
+                        "Vehicle is embedded too deeply in terrain ({0:F1}m > {1:F1}m). Static stations or deeply buried structures cannot be rescued.",
+                        maxClearance, config?.PlayerRescueMaxStaticObbDepthMeters ?? 4.0f);
+                    return false;
                 }
 
                 if (maxClearance > 0 || isMacroSubmerged)
@@ -1963,11 +1977,51 @@ namespace PhysicsOptimizer.Modules
                 Distance = (float)finalDistance,
                 StartPos = topGrid.PositionComp.WorldVolume.Center,
                 VoxelPush = true,
+                ConvertToDynamic = topGrid.IsStatic,
                 IsRescue = true,
                 IsAdminRescue = isAdmin
             });
 
             return true;
+        }
+
+        /// <summary>
+        /// Clears all push-apart attempts, consecutive contact counts, and cached contact normals for a grid.
+        /// Prevents freshly rescued or dynamic-converted grids from being immediately re-stationed.
+        /// </summary>
+        public void ResetGridAttempts(long gridEntityId)
+        {
+            _pushApartAttempts.TryRemove(gridEntityId, out _);
+            _consecutiveContactFrames.TryRemove(gridEntityId, out _);
+            _consecutiveVoxelContactFrames.TryRemove(gridEntityId, out _);
+            _lastContactFrameTracker.TryRemove(gridEntityId, out _);
+            _lastEscapes.TryRemove(gridEntityId, out _);
+            _lastVoxelPenetrations.TryRemove(gridEntityId, out _);
+            _lastVoxelContactNormals.TryRemove(gridEntityId, out _);
+            _lastImpactPositions.TryRemove(gridEntityId, out _);
+        }
+
+        private static readonly MethodInfo _landingGearAttachRequest =
+            typeof(SpaceEngineers.Game.Entities.Blocks.MyLandingGear).GetMethod("AttachRequest", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        private static void UnlockLandingGears(MyCubeGrid grid)
+        {
+            if (grid?.GridSystems?.LandingSystem == null || grid.GridSystems.LandingSystem.TotalGearCount == 0) return;
+
+            foreach (var gear in grid.GetFatBlocks<SpaceEngineers.Game.Entities.Blocks.MyLandingGear>())
+            {
+                if (gear == null || gear.MarkedForClose || gear.Closed) continue;
+                try
+                {
+                    gear.ResetAutoLock();
+                    gear.RequestLock(false);
+                    _landingGearAttachRequest?.Invoke(gear, new object[] { false });
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, LogSource, "Error unlocking landing gear during rescue push.");
+                }
+            }
         }
 
         /// <summary>
@@ -2226,6 +2280,7 @@ namespace PhysicsOptimizer.Modules
                                 _lastContactFrameTracker.TryRemove(member.EntityId, out _);
                                 _pushApartAttempts.TryRemove(member.EntityId, out _);
                                 _lastEscapes.TryRemove(member.EntityId, out _);
+                                _plugin?.AdaptiveCollision?.ResetGridQuality(member.EntityId);
                             }
 
                             ChatNotificationService.SendPushApartNotification(grid, 0, true, config, MySandboxGame.Static?.SimulationFrameCounter ?? 0);
@@ -2250,6 +2305,15 @@ namespace PhysicsOptimizer.Modules
                     {
                         GridUtils.GetMechanicalGroupMembers(grid, _pushMechanicalGroupBuffer);
 
+                        if (action.ConvertToDynamic)
+                        {
+                            foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
+                            {
+                                if (member == null || member.MarkedForClose || member.Closed) continue;
+                                UnlockLandingGears(member);
+                            }
+                        }
+
                         foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
                         {
                             if (member == null || member.MarkedForClose || member.Closed) continue;
@@ -2258,12 +2322,56 @@ namespace PhysicsOptimizer.Modules
                             matrix.Translation += action.SeparationDir * action.Distance;
                             member.PositionComp.SetWorldMatrix(ref matrix);
 
+                            if (action.ConvertToDynamic)
+                            {
+                                if (member.IsStatic)
+                                {
+                                    try
+                                    {
+                                        if (MyMultiplayer.Static != null)
+                                        {
+                                            MyMultiplayer.RaiseEvent(member, (MyCubeGrid x) => x.OnConvertToDynamic);
+                                        }
+                                        else
+                                        {
+                                            member.OnConvertToDynamic();
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        member.OnConvertToDynamic();
+                                    }
+
+                                    if (member.IsStatic)
+                                    {
+                                        member.Physics?.ConvertToDynamic(member.GridSizeEnum == MyCubeSize.Large, member.IsClientPredicted);
+                                    }
+                                }
+
+                                MyFixedGrids.UnmarkGridRoot(member);
+                                MyGridPhysicalHierarchy.Static?.UpdateRoot(member);
+                            }
+
                             if (member.Physics != null)
                             {
                                 // Wake the body first - velocity writes on a deactivated rigid body are lost
+                                member.Physics.ForceActivate();
                                 member.Physics.RigidBody?.Activate();
                                 member.Physics.LinearVelocity = Vector3.Zero;
                                 member.Physics.AngularVelocity = Vector3.Zero;
+                                if (member.Physics.RigidBody != null)
+                                {
+                                    member.Physics.RigidBody.LinearVelocity = Vector3.Zero;
+                                    member.Physics.RigidBody.AngularVelocity = Vector3.Zero;
+                                }
+                            }
+
+                            if (action.ConvertToDynamic)
+                            {
+                                _plugin?.AdaptiveCollision?.ResetGridQuality(member.EntityId);
+                                _plugin?.RigidBodySleep?.WakeGrid(member, "RescuePush");
+                                _plugin?.WheelOptimizer?.WakeRover(member.EntityId, "RescuePush");
+                                ResetGridAttempts(member.EntityId);
                             }
 
                             _consecutiveContactFrames[member.EntityId] = 0;
@@ -2289,7 +2397,6 @@ namespace PhysicsOptimizer.Modules
 
                         PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementGridsSeparated();
                         PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementPushApartActionsExecuted();
-                        ChatNotificationService.SendPushApartNotification(grid, action.Distance, false, config, MySandboxGame.Static?.SimulationFrameCounter ?? 0);
                         ChatNotificationService.SendPushApartNotification(grid, action.Distance, false, config, MySandboxGame.Static?.SimulationFrameCounter ?? 0, action.IsRescue);
                     }
                     finally

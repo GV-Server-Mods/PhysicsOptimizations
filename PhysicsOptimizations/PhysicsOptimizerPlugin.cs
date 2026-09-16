@@ -164,6 +164,7 @@ namespace PhysicsOptimizer
                     SubgridStabilizer.RegisterPatches(ctx);
                     GridDefender.RegisterPatches(ctx);
                     ThrusterClearance.RegisterPatches(ctx);
+                    PhysicsOptimizerPatches.RegisterPatches(ctx);
 
                     patchManager.Commit();
                     Log.Info(LogSource, "All patches successfully registered with Torch PatchManager.");
