@@ -41,11 +41,24 @@ namespace PhysicsOptimizer.Views
                 Plugin?.Telemetry?.NotifyAllPropertiesChanged();
                 Plugin?.DefenseStats?.NotifyAll();
 
-                float speed = Plugin?.Telemetry?.ServerSimulationSpeed ?? 1.0f;
-                double contactRate = Plugin?.DefenseStats?.ContactCallbacksPerSecond ?? 0.0;
-                int topRate = Plugin?.DefenseStats?.TopOffender?.CurrentRate ?? 0;
-                AddHistorySample(speed, contactRate, topRate);
-                RedrawGraph();
+                if (PhysicsOptimizerPlugin.IsServerOnline)
+                {
+                    float speed = Plugin?.Telemetry?.ServerSimulationSpeed ?? 1.0f;
+                    double contactRate = Plugin?.DefenseStats?.ContactCallbacksPerSecond ?? 0.0;
+                    int topRate = Plugin?.DefenseStats?.TopOffender?.CurrentRate ?? 0;
+                    AddHistorySample(speed, contactRate, topRate);
+                    RedrawGraph();
+                }
+                else if (_historyCount > 0)
+                {
+                    _historyCount = 0;
+                    _historyHead = 0;
+                    if (SimSpeedPolyline != null) SimSpeedPolyline.Points = null;
+                    if (ContactLoadPolyline != null) ContactLoadPolyline.Points = null;
+                    if (ClangSpikesPolyline != null) ClangSpikesPolyline.Points = null;
+                    if (ContactLoadLegendText != null) ContactLoadLegendText.Text = "Contact Load";
+                    if (ClangSpikesLegendText != null) ClangSpikesLegendText.Text = "Clang Spikes";
+                }
             };
 
             Loaded += (s, e) => _telemetryTimer.Start();
@@ -264,11 +277,28 @@ namespace PhysicsOptimizer.Views
             int startIndex = (_historyHead - _historyCount + HistorySamples) % HistorySamples;
 
             // Find peak contact rate for dynamic scaling
+            // Find peak contact rate & peak clang rate for dynamic auto-scaling
             double maxContact = 100.0;
+            double maxClang = 25.0; // Baseline floor so minor 1-2/s driving bumps stay close to bottom
             for (int i = 0; i < _historyCount; i++)
             {
                 int idx = (startIndex + i) % HistorySamples;
                 if (_contactRateHistory[idx] > maxContact) maxContact = _contactRateHistory[idx];
+                if (_clangRateHistory[idx] > maxClang) maxClang = _clangRateHistory[idx];
+            }
+
+            if (ContactLoadLegendText != null)
+            {
+                ContactLoadLegendText.Text = maxContact > 100.0
+                    ? $"Contact Load (peak {maxContact:N0}/s)"
+                    : "Contact Load";
+            }
+
+            if (ClangSpikesLegendText != null)
+            {
+                ClangSpikesLegendText.Text = maxClang > 25.0
+                    ? $"Clang Spikes (peak {maxClang:N0}/s)"
+                    : "Clang Spikes";
             }
 
             for (int i = 0; i < _historyCount; i++)
@@ -286,8 +316,8 @@ namespace PhysicsOptimizer.Views
                 double contactY = (height - 10) - (contactFrac * (height - 25));
                 contactPoints.Add(new Point(x, contactY));
 
-                // Clang Spikes: 0 rate at bottom, 50/s reaches near top
-                double clangFrac = Math.Min(1.0, _clangRateHistory[idx] / 50.0);
+                // Clang Spikes: dynamically auto-scaled to maxClang (min floor 25/s)
+                double clangFrac = Math.Max(0.0, Math.Min(1.0, _clangRateHistory[idx] / maxClang));
                 double clangY = (height - 10) - (clangFrac * (height - 20));
                 clangPoints.Add(new Point(x, clangY));
             }

@@ -1043,6 +1043,153 @@
                                                                         </StackPanel>
                                                                 </StackPanel>
                                                         </GroupBox>
+ 
+                                                        <!-- Vehicle Self-Rescue (!unstuckit) -->
+                                                        <GroupBox Header="🛟 Vehicle Self-Rescue (!unstuckit, !rescue)">
+                                                                <StackPanel>
+                                                                        <CheckBox Content="Enable Player Vehicle Self-Rescue"
+                                                                                  IsChecked="{Binding Config.EnablePlayerRescue}"
+                                                                                  FontWeight="SemiBold"
+                                                                                  Margin="0,0,0,4"
+                                                                                  ToolTip="Enables player !unstuckit, !rescue, and !unstuck commands allowing stranded rovers to self-push using the terrain push-apart engine. Admins bypass all cooldowns and anti-exploit restrictions. Default: Checked."/>
+                                                                        <StackPanel IsEnabled="{Binding Config.EnablePlayerRescue}">
+                                                                                <TextBlock Text="Allows seated drivers and on-foot players to rescue stuck rovers using the automated push-apart engine with strict anti-combat-exploit gates."
+                                                                                           Foreground="#9CA3AF"
+                                                                                           FontSize="11"
+                                                                                           Margin="16,0,0,8"
+                                                                                           TextWrapping="Wrap"/>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Require a cooldown of"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescueCooldownSeconds}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Global cooldown in seconds per player and per vehicle between rescue attempts. Default: 300s (5 minutes)."/>
+                                                                                        <TextBlock Text="seconds between rescue attempts."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Block rescue for"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescueCombatCooldownSeconds}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Cooldown in seconds after the vehicle takes collision or weapon damage before rescue is allowed. Default: 30s."/>
+                                                                                        <TextBlock Text="seconds after taking damage (anti-combat escape)."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Require a warm-up stationary countdown of"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescueWarmupSeconds}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Warm-up delay in seconds before executing rescue. Aborts immediately if the vehicle moves, takes damage, or hostiles approach. Default: 5s."/>
+                                                                                        <TextBlock Text="seconds before execution."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Abort countdown if vehicle velocity exceeds"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescueMaxSpeed, StringFormat={}{0:F1}}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Maximum allowable speed in m/s during warm-up. Grids stuck in violent Havok Clang loops are automatically exempted. Default: 1.0 m/s."/>
+                                                                                        <TextBlock Text="m/s (Clang vibration loops exempt)."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Block rescue if hostile players or enemy grids are within"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescueEnemyProximityMeters, StringFormat={}{0:F0}}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Distance in meters around player and vehicle scanned for hostile factions or armed enemy grids. Default: 1000m."/>
+                                                                                        <TextBlock Text="meters."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Nudge construct along terrain normal by"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescuePushDistance, StringFormat={}{0:F1}}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="One-shot rescue translation distance in meters normal to the macro terrain surface (subterranean OBB clearance automatically calculated). Default: 1.5m."/>
+                                                                                        <TextBlock Text="meters (subterranean clearance applies automatically)."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <WrapPanel Margin="16,2,0,2"
+                                                                                           VerticalAlignment="Center">
+                                                                                        <TextBlock Text="Allow on-foot crosshair raycast targeting up to"
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,5,0"/>
+                                                                                        <TextBox Text="{Binding Config.PlayerRescueOnFootMaxDistanceMeters, StringFormat={}{0:F0}}"
+                                                                                                 Width="55"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 Margin="0,0,5,0"
+                                                                                                 ToolTip="Maximum crosshair raycast distance in meters for on-foot players outside their vehicles. Admins bypass this and have a 1000m range. Default: 50m."/>
+                                                                                        <TextBlock Text="meters."
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
+                                                                                </WrapPanel>
+
+                                                                                <CheckBox Content="Require Ground Proximity or Active Collision Contacts"
+                                                                                          IsChecked="{Binding Config.PlayerRescueRequireNearTerrainOrContact}"
+                                                                                          Margin="16,4,0,4"
+                                                                                          ToolTip="Prevents flying or orbital grids from using rescue as a propulsion mechanic. Grid must be near a planet surface or actively colliding. Default: Checked."/>
+
+                                                                                <CheckBox Content="Automatically Upright Flipped / Upside-Down Rovers"
+                                                                                          IsChecked="{Binding Config.PlayerRescueUprightFlipped}"
+                                                                                          Margin="16,2,0,4"
+                                                                                          ToolTip="Rotates inverted rovers right-side-up during rescue. Disabled by default so players must rely on gyroscopes and rover engineering. Default: Unchecked."/>
+                                                                        </StackPanel>
+                                                                </StackPanel>
+                                                        </GroupBox>
 
                                                         <!-- Voxel & Terrain Protection -->
                                                         <GroupBox Header="🌍 Voxel &amp; Terrain Protection">
@@ -1066,7 +1213,6 @@
                                 </ScrollViewer>
                         </TabItem>
 
-                        \t
                         <!-- TAB 3: LIVE TELEMETRY & PANIC COCKPIT -->
                         <TabItem Header="Live Telemetry &amp; Actions">
                                 <Grid Margin="12,10,12,10">
@@ -1086,14 +1232,14 @@
                                                                    FontWeight="Bold"
                                                                    Foreground="#CCCCCC"
                                                                    Margin="0,0,0,4"/>
-                                                        <TextBlock Text="Real-time Havok simulation gauges, 60s trend graph, Kharak zone clanger heatmap, and 1-click physics rescue tools."
+                                                        <TextBlock Text="Real-time Havok simulation gauges, 60-second trend graph, and 1-click physics rescue tools."
                                                                    FontSize="11"
                                                                    Foreground="#9CA3AF"
                                                                    Margin="0,0,0,10"/>
 
                                                         <!-- LAYER 1: DYNAMIC DEFCON EMERGENCY BANNER (LOCKED HEIGHT, ZERO JITTER) -->
-                                                        <Border Background="{Binding DefenseStats.AlertBackgroundColor, FallbackValue='#1B382B'}"
-                                                                BorderBrush="{Binding DefenseStats.AlertBorderColor, FallbackValue='#2E7D32'}"
+                                                        <Border Background="{Binding DefenseStats.AlertBackgroundColor, FallbackValue='#202026'}"
+                                                                BorderBrush="{Binding DefenseStats.AlertBorderColor, FallbackValue='#4B5563'}"
                                                                 BorderThickness="2"
                                                                 CornerRadius="6"
                                                                 Padding="12,6"
@@ -1107,14 +1253,14 @@
 
                                                                         <!-- Status Alert Display -->
                                                                         <StackPanel Grid.Column="0"
-                                                                                        Orientation="Horizontal"
-                                                                                        VerticalAlignment="Center"
-                                                                                        Margin="0,0,8,0">
-                                                                                <TextBlock Text="{Binding DefenseStats.AlertIcon, FallbackValue='🟢'}"
+                                                                                    Orientation="Horizontal"
+                                                                                    VerticalAlignment="Center"
+                                                                                    Margin="0,0,8,0">
+                                                                                <TextBlock Text="{Binding DefenseStats.AlertIcon, FallbackValue='⚪'}"
                                                                                            FontSize="18"
                                                                                            VerticalAlignment="Center"
                                                                                            Margin="0,0,8,0"/>
-                                                                                <TextBlock Text="{Binding DefenseStats.AlertStatusText, FallbackValue='OPTIMAL (1.00 TPS) — Physics solvers quiet, all constructs nominal'}"
+                                                                                <TextBlock Text="{Binding DefenseStats.AlertStatusText, FallbackValue='SERVER OFFLINE — Simulation suspended until server starts'}"
                                                                                            FontWeight="Bold"
                                                                                            FontSize="13"
                                                                                            Foreground="#FFFFFF"
@@ -1134,9 +1280,9 @@
 
                                                                         <!-- Dynamic 1-Click Action Rescue Buttons for Top Offender (Single Row, Non-Wrapping) -->
                                                                         <StackPanel Grid.Column="1"
-                                                                                        Orientation="Horizontal"
-                                                                                        VerticalAlignment="Center"
-                                                                                        Margin="8,0,0,0"
+                                                                                    Orientation="Horizontal"
+                                                                                    VerticalAlignment="Center"
+                                                                                    Margin="8,0,0,0"
                                                                                     Visibility="{Binding DefenseStats.HasActiveClangers, Converter={StaticResource BoolToVis}}">
                                                                                 <Button Content="⚡ FREEZE"
                                                                                         Click="BannerFreezeTopOffender_Click"
@@ -1195,213 +1341,116 @@
                                                                 </Grid>
                                                         </Border>
 
-                                                        <!-- LAYER 2: DIAGNOSTIC SPLIT (60s ROLLING GRAPH + KHARAK ZONE HEATMAP) -->
-                                                        <Grid Margin="0,0,0,12">
-                                                                <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="3*"/>
-                                                                        <ColumnDefinition Width="2*"/>
-                                                                </Grid.ColumnDefinitions>
+                                                        <!-- LAYER 2: 60-SECOND REAL-TIME PHYSICS TREND GRAPH (FULL WIDTH) -->
+                                                        <GroupBox Header="📈 60-Second Real-Time Physics Trend"
+                                                                  Margin="0,0,0,12">
+                                                                <StackPanel>
+                                                                        <!-- Legend -->
+                                                                        <DockPanel LastChildFill="False"
+                                                                                   Margin="0,0,0,6">
+                                                                                <WrapPanel Orientation="Horizontal"
+                                                                                           DockPanel.Dock="Left">
+                                                                                        <Rectangle Width="10"
+                                                                                                   Height="10"
+                                                                                                   Fill="#4CAF50"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,4,0"/>
+                                                                                        <TextBlock Text="Sim Speed (TPS)"
+                                                                                                   FontSize="10"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   Margin="0,0,14,0"/>
 
-                                                                <!-- LEFT: 60s ROLLING GRAPH -->
-                                                                <GroupBox Grid.Column="0"
-                                                                          Header="📈 60-Second Real-Time Physics Trend"
-                                                                          Margin="0,0,6,0">
-                                                                        <StackPanel>
-                                                                                <!-- Legend -->
-                                                                                <DockPanel LastChildFill="False"
-                                                                                                Margin="0,0,0,6">
-                                                                                        <WrapPanel Orientation="Horizontal"
-                                                                                                        DockPanel.Dock="Left">
-                                                                                                <Rectangle Width="10"
-                                                                                                                Height="10"
-                                                                                                                Fill="#4CAF50"
-                                                                                                                VerticalAlignment="Center"
-                                                                                                                Margin="0,0,4,0"/>
-                                                                                                <TextBlock Text="Sim Speed (TPS)"
-                                                                                                                FontSize="10"
-                                                                                                                Foreground="#CCCCCC"
-                                                                                                                Margin="0,0,12,0"/>
+                                                                                        <Rectangle Width="10"
+                                                                                                   Height="10"
+                                                                                                   Fill="#FF9800"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,4,0"/>
+                                                                                        <TextBlock x:Name="ContactLoadLegendText"
+                                                                                                   Text="Contact Load"
+                                                                                                   FontSize="10"
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   Margin="0,0,14,0"/>
 
-                                                                                                <Rectangle Width="10"
-                                                                                                                Height="10"
-                                                                                                                Fill="#FF9800"
-                                                                                                                VerticalAlignment="Center"
-                                                                                                                Margin="0,0,4,0"/>
-                                                                                                <TextBlock Text="Contact Load"
-                                                                                                                FontSize="10"
-                                                                                                                Foreground="#CCCCCC"
-                                                                                                                Margin="0,0,12,0"/>
+                                                                                        <Rectangle Width="10"
+                                                                                                   Height="10"
+                                                                                                   Fill="#EF4444"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,4,0"/>
+                                                                                        <TextBlock x:Name="ClangSpikesLegendText"
+                                                                                                   Text="Clang Spikes"
+                                                                                                   FontSize="10"
+                                                                                                   Foreground="#CCCCCC"/>
+                                                                                </WrapPanel>
+                                                                                <TextBlock Text="Past 60s"
+                                                                                           FontSize="10"
+                                                                                           Foreground="#6B7280"
+                                                                                           DockPanel.Dock="Right"/>
+                                                                        </DockPanel>
 
-                                                                                                <Rectangle Width="10"
-                                                                                                                Height="10"
-                                                                                                                Fill="#EF4444"
-                                                                                                                VerticalAlignment="Center"
-                                                                                                                Margin="0,0,4,0"/>
-                                                                                                <TextBlock Text="Clang Spikes"
-                                                                                                                FontSize="10"
-                                                                                                                Foreground="#CCCCCC"/>
-                                                                                        </WrapPanel>
-                                                                                        <TextBlock Text="Past 60s"
-                                                                                                        FontSize="10"
-                                                                                                        Foreground="#6B7280"
-                                                                                                        DockPanel.Dock="Right"/>
-                                                                                </DockPanel>
+                                                                        <!-- Canvas for Graph -->
+                                                                        <Border Background="#131316"
+                                                                                BorderBrush="#27272A"
+                                                                                BorderThickness="1"
+                                                                                CornerRadius="3">
+                                                                                <Canvas x:Name="TelemetryGraphCanvas"
+                                                                                        Height="105"
+                                                                                        ClipToBounds="True"
+                                                                                        SizeChanged="TelemetryGraphCanvas_SizeChanged">
+                                                                                        <!-- Reference Grid Lines -->
+                                                                                        <Line X1="0"
+                                                                                              Y1="10"
+                                                                                              X2="1000"
+                                                                                              Y2="10"
+                                                                                              Stroke="#26262B"
+                                                                                              StrokeDashArray="2,4"
+                                                                                              StrokeThickness="1"/>
+                                                                                        <TextBlock Text="1.0"
+                                                                                                   Foreground="#3F3F46"
+                                                                                                   FontSize="8"
+                                                                                                   Canvas.Left="2"
+                                                                                                   Canvas.Top="2"/>
 
-                                                                                <!-- Canvas for Graph -->
-                                                                                <Border Background="#131316"
-                                                                                        BorderBrush="#27272A"
-                                                                                        BorderThickness="1"
-                                                                                        CornerRadius="3">
-                                                                                        <Canvas x:Name="TelemetryGraphCanvas"
-                                                                                                Height="105"
-                                                                                                ClipToBounds="True"
-                                                                                                SizeChanged="TelemetryGraphCanvas_SizeChanged">
-                                                                                                <!-- Reference Grid Lines -->
-                                                                                                <Line X1="0"
-                                                                                                                Y1="10"
-                                                                                                                X2="1000"
-                                                                                                                Y2="10"
-                                                                                                                Stroke="#26262B"
-                                                                                                                StrokeDashArray="2,4"
-                                                                                                                StrokeThickness="1"/>
-                                                                                                <TextBlock Text="1.0"
-                                                                                                                Foreground="#3F3F46"
-                                                                                                                FontSize="8"
-                                                                                                                Canvas.Left="2"
-                                                                                                                Canvas.Top="2"/>
+                                                                                        <Line X1="0"
+                                                                                              Y1="52"
+                                                                                              X2="1000"
+                                                                                              Y2="52"
+                                                                                              Stroke="#26262B"
+                                                                                              StrokeDashArray="2,4"
+                                                                                              StrokeThickness="1"/>
+                                                                                        <TextBlock Text="0.5"
+                                                                                                   Foreground="#3F3F46"
+                                                                                                   FontSize="8"
+                                                                                                   Canvas.Left="2"
+                                                                                                   Canvas.Top="44"/>
 
-                                                                                                <Line X1="0"
-                                                                                                                Y1="52"
-                                                                                                                X2="1000"
-                                                                                                                Y2="52"
-                                                                                                                Stroke="#26262B"
-                                                                                                                StrokeDashArray="2,4"
-                                                                                                                StrokeThickness="1"/>
-                                                                                                <TextBlock Text="0.5"
-                                                                                                                Foreground="#3F3F46"
-                                                                                                                FontSize="8"
-                                                                                                                Canvas.Left="2"
-                                                                                                                Canvas.Top="44"/>
+                                                                                        <Line X1="0"
+                                                                                              Y1="95"
+                                                                                              X2="1000"
+                                                                                              Y2="95"
+                                                                                              Stroke="#26262B"
+                                                                                              StrokeDashArray="2,4"
+                                                                                              StrokeThickness="1"/>
+                                                                                        <TextBlock Text="0.0"
+                                                                                                   Foreground="#3F3F46"
+                                                                                                   FontSize="8"
+                                                                                                   Canvas.Left="2"
+                                                                                                   Canvas.Top="87"/>
 
-                                                                                                <Line X1="0"
-                                                                                                                Y1="95"
-                                                                                                                X2="1000"
-                                                                                                                Y2="95"
-                                                                                                                Stroke="#26262B"
-                                                                                                                StrokeDashArray="2,4"
-                                                                                                                StrokeThickness="1"/>
-                                                                                                <TextBlock Text="0.0"
-                                                                                                                Foreground="#3F3F46"
-                                                                                                                FontSize="8"
-                                                                                                                Canvas.Left="2"
-                                                                                                                Canvas.Top="87"/>
-
-                                                                                                <!-- Dynamic Graph Polylines -->
-                                                                                                <Polyline x:Name="ContactLoadPolyline"
-                                                                                                          Stroke="#FF9800"
-                                                                                                          StrokeThickness="1.5"
-                                                                                                          Opacity="0.75"/>
-                                                                                                <Polyline x:Name="ClangSpikesPolyline"
-                                                                                                          Stroke="#EF4444"
-                                                                                                          StrokeThickness="2"/>
-                                                                                                <Polyline x:Name="SimSpeedPolyline"
-                                                                                                          Stroke="#4CAF50"
-                                                                                                          StrokeThickness="2"/>
-                                                                                        </Canvas>
-                                                                                </Border>
-                                                                        </StackPanel>
-                                                                </GroupBox>
-
-                                                                <!-- RIGHT: KHARAK ZONE HEATMAP -->
-                                                                <GroupBox Grid.Column="1"
-                                                                          Header="🗺️ Kharak Zone Clang Heatmap"
-                                                                          Margin="6,0,0,0">
-                                                                        <StackPanel VerticalAlignment="Center">
-                                                                                <!-- Zone 0 -->
-                                                                                <Border Background="#18181B"
-                                                                                        BorderBrush="{Binding DefenseStats.Zone0Color, FallbackValue='#4CAF50'}"
-                                                                                        BorderThickness="1.5"
-                                                                                        CornerRadius="3"
-                                                                                        Padding="6,4"
-                                                                                        Margin="0,0,0,4">
-                                                                                        <DockPanel LastChildFill="True">
-                                                                                                <TextBlock Text="Z0 (&lt;20km Hub)"
-                                                                                                                FontWeight="Bold"
-                                                                                                                FontSize="11"
-                                                                                                                Foreground="#CCCCCC"
-                                                                                                                DockPanel.Dock="Left"
-                                                                                                                Margin="0,0,6,0"/>
-                                                                                                <TextBlock Text="{Binding DefenseStats.Zone0Status, FallbackValue='🟢 Safe Hub: Clean'}"
-                                                                                                           FontSize="11"
-                                                                                                           Foreground="{Binding DefenseStats.Zone0Color, FallbackValue='#4CAF50'}"
-                                                                                                           HorizontalAlignment="Right"/>
-                                                                                        </DockPanel>
-                                                                                </Border>
-
-                                                                                <!-- Zone 1 -->
-                                                                                <Border Background="#18181B"
-                                                                                        BorderBrush="{Binding DefenseStats.Zone1Color, FallbackValue='#4CAF50'}"
-                                                                                        BorderThickness="1.5"
-                                                                                        CornerRadius="3"
-                                                                                        Padding="6,4"
-                                                                                        Margin="0,0,0,4">
-                                                                                        <DockPanel LastChildFill="True">
-                                                                                                <TextBlock Text="Z1 (20-35km PvP)"
-                                                                                                                FontWeight="Bold"
-                                                                                                                FontSize="11"
-                                                                                                                Foreground="#CCCCCC"
-                                                                                                                DockPanel.Dock="Left"
-                                                                                                                Margin="0,0,6,0"/>
-                                                                                                <TextBlock Text="{Binding DefenseStats.Zone1Status, FallbackValue='🟢 Fledgling: Clean'}"
-                                                                                                           FontSize="11"
-                                                                                                           Foreground="{Binding DefenseStats.Zone1Color, FallbackValue='#4CAF50'}"
-                                                                                                           HorizontalAlignment="Right"/>
-                                                                                        </DockPanel>
-                                                                                </Border>
-
-                                                                                <!-- Zone 2 -->
-                                                                                <Border Background="#18181B"
-                                                                                        BorderBrush="{Binding DefenseStats.Zone2Color, FallbackValue='#4CAF50'}"
-                                                                                        BorderThickness="1.5"
-                                                                                        CornerRadius="3"
-                                                                                        Padding="6,4"
-                                                                                        Margin="0,0,0,4">
-                                                                                        <DockPanel LastChildFill="True">
-                                                                                                <TextBlock Text="Z2 (35-50km Relic)"
-                                                                                                                FontWeight="Bold"
-                                                                                                                FontSize="11"
-                                                                                                                Foreground="#CCCCCC"
-                                                                                                                DockPanel.Dock="Left"
-                                                                                                                Margin="0,0,6,0"/>
-                                                                                                <TextBlock Text="{Binding DefenseStats.Zone2Status, FallbackValue='🟢 Contested: Clean'}"
-                                                                                                           FontSize="11"
-                                                                                                           Foreground="{Binding DefenseStats.Zone2Color, FallbackValue='#4CAF50'}"
-                                                                                                           HorizontalAlignment="Right"/>
-                                                                                        </DockPanel>
-                                                                                </Border>
-
-                                                                                <!-- Zone 3 -->
-                                                                                <Border Background="#18181B"
-                                                                                        BorderBrush="{Binding DefenseStats.Zone3Color, FallbackValue='#4CAF50'}"
-                                                                                        BorderThickness="1.5"
-                                                                                        CornerRadius="3"
-                                                                                        Padding="6,4">
-                                                                                        <DockPanel LastChildFill="True">
-                                                                                                <TextBlock Text="Z3 (&gt;50km Deep)"
-                                                                                                                FontWeight="Bold"
-                                                                                                                FontSize="11"
-                                                                                                                Foreground="#CCCCCC"
-                                                                                                                DockPanel.Dock="Left"
-                                                                                                                Margin="0,0,6,0"/>
-                                                                                                <TextBlock Text="{Binding DefenseStats.Zone3Status, FallbackValue='🟢 Deep Desert: Clean'}"
-                                                                                                           FontSize="11"
-                                                                                                           Foreground="{Binding DefenseStats.Zone3Color, FallbackValue='#4CAF50'}"
-                                                                                                           HorizontalAlignment="Right"/>
-                                                                                        </DockPanel>
-                                                                                </Border>
-                                                                        </StackPanel>
-                                                                </GroupBox>
-                                                        </Grid>
+                                                                                        <!-- Dynamic Graph Polylines -->
+                                                                                        <Polyline x:Name="ContactLoadPolyline"
+                                                                                                  Stroke="#FF9800"
+                                                                                                  StrokeThickness="1.5"
+                                                                                                  Opacity="0.75"/>
+                                                                                        <Polyline x:Name="ClangSpikesPolyline"
+                                                                                                  Stroke="#EF4444"
+                                                                                                  StrokeThickness="2"/>
+                                                                                        <Polyline x:Name="SimSpeedPolyline"
+                                                                                                  Stroke="#4CAF50"
+                                                                                                  StrokeThickness="2"/>
+                                                                                </Canvas>
+                                                                        </Border>
+                                                                </StackPanel>
+                                                        </GroupBox>
 
                                                         <!-- LAYER 3: 3-COLUMN METRIC CARDS -->
                                                         <Grid Margin="0,0,0,12">
@@ -1413,125 +1462,217 @@
 
                                                                 <!-- CARD 1: HAVOK SIMULATION HEALTH -->
                                                                 <GroupBox Grid.Column="0"
-                                                                          Header="[CARD 1] HAVOK HEALTH &amp; SLEEP"
+                                                                          Header="⚡ Havok Health &amp; Sleep"
                                                                           Margin="0,0,4,0">
                                                                         <StackPanel>
                                                                                 <DockPanel LastChildFill="False"
-                                                                                                Margin="0,0,0,4">
+                                                                                           Margin="0,0,0,4">
                                                                                         <TextBlock Text="Sim Speed:"
-                                                                                                        FontWeight="Bold"
-                                                                                                        Foreground="#CCCCCC"
-                                                                                                        DockPanel.Dock="Left"/>
-                                                                                        <TextBlock Text="{Binding Telemetry.ServerSimulationSpeed, StringFormat={}{0:F2} TPS}"
                                                                                                    FontWeight="Bold"
-                                                                                                        Foreground="#4CAF50"
-                                                                                                        DockPanel.Dock="Right"/>
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   DockPanel.Dock="Left"/>
+                                                                                        <TextBlock Text="{Binding Telemetry.ServerSimulationSpeedDisplay}"
+                                                                                                   FontWeight="Bold"
+                                                                                                   Foreground="{Binding Telemetry.ServerSimulationSpeedColor}"
+                                                                                                   DockPanel.Dock="Right"/>
                                                                                 </DockPanel>
 
-                                                                                <TextBlock Text="{Binding Telemetry.DynamicGridsSleepDisplay}"
-                                                                                                Margin="0,2,0,2"/>
+                                                                                <TextBlock Margin="0,2,0,2">
+                                                                                        <Run Text="- Forced Grid Sleep: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.DynamicGridsSleepDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.DynamicGridsSleepColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
                                                                                 <ProgressBar Value="{Binding Telemetry.DynamicSleepRatioPercent, Mode=OneWay}"
                                                                                              Maximum="100"
-                                                                                                Height="6"
-                                                                                                Margin="0,0,0,4"
+                                                                                             Height="6"
+                                                                                             Margin="0,0,0,4"
                                                                                              Foreground="#4CAF50"
-                                                                                                Background="#26262B"
-                                                                                                BorderThickness="0"/>
+                                                                                             Background="#26262B"
+                                                                                             BorderThickness="0"/>
 
-                                                                                <TextBlock Text="{Binding Telemetry.RigidBodiesDisplay}"
-                                                                                                Margin="0,2,0,0"/>
-                                                                                <TextBlock Text="{Binding Telemetry.MergedOreDisplay}"
-                                                                                                Margin="0,2,0,0"/>
+                                                                                <TextBlock Margin="0,2,0,0">
+                                                                                        <Run Text="- Rigid Bodies: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.RigidBodiesDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.RigidBodiesColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock Margin="0,2,0,0">
+                                                                                        <Run Text="- Merged Ore: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.MergedOreDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.MergedOreColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
 
                                                                                 <Separator Background="#3A3A3C"
-                                                                                                Margin="0,6,0,4"/>
+                                                                                           Margin="0,6,0,4"/>
 
                                                                                 <TextBlock Text="🔥 Hot-Path Engine Rates:"
-                                                                                                FontWeight="SemiBold"
-                                                                                                Foreground="#9CA3AF"
-                                                                                                Margin="0,0,0,2"/>
-                                                                                <TextBlock Text="{Binding DefenseStats.ContactCallbacksPerSecond, StringFormat={}- Havok Contacts: {0:F0}/s}"
-                                                                                                Foreground="#E0E0E0"/>
-                                                                                <TextBlock Text="{Binding DefenseStats.VoxelRaycastsPerSecond, StringFormat={}- Voxel Raycasts: {0:F1}/s}"
-                                                                                                Foreground="#E0E0E0"/>
+                                                                                           FontWeight="SemiBold"
+                                                                                           Foreground="#9CA3AF"
+                                                                                           Margin="0,0,0,2"/>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Havok Contacts: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.ContactCallbacksDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.ContactCallbacksColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Voxel Raycasts: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.VoxelRaycastsDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.VoxelRaycastsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
                                                                         </StackPanel>
                                                                 </GroupBox>
 
                                                                 <!-- CARD 2: ROVER & SUBGRID STATUS -->
                                                                 <GroupBox Grid.Column="1"
-                                                                          Header="[CARD 2] ROVER &amp; SUBGRIDS"
+                                                                          Header="🚜 Rover &amp; Subgrids"
                                                                           Margin="4,0,4,0">
                                                                         <StackPanel>
-                                                                                <TextBlock Text="{Binding Telemetry.RoversDisplay}"/>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Tracked Rovers: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.RoversDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.RoversColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
 
-                                                                                <TextBlock Text="{Binding Telemetry.SleepingWheelsDisplay}"
-                                                                                                Margin="0,4,0,2"/>
+                                                                                <TextBlock Margin="0,4,0,2">
+                                                                                        <Run Text="- Sleeping Wheels: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.SleepingWheelsDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.SleepingWheelsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
                                                                                 <ProgressBar Value="{Binding Telemetry.SleepingWheelsRatioPercent, Mode=OneWay}"
                                                                                              Maximum="100"
-                                                                                                Height="6"
-                                                                                                Margin="0,0,0,4"
+                                                                                             Height="6"
+                                                                                             Margin="0,0,0,4"
                                                                                              Foreground="#00E676"
-                                                                                                Background="#26262B"
-                                                                                                BorderThickness="0"/>
+                                                                                             Background="#26262B"
+                                                                                             BorderThickness="0"/>
 
-                                                                                <TextBlock Text="{Binding Telemetry.SubgridJointsDisplay}"
-                                                                                                Margin="0,2,0,2"/>
+                                                                                <TextBlock Margin="0,2,0,2">
+                                                                                        <Run Text="- Subgrid Joints: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.SubgridJointsDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.SubgridJointsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
                                                                                 <ProgressBar Value="{Binding Telemetry.StabilizedJointsRatioPercent, Mode=OneWay}"
                                                                                              Maximum="100"
-                                                                                                Height="6"
-                                                                                                Margin="0,0,0,4"
+                                                                                             Height="6"
+                                                                                             Margin="0,0,0,4"
                                                                                              Foreground="#BA68C8"
-                                                                                                Background="#26262B"
-                                                                                                BorderThickness="0"/>
+                                                                                             Background="#26262B"
+                                                                                             BorderThickness="0"/>
 
-                                                                                <TextBlock Text="{Binding Telemetry.AdaptiveTOIDisplay}"
-                                                                                                Margin="0,2,0,0"/>
+                                                                                <TextBlock Margin="0,2,0,0">
+                                                                                        <Run Text="- Adaptive TOI: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.AdaptiveTOIDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.AdaptiveTOIColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
                                                                         </StackPanel>
                                                                 </GroupBox>
 
                                                                 <!-- CARD 3: COLLISION & ARMOR DEFENSE -->
                                                                 <GroupBox Grid.Column="2"
-                                                                          Header="[CARD 3] COLLISION &amp; ARMOR"
+                                                                          Header="🛡️ Collision &amp; Armor Defense"
                                                                           Margin="4,0,0,0">
                                                                         <StackPanel>
-                                                                                <TextBlock Text="{Binding DefenseStats.TotalEvaluated, StringFormat={}- Evaluated Collisions: {0:N0}}"/>
                                                                                 <TextBlock>
-                                                                                        <Run Text="- Crashes Blocked: "/>
-                                                                                        <Run Text="{Binding DefenseStats.TotalBlocked, Mode=OneWay, StringFormat=N0}"
-                                                                                                        FontWeight="Bold"
-                                                                                                        Foreground="#4CAF50"/>
+                                                                                        <Run Text="- Evaluated Collisions: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.EvaluatedCollisionsDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.EvaluatedCollisionsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Crashes Blocked: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.TotalBlockedDisplay, Mode=OneWay}"
+                                                                                             FontWeight="Bold"
+                                                                                             Foreground="#4CAF50"/>
                                                                                         <Run Text=" ("/>
-                                                                                        <Run Text="{Binding DefenseStats.BlockRatio, Mode=OneWay, StringFormat={}{0:F1}%}"
-                                                                                                        FontWeight="Bold"
-                                                                                                        Foreground="#FF9800"/>
+                                                                                        <Run Text="{Binding DefenseStats.TotalBlockedRatioDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.TotalBlockedColor, Mode=OneWay}"/>
                                                                                         <Run Text=")"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock Text="{Binding DefenseStats.MissileHitsAllowed, StringFormat={}- PMW Torpedo Impacts: {0:N0}}"
-                                                                                                FontWeight="Bold"
-                                                                                                Foreground="#E91E63"/>
-                                                                                <TextBlock Text="{Binding DefenseStats.ArmorHitsOccluded, StringFormat={}- Internal Blocks Saved: {0:N0}}"
-                                                                                                FontWeight="Bold"
-                                                                                                Foreground="#64B5F6"/>
                                                                                 <TextBlock>
-                                                                                        <Run Text="- Grids Nudged Apart: "/>
-                                                                                        <Run Text="{Binding DefenseStats.GridsSeparated, Mode=OneWay, StringFormat=N0}"
-                                                                                                        FontWeight="Bold"
-                                                                                                        Foreground="#00E676"/>
-                                                                                        <Run Text=" ("/>
-                                                                                        <Run Text="{Binding DefenseStats.PushApartActionsExecuted, Mode=OneWay, StringFormat=N0}"/>
-                                                                                        <Run Text=" pushes)"/>
+                                                                                        <Run Text="- PMW Torpedo Impacts: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.MissileHitsAllowedDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.MissileHitsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock Text="{Binding DefenseStats.VoxelNormalsInverted, StringFormat={}- Dual Clamps Inverted: {0:N0}}"/>
-                                                                                <TextBlock Text="{Binding DefenseStats.ThrusterObstructionsVaporized, StringFormat={}- Thruster Blocks Burned: {0:N0}}"/>
-                                                                                <TextBlock Text="{Binding DefenseStats.VoxelCutoutsPrevented, StringFormat={}- Voxel Cutouts Prevented: {0:N0}}"/>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Internal Blocks Saved: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.ArmorHitsOccludedDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.ArmorHitsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Grids Nudged Apart: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.GridsSeparatedDisplay, Mode=OneWay}"
+                                                                                             FontWeight="Bold"
+                                                                                             Foreground="#00E676"/>
+                                                                                        <Run Text=" ("/>
+                                                                                        <Run Text="{Binding DefenseStats.GridsSeparatedPushesDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.GridsSeparatedColor, Mode=OneWay}"/>
+                                                                                        <Run Text=")"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Vehicle Rescues: "
+                                                                                             Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.PlayerRescuesDisplay, Mode=OneWay}"
+                                                                                             FontWeight="Bold"
+                                                                                             Foreground="#38BDF8"/>
+                                                                                        <Run Text=" (👑 "/>
+                                                                                        <Run Text="{Binding DefenseStats.AdminRescuesDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="#FBBF24"/>
+                                                                                        <Run Text=" admin)"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Dual Clamps Inverted: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.VoxelNormalsInvertedDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.VoxelNormalsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Thruster Blocks Burned: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.ThrusterObstructionsDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.ThrusterObstructionsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                        <Run Text="- Voxel Cutouts Prevented: "
+                                                                                                        Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding DefenseStats.VoxelCutoutsPreventedDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.VoxelCutoutsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
                                                                                 <TextBlock Foreground="#9CA3AF"
-                                                                                                FontSize="10"
-                                                                                                Margin="0,3,0,0">
+                                                                                           FontSize="10"
+                                                                                           Margin="0,3,0,0">
                                                                                         <Run Text="Caches: "/>
-                                                                                        <Run Text="{Binding DefenseStats.VoxelBucketsCached, Mode=OneWay, StringFormat=N0}"/>
-                                                                                        <Run Text=" carved regions | "/>
-                                                                                        <Run Text="{Binding DefenseStats.TerrainCacheEntries, Mode=OneWay, StringFormat=N0}"/>
-                                                                                        <Run Text=" macro terrain"/>
+                                                                                        <Run Text="{Binding DefenseStats.CachesDisplay, Mode=OneWay}"
+                                                                                             Foreground="{Binding DefenseStats.CachesColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                         </StackPanel>
                                                                 </GroupBox>
@@ -1624,9 +1765,9 @@
                                                                                                                 </Grid.ColumnDefinitions>
 
                                                                                                                 <StackPanel Grid.Column="0"
-                                                                                                                                VerticalAlignment="Center">
+                                                                                                                            VerticalAlignment="Center">
                                                                                                                         <WrapPanel Orientation="Horizontal"
-                                                                                                                                        VerticalAlignment="Center">
+                                                                                                                                   VerticalAlignment="Center">
                                                                                                                                 <TextBlock Text="{Binding DisplayName}"
                                                                                                                                            FontWeight="Bold"
                                                                                                                                            FontSize="13"
@@ -1653,9 +1794,9 @@
                                                                                                                 </StackPanel>
 
                                                                                                                 <WrapPanel Grid.Column="1"
-                                                                                                                                Orientation="Horizontal"
-                                                                                                                                VerticalAlignment="Center"
-                                                                                                                                Margin="8,0,0,0">
+                                                                                                                           Orientation="Horizontal"
+                                                                                                                           VerticalAlignment="Center"
+                                                                                                                           Margin="8,0,0,0">
                                                                                                                         <Button Content="📍 GPS"
                                                                                                                                 Tag="{Binding}"
                                                                                                                                 Click="OffenderGps_OnClick"
@@ -1726,97 +1867,97 @@
                                                                 IsEnabled="{Binding Config.Enabled}">
                                                                 <StackPanel>
                                                                         <WrapPanel Orientation="Horizontal"
-                                                                                        VerticalAlignment="Center">
+                                                                                   VerticalAlignment="Center">
                                                                                 <TextBlock Text="Global Diagnostics:"
-                                                                                                FontWeight="SemiBold"
-                                                                                                Foreground="#9CA3AF"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                           FontWeight="SemiBold"
+                                                                                           Foreground="#9CA3AF"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="Enable Debug Logging"
-                                                                                                IsChecked="{Binding Config.EnableDebugLogging}"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,16,0"
-                                                                                                ToolTip="Outputs real-time event logs to Torch console."/>
+                                                                                          IsChecked="{Binding Config.EnableDebugLogging}"
+                                                                                          VerticalAlignment="Center"
+                                                                                          Margin="0,0,16,0"
+                                                                                          ToolTip="Outputs real-time event logs to Torch console."/>
                                                                                 <WrapPanel VerticalAlignment="Center">
                                                                                         <CheckBox Content="Emit Console Telemetry heartbeat every"
-                                                                                                        IsChecked="{Binding Config.EnablePeriodicConsoleTelemetry}"
-                                                                                                        VerticalAlignment="Center"/>
+                                                                                                  IsChecked="{Binding Config.EnablePeriodicConsoleTelemetry}"
+                                                                                                  VerticalAlignment="Center"/>
                                                                                         <TextBox Text="{Binding Config.ConsoleTelemetryIntervalSeconds}"
-                                                                                                        Width="45"
-                                                                                                        HorizontalContentAlignment="Center"
-                                                                                                        Margin="5,0"
-                                                                                                        VerticalAlignment="Center"
-                                                                                                        IsEnabled="{Binding Config.EnablePeriodicConsoleTelemetry}"/>
+                                                                                                 Width="45"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 Margin="5,0"
+                                                                                                 VerticalAlignment="Center"
+                                                                                                 IsEnabled="{Binding Config.EnablePeriodicConsoleTelemetry}"/>
                                                                                         <TextBlock Text="Seconds."
-                                                                                                        Foreground="#FFFFFF"
-                                                                                                        VerticalAlignment="Center"/>
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
                                                                         </WrapPanel>
                                                                         <WrapPanel Orientation="Horizontal"
-                                                                                        VerticalAlignment="Center"
-                                                                                        Margin="0,4,0,0">
+                                                                                   VerticalAlignment="Center"
+                                                                                   Margin="0,4,0,0">
                                                                                 <TextBlock Text="Push-Apart Diagnostics:"
-                                                                                                FontWeight="SemiBold"
-                                                                                                Foreground="#9CA3AF"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                           FontWeight="SemiBold"
+                                                                                           Foreground="#9CA3AF"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="Log Escape Diagnostics"
-                                                                                                IsChecked="{Binding Config.LogPushApartDiagnostics}"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                          IsChecked="{Binding Config.LogPushApartDiagnostics}"
+                                                                                          VerticalAlignment="Center"
+                                                                                          Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="Log Station Give-Up"
-                                                                                                IsChecked="{Binding Config.LogPushApartStationConversion}"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                          IsChecked="{Binding Config.LogPushApartStationConversion}"
+                                                                                          VerticalAlignment="Center"
+                                                                                          Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="Enable Debug GPS"
-                                                                                                IsChecked="{Binding Config.EnablePushApartDebugDraw}"
-                                                                                                VerticalAlignment="Center"/>
+                                                                                          IsChecked="{Binding Config.EnablePushApartDebugDraw}"
+                                                                                          VerticalAlignment="Center"/>
                                                                         </WrapPanel>
                                                                         <WrapPanel Orientation="Horizontal"
-                                                                                        VerticalAlignment="Center"
-                                                                                        Margin="0,4,0,0">
+                                                                                   VerticalAlignment="Center"
+                                                                                   Margin="0,4,0,0">
                                                                                 <TextBlock Text="Voxel Arbitrator Diagnostics:"
-                                                                                                FontWeight="SemiBold"
-                                                                                                Foreground="#9CA3AF"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                           FontWeight="SemiBold"
+                                                                                           Foreground="#9CA3AF"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="Enable Arbitrator Debug GPS"
-                                                                                                IsChecked="{Binding Config.EnableVoxelNormalArbitratorDebugDraw}"
-                                                                                                VerticalAlignment="Center"/>
+                                                                                          IsChecked="{Binding Config.EnableVoxelNormalArbitratorDebugDraw}"
+                                                                                          VerticalAlignment="Center"/>
                                                                         </WrapPanel>
                                                                         <WrapPanel Orientation="Horizontal"
-                                                                                        VerticalAlignment="Center"
-                                                                                        Margin="0,4,0,0">
+                                                                                   VerticalAlignment="Center"
+                                                                                   Margin="0,4,0,0">
                                                                                 <TextBlock Text="In-Game Chat Alerts:"
-                                                                                                FontWeight="SemiBold"
-                                                                                                Foreground="#9CA3AF"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                           FontWeight="SemiBold"
+                                                                                           Foreground="#9CA3AF"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="Hourly Digest"
-                                                                                                IsChecked="{Binding Config.EnableHourlyChatDigest}"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                          IsChecked="{Binding Config.EnableHourlyChatDigest}"
+                                                                                          VerticalAlignment="Center"
+                                                                                          Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="Nudge HUD Toasts"
-                                                                                                IsChecked="{Binding Config.EnablePushApartPlayerNotification}"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                          IsChecked="{Binding Config.EnablePushApartPlayerNotification}"
+                                                                                          VerticalAlignment="Center"
+                                                                                          Margin="0,0,14,0"/>
                                                                                 <CheckBox Content="PMW Faction Telemetry"
-                                                                                                IsChecked="{Binding Config.EnablePmwFactionTelemetry}"
-                                                                                                VerticalAlignment="Center"
-                                                                                                Margin="0,0,14,0"/>
+                                                                                          IsChecked="{Binding Config.EnablePmwFactionTelemetry}"
+                                                                                          VerticalAlignment="Center"
+                                                                                          Margin="0,0,14,0"/>
                                                                                 <WrapPanel VerticalAlignment="Center">
                                                                                         <TextBlock Text="UI Poll:"
-                                                                                                        Foreground="#CCCCCC"
-                                                                                                        VerticalAlignment="Center"
-                                                                                                        Margin="0,0,4,0"/>
+                                                                                                   Foreground="#CCCCCC"
+                                                                                                   VerticalAlignment="Center"
+                                                                                                   Margin="0,0,4,0"/>
                                                                                         <TextBox Text="{Binding Config.UiRefreshIntervalMs}"
-                                                                                                        Width="40"
-                                                                                                        HorizontalContentAlignment="Center"
-                                                                                                        Margin="0,0,4,0"
-                                                                                                        VerticalAlignment="Center"/>
+                                                                                                 Width="40"
+                                                                                                 HorizontalContentAlignment="Center"
+                                                                                                 Margin="0,0,4,0"
+                                                                                                 VerticalAlignment="Center"/>
                                                                                         <TextBlock Text="ms"
-                                                                                                        Foreground="#FFFFFF"
-                                                                                                        VerticalAlignment="Center"/>
+                                                                                                   Foreground="#FFFFFF"
+                                                                                                   VerticalAlignment="Center"/>
                                                                                 </WrapPanel>
                                                                         </WrapPanel>
                                                                 </StackPanel>

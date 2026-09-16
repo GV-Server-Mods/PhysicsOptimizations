@@ -120,6 +120,18 @@ namespace PhysicsOptimizer.Config
         private bool _excludeWheelSubgridsFromPushApart = true;
         private bool _excludeWheelSubgridsFromSubgridStabilizer = true;
 
+        // --- Group 5: Player & Admin Vehicle Rescue ---
+        private bool _enablePlayerRescue = true;
+        private int _playerRescueCooldownSeconds = 300;
+        private int _playerRescueCombatCooldownSeconds = 30;
+        private int _playerRescueWarmupSeconds = 5;
+        private float _playerRescueMaxSpeed = 2.0f;
+        private float _playerRescueEnemyProximityMeters = 1000.0f;
+        private float _playerRescuePushDistance = 2.5f;
+        private bool _playerRescueRequireNearTerrainOrContact = true;
+        private bool _playerRescueUprightFlipped = false;
+        private float _playerRescueOnFootMaxDistanceMeters = 50.0f;
+
         // --- Speed Gates & Rate Limits (Fallback) ---
         private float _minDrivingVelocity = 10.0f;
         private int _deformationCooldownFrames = 30;
@@ -337,6 +349,46 @@ namespace PhysicsOptimizer.Config
         public bool EnableVoxelNormalArbitratorDebugDraw { get => _enableVoxelNormalArbitratorDebugDraw; set => SetValue(ref _enableVoxelNormalArbitratorDebugDraw, value); }
         public bool LogPushApartDiagnostics { get => _logPushApartDiagnostics; set => SetValue(ref _logPushApartDiagnostics, value); }
         public bool LogPushApartStationConversion { get => _logPushApartStationConversion; set => SetValue(ref _logPushApartStationConversion, value); }
+
+        // --- Group 5: Player & Admin Vehicle Rescue ---
+        public bool EnablePlayerRescue { get => _enablePlayerRescue; set => SetValue(ref _enablePlayerRescue, value); }
+        public int PlayerRescueCooldownSeconds
+        {
+            get => _playerRescueCooldownSeconds;
+            set => SetValue(ref _playerRescueCooldownSeconds, Math.Max(0, Math.Min(3600, value)));
+        }
+        public int PlayerRescueCombatCooldownSeconds
+        {
+            get => _playerRescueCombatCooldownSeconds;
+            set => SetValue(ref _playerRescueCombatCooldownSeconds, Math.Max(0, Math.Min(600, value)));
+        }
+        public int PlayerRescueWarmupSeconds
+        {
+            get => _playerRescueWarmupSeconds;
+            set => SetValue(ref _playerRescueWarmupSeconds, Math.Max(0, Math.Min(60, value)));
+        }
+        public float PlayerRescueMaxSpeed
+        {
+            get => _playerRescueMaxSpeed;
+            set => SetValue(ref _playerRescueMaxSpeed, Math.Max(0.0f, Math.Min(50.0f, value)));
+        }
+        public float PlayerRescueEnemyProximityMeters
+        {
+            get => _playerRescueEnemyProximityMeters;
+            set => SetValue(ref _playerRescueEnemyProximityMeters, Math.Max(0.0f, Math.Min(10000.0f, value)));
+        }
+        public float PlayerRescuePushDistance
+        {
+            get => _playerRescuePushDistance;
+            set => SetValue(ref _playerRescuePushDistance, Math.Max(0.1f, Math.Min(20.0f, value)));
+        }
+        public bool PlayerRescueRequireNearTerrainOrContact { get => _playerRescueRequireNearTerrainOrContact; set => SetValue(ref _playerRescueRequireNearTerrainOrContact, value); }
+        public bool PlayerRescueUprightFlipped { get => _playerRescueUprightFlipped; set => SetValue(ref _playerRescueUprightFlipped, value); }
+        public float PlayerRescueOnFootMaxDistanceMeters
+        {
+            get => _playerRescueOnFootMaxDistanceMeters;
+            set => SetValue(ref _playerRescueOnFootMaxDistanceMeters, Math.Max(1.0f, Math.Min(500.0f, value)));
+        }
 
         public float MinDrivingVelocity
         {

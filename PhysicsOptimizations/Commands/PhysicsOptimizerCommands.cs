@@ -24,7 +24,7 @@ namespace PhysicsOptimizer.Commands
 
             var cfg = Plugin.Config;
             var sb = new StringBuilder();
-            sb.AppendLine("=== [GVK Physics Optimizer Status v2.0.0] ===");
+            sb.AppendLine("=== [Physics Optimizer Status v2.0.0] ===");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Plugin Master: {0}", cfg.Enabled));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Physics Optimizations: {0}", cfg.EnablePhysicsOptimizations));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Grid Defender: {0}", cfg.EnableGridDefender));
@@ -72,6 +72,10 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine("* Active Push-Apart Separation:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} (Distance: {1:F2}m after {2} frames)", cfg.EnablePushApart, cfg.PushApartDistance, cfg.PushApartThreshold));
             sb.AppendLine();
+            sb.AppendLine("* Vehicle Self-Rescue (!unstuckit):");
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Cooldown: {1}s | Combat Cooldown: {2}s | Warmup: {3}s", cfg.EnablePlayerRescue, cfg.PlayerRescueCooldownSeconds, cfg.PlayerRescueCombatCooldownSeconds, cfg.PlayerRescueWarmupSeconds));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Max Speed: {0:F1} m/s | Enemy Proximity: {1:F0}m | Push Dist: {2:F1}m | On-Foot Max: {3:F0}m | Upright: {4}", cfg.PlayerRescueMaxSpeed, cfg.PlayerRescueEnemyProximityMeters, cfg.PlayerRescuePushDistance, cfg.PlayerRescueOnFootMaxDistanceMeters, cfg.PlayerRescueUprightFlipped));
+            sb.AppendLine();
             sb.AppendLine("* Voxel & Terrain Protection:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Suppress Voxel Cutouts: {0}", cfg.SuppressAllVoxelExplosionDamage));
             sb.AppendLine();
@@ -111,6 +115,7 @@ namespace PhysicsOptimizer.Commands
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - PMW Torpedo Impacts Allowed: {0:N0} | Piloted Buggy Saves: {1:N0}", d.MissileHitsAllowed, d.PilotedBuggySaves));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Layered Armor Hits Saved: {0:N0} | Dual-Sided Clamps Inverted: {1:N0}", d.ArmorHitsOccluded, d.VoxelNormalsInverted));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Grids Nudged Apart: {0:N0}", d.GridsSeparated));
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Vehicle Rescues Executed: {0:N0} (Players: {1:N0}, Admins: {2:N0})", d.TotalRescuesExecuted, d.PlayerRescuesExecuted, d.AdminRescuesExecuted));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Thruster Obstructions Burned: {0:N0} | Voxel Cutouts Prevented: {1:N0}", d.ThrusterObstructionsVaporized, d.VoxelCutoutsPrevented));
 
                 var offenders = Modules.GridDefender.GetActiveClangers(minRate: 1, maxResults: 5);
@@ -308,8 +313,15 @@ namespace PhysicsOptimizer.Commands
                     cfg.ConvertToStaticOnPushApartGiveUp = !cfg.ConvertToStaticOnPushApartGiveUp;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Converting to static station on push-apart give up is now {0}.", cfg.ConvertToStaticOnPushApartGiveUp ? "ENABLED" : "DISABLED");
                     break;
+                case "rescue":
+                case "playerrescue":
+                case "unstuckit":
+                    cfg.EnablePlayerRescue = !cfg.EnablePlayerRescue;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Vehicle Self-Rescue (!unstuckit) is now {0}.", cfg.EnablePlayerRescue ? "ENABLED" : "DISABLED");
+                    break;
                 default:
                     Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, pushapart, pushstation, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry, wheelpushapart, wheelstabilizer.", featureName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, pushapart, pushstation, rescue, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry, wheelpushapart, wheelstabilizer.", featureName));
                     return;
             }
 
@@ -386,6 +398,20 @@ namespace PhysicsOptimizer.Commands
                     ? string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Dampened velocities across {0} active clanger constructs.", count)
                     : "[PhysicsOptimizer] No active clangers detected above threshold.");
             }
+        }
+
+        [Command("rescue", "Rescues your current vehicle, or crosshair-targeted construct if on foot/spectator. Usage: !phys rescue [gridNameOrId]")]
+        [Permission(MyPromoteLevel.None)]
+        public void Rescue(string targetFilter = null)
+        {
+            Services.PlayerRescueService.RequestRescue(Context, targetFilter);
+        }
+
+        [Command("unstuckit", "Rescues your current vehicle, or crosshair-targeted construct if on foot/spectator. Usage: !phys unstuckit [gridNameOrId]")]
+        [Permission(MyPromoteLevel.None)]
+        public void UnstuckIt(string targetFilter = null)
+        {
+            Services.PlayerRescueService.RequestRescue(Context, targetFilter);
         }
     }
 }

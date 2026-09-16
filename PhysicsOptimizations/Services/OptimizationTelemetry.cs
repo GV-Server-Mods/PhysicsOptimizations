@@ -31,33 +31,41 @@ namespace PhysicsOptimizer.Services
         public double StabilizedJointsRatioPercent => (IsSubgridStabilizerEnabled && TrackedSubgridConstraints > 0) ? (double)StabilizedSubgridConstraints / TrackedSubgridConstraints * 100.0 : 0.0;
 
         // Formatted display strings for UI
+        // Formatted display strings and colors for UI
         public string RigidBodiesDisplay => IsRigidBodySleepEnabled
             ? $"{ActiveRigidBodies:N0} Act / {SleepingRigidBodies:N0} Slp"
             : "[Disabled]";
+        public string RigidBodiesColor => IsRigidBodySleepEnabled ? "#E0E0E0" : "#6B7280";
 
         public string DynamicGridsSleepDisplay => IsRigidBodySleepEnabled
             ? $"{GridsCurrentlyForcedSleep:N0} / {TrackedGridsCount:N0} ({ForcedSleepEventsTotal:N0} events)"
             : "[Disabled]";
+        public string DynamicGridsSleepColor => IsRigidBodySleepEnabled ? "#4CAF50" : "#6B7280";
 
         public string MergedOreDisplay => IsOreMergeEnabled
             ? $"{OreStacksMergedTotal:N0} ({OreEntitiesEliminatedTotal:N0} eliminated)"
             : "[Disabled]";
+        public string MergedOreColor => IsOreMergeEnabled ? "#E0E0E0" : "#6B7280";
 
         public string RoversDisplay => IsWheelOptimizerEnabled
-            ? $"{TrackedRoversCount:N0} (Parked Asleep: {ParkedRoversAsleep:N0})"
+            ? $"{TrackedRoversCount:N0} (Parked: {ParkedRoversAsleep:N0} asleep)"
             : "[Disabled]";
+        public string RoversColor => IsWheelOptimizerEnabled ? "#E0E0E0" : "#6B7280";
 
         public string SleepingWheelsDisplay => IsWheelOptimizerEnabled
             ? $"{SleepingWheelsCount:N0} / {TotalRoverWheelsCount:N0} sleeping"
             : "[Disabled]";
+        public string SleepingWheelsColor => IsWheelOptimizerEnabled ? "#00E676" : "#6B7280";
 
         public string SubgridJointsDisplay => IsSubgridStabilizerEnabled
             ? $"{StabilizedSubgridConstraints:N0} / {TrackedSubgridConstraints:N0} dampened"
             : "[Disabled]";
+        public string SubgridJointsColor => IsSubgridStabilizerEnabled ? "#BA68C8" : "#6B7280";
 
         public string AdaptiveTOIDisplay => IsAdaptiveCollisionEnabled
             ? $"{DiscreteTOIGridsCount:N0} Disc / {ContinuousTOIGridsCount:N0} Cont"
             : "[Disabled]";
+        public string AdaptiveTOIColor => IsAdaptiveCollisionEnabled ? "#60A5FA" : "#6B7280";
 
         // Live gauges
         private float _serverSimulationSpeed = 1.0f;
@@ -91,6 +99,31 @@ namespace PhysicsOptimizer.Services
         {
             get => _serverSimulationSpeed;
             set => _serverSimulationSpeed = value;
+        }
+
+        public string ServerSimulationSpeedDisplay
+        {
+            get
+            {
+                var state = PhysicsOptimizerPlugin.GetServerLifecycleState();
+                if (state == ServerLifecycleState.Offline) return "Offline";
+                if (state == ServerLifecycleState.Starting) return "Starting...";
+                if (state == ServerLifecycleState.Stopping) return "Stopping...";
+                return $"{ServerSimulationSpeed:F2} TPS";
+            }
+        }
+
+        public string ServerSimulationSpeedColor
+        {
+            get
+            {
+                var state = PhysicsOptimizerPlugin.GetServerLifecycleState();
+                if (state == ServerLifecycleState.Offline) return "#9CA3AF";
+                if (state == ServerLifecycleState.Starting || state == ServerLifecycleState.Stopping) return "#F59E0B";
+                if (ServerSimulationSpeed < 0.80f) return "#EF4444";
+                if (ServerSimulationSpeed < 0.95f) return "#F59E0B";
+                return "#4CAF50";
+            }
         }
 
         public void UpdateServerSimulationSpeed(float speed)
@@ -248,15 +281,16 @@ namespace PhysicsOptimizer.Services
 
         public string GetDiagnosticSummary()
         {
-            return $"Sim Speed: {ServerSimulationSpeed:F2} TPS\n" +
-                   $"Active Bodies: {ActiveRigidBodies}, Sleeping: {SleepingRigidBodies}\n" +
-                   $"Rovers: {TrackedRoversCount}, Parked: {ParkedRoversAsleep}, Sleeping Wheels: {SleepingWheelsCount}/{TotalRoverWheelsCount}\n" +
-                   $"Forced Sleep Events: {ForcedSleepEventsTotal}\n" +
-                   $"Merged Ore Stacks: {OreStacksMergedTotal}, Eliminated: {OreEntitiesEliminatedTotal}\n" +
-                   $"Subgrid Constraints Stabilized: {StabilizedSubgridConstraints}/{TrackedSubgridConstraints}\n" +
-                   $"TOI Grids Discrete: {DiscreteTOIGridsCount}, Continuous: {ContinuousTOIGridsCount}";
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "Sim Speed: {0:F2} TPS", ServerSimulationSpeed));
+            var state = PhysicsOptimizerPlugin.GetServerLifecycleState();
+            if (state != ServerLifecycleState.Online)
+            {
+                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "Server State: {0} (Simulation suspended)", state));
+            }
+            else
+            {
+                sb.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "Sim Speed: {0:F2} TPS", ServerSimulationSpeed));
+            }
 
             sb.AppendLine(IsRigidBodySleepEnabled
                 ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "Active Bodies: {0:N0}, Sleeping: {1:N0} (Forced Sleep: {2:N0}/{3:N0}, {4:N0} events)", ActiveRigidBodies, SleepingRigidBodies, GridsCurrentlyForcedSleep, TrackedGridsCount, ForcedSleepEventsTotal)

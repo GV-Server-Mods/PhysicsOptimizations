@@ -9,6 +9,7 @@ using Torch.Managers.PatchManager;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using PhysicsOptimizer.Config;
+using PhysicsOptimizer.Services;
 using PhysicsOptimizer.Utils;
 
 namespace PhysicsOptimizer.Modules
@@ -462,6 +463,8 @@ namespace PhysicsOptimizer.Modules
             var slim = target as MySlimBlock;
             var grid = slim?.CubeGrid ?? target as MyCubeGrid;
             if (grid == null || grid.MarkedForClose || grid.Closed) return;
+
+            PlayerRescueService.RecordGridDamage(grid.EntityId);
 
             var plugin = PhysicsOptimizerPlugin.Instance;
             if (plugin?.Config != null && plugin.Config.Enabled && plugin.Config.EnablePhysicsOptimizations)

@@ -8,6 +8,7 @@ using Sandbox.Game.Multiplayer;
 using Torch;
 using Torch.API;
 using Torch.API.Plugins;
+using Torch.API.Session;
 using Torch.Managers.PatchManager;
 using VRage.Game.Entity;
 using PhysicsOptimizer.Config;
@@ -18,6 +19,14 @@ using PhysicsOptimizer.Utils;
 
 namespace PhysicsOptimizer
 {
+    public enum ServerLifecycleState
+    {
+        Offline,
+        Starting,
+        Online,
+        Stopping
+    }
+
     public class PhysicsOptimizerPlugin : TorchPluginBase, IWpfPlugin
     {
         private const string LogSource = "Plugin";
@@ -51,6 +60,49 @@ namespace PhysicsOptimizer
 
         private readonly List<IPhysicsOptimizer> _optimizers = [];
 
+        public static ServerLifecycleState GetServerLifecycleState()
+        {
+            try
+            {
+                var torch = Instance?.Torch;
+                if (torch != null)
+                {
+                    if (torch is ITorchServer server)
+                    {
+                        if (server.State == ServerState.Stopped || server.State == ServerState.Error)
+                            return ServerLifecycleState.Offline;
+
+                        if (server.State == ServerState.Starting)
+                            return ServerLifecycleState.Starting;
+                    }
+
+                    var session = torch.CurrentSession;
+                    if (session == null)
+                        return ServerLifecycleState.Offline;
+
+                    if (session.State == TorchSessionState.Loading)
+                        return ServerLifecycleState.Starting;
+
+                    if (session.State == TorchSessionState.Unloading || session.State == TorchSessionState.Unloaded)
+                        return ServerLifecycleState.Stopping;
+
+                    if (session.State != TorchSessionState.Loaded)
+                        return ServerLifecycleState.Offline;
+                }
+
+                if (Sandbox.Game.World.MySession.Static == null || Sandbox.MySandboxGame.Static == null)
+                    return ServerLifecycleState.Offline;
+
+                return ServerLifecycleState.Online;
+            }
+            catch
+            {
+                return ServerLifecycleState.Offline;
+            }
+        }
+
+        public static bool IsServerOnline => GetServerLifecycleState() == ServerLifecycleState.Online;
+
         public override void Init(ITorchBase torch)
         {
             base.Init(torch);
@@ -67,6 +119,11 @@ namespace PhysicsOptimizer
 
             MyEntities.OnEntityAdd += OnEntityAdded;
             MyEntities.OnEntityRemove += OnEntityRemoved;
+
+            if (torch?.Managers?.GetManager(typeof(ITorchSessionManager)) is ITorchSessionManager sessionMgr)
+            {
+                sessionMgr.SessionStateChanged += OnSessionStateChanged;
+            }
 
             Log.Info(LogSource, "Plugin v2.0.0 initialized successfully. Unified Havok engine is ACTIVE.");
         }
@@ -132,6 +189,11 @@ namespace PhysicsOptimizer
 
         private void OnEntityRemoved(MyEntity entity)
         {
+            if (entity != null)
+            {
+                PlayerRescueService.OnEntityRemoved(entity.EntityId);
+            }
+
             foreach (var optimizer in _optimizers)
             {
                 optimizer.OnEntityRemoved(entity);
@@ -166,6 +228,7 @@ namespace PhysicsOptimizer
             }
 
             GridDefender?.Update(_frameCounter);
+            PlayerRescueService.Update(_frameCounter);
 
             int intervalTicks = Math.Max(1, Config.ConsoleTelemetryIntervalSeconds) * 60;
             if (Config.EnablePeriodicConsoleTelemetry && _frameCounter % (ulong)intervalTicks == 0)
@@ -243,6 +306,11 @@ namespace PhysicsOptimizer
 
         public override void Dispose()
         {
+            if (Torch?.Managers?.GetManager(typeof(ITorchSessionManager)) is ITorchSessionManager sessionMgr)
+            {
+                sessionMgr.SessionStateChanged -= OnSessionStateChanged;
+            }
+
             MyEntities.OnEntityAdd -= OnEntityAdded;
             MyEntities.OnEntityRemove -= OnEntityRemoved;
             Log.FlushRepeats();
@@ -255,6 +323,16 @@ namespace PhysicsOptimizer
 
             base.Dispose();
             Instance = null;
+        }
+
+        private void OnSessionStateChanged(ITorchSession session, TorchSessionState newState)
+        {
+            if (newState != TorchSessionState.Loaded)
+            {
+                Telemetry?.UpdateServerSimulationSpeed(0f);
+            }
+            Telemetry?.NotifyAllPropertiesChanged();
+            DefenseStats?.NotifyAll();
         }
 
         public void LoadConfig()

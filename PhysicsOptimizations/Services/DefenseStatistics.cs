@@ -28,6 +28,8 @@ namespace PhysicsOptimizer.Services
         private long _thrusterObstructionsVaporized;
         private long _voxelCutoutsPrevented;
         private long _pilotedBuggySaves;
+        private long _playerRescuesExecuted;
+        private long _adminRescuesExecuted;
 
         // Hot-path invocation counters (surfaced as per-second rates in the console heartbeat).
         private long _contactCallbacks;
@@ -111,6 +113,21 @@ namespace PhysicsOptimizer.Services
         public long GridsSeparated => Interlocked.Read(ref _gridsSeparated);
 
         /// <summary>
+        /// Total player self-rescues executed (!unstuckit).
+        /// </summary>
+        public long PlayerRescuesExecuted => Interlocked.Read(ref _playerRescuesExecuted);
+
+        /// <summary>
+        /// Total admin crosshairs/forced rescues executed.
+        /// </summary>
+        public long AdminRescuesExecuted => Interlocked.Read(ref _adminRescuesExecuted);
+
+        /// <summary>
+        /// Total vehicle rescues executed across both players and admins.
+        /// </summary>
+        public long TotalRescuesExecuted => PlayerRescuesExecuted + AdminRescuesExecuted;
+
+        /// <summary>
         /// Total internal blocks saved by layered armor occlusion.
         /// </summary>
         public long ArmorHitsOccluded => Interlocked.Read(ref _armorHitsOccluded);
@@ -134,6 +151,92 @@ namespace PhysicsOptimizer.Services
         /// Total piloted vehicle collision damage saves.
         /// </summary>
         public long PilotedBuggySaves => Interlocked.Read(ref _pilotedBuggySaves);
+
+        private Config.PhysicsOptimizerConfig Config => PhysicsOptimizerPlugin.Instance?.Config;
+
+        public bool IsGridDefenderEnabled => Config != null && Config.Enabled && Config.EnableGridDefender;
+        public bool IsPmwEnabled => IsGridDefenderEnabled && Config.AllowMissileDamage;
+        public bool IsArmorOcclusionEnabled => IsGridDefenderEnabled && Config.EnableLayeredArmorOcclusion;
+        public bool IsPushApartEnabled => IsGridDefenderEnabled && Config.EnablePushApart;
+        public bool IsVoxelArbitratorEnabled => IsGridDefenderEnabled && Config.EnableVoxelNormalArbitrator;
+        public bool IsThrusterClearanceEnabled => Config != null && Config.Enabled && Config.EnableThrusterClearance;
+        public bool IsVoxelCutoutSuppressionEnabled => Config != null && Config.Enabled && Config.SuppressAllVoxelExplosionDamage;
+        public bool IsPlayerRescueEnabled => Config != null && Config.Enabled && Config.EnablePlayerRescue;
+
+        public string PlayerRescuesDisplay => IsPlayerRescueEnabled
+            ? $"{PlayerRescuesExecuted:N0}"
+            : "[Disabled]";
+        public string PlayerRescuesColor => IsPlayerRescueEnabled ? "#38BDF8" : "#6B7280";
+
+        public string AdminRescuesDisplay => $"{AdminRescuesExecuted:N0}";
+        public string AdminRescuesColor => "#FBBF24";
+
+        public string TotalRescuesDisplay => $"{TotalRescuesExecuted:N0}";
+
+        // Formatted display strings for Card 3 & Hot Paths
+        // Formatted display strings and colors for Card 3 & Hot Paths
+        public string EvaluatedCollisionsDisplay => IsGridDefenderEnabled
+            ? $"{TotalEvaluated:N0}"
+            : "[Disabled]";
+        public string EvaluatedCollisionsColor => IsGridDefenderEnabled ? "#E0E0E0" : "#6B7280";
+
+        public string TotalBlockedDisplay => IsGridDefenderEnabled
+            ? $"{TotalBlocked:N0}"
+            : "[Disabled]";
+
+        public string TotalBlockedRatioDisplay => IsGridDefenderEnabled
+            ? $" ({BlockRatio:F1}%)"
+            : "";
+        public string TotalBlockedColor => IsGridDefenderEnabled ? "#4CAF50" : "#6B7280";
+
+        public string MissileHitsAllowedDisplay => IsPmwEnabled
+            ? $"{MissileHitsAllowed:N0}"
+            : "[Disabled]";
+        public string MissileHitsColor => IsPmwEnabled ? "#E91E63" : "#6B7280";
+
+        public string ArmorHitsOccludedDisplay => IsArmorOcclusionEnabled
+            ? $"{ArmorHitsOccluded:N0}"
+            : "[Disabled]";
+        public string ArmorHitsColor => IsArmorOcclusionEnabled ? "#64B5F6" : "#6B7280";
+
+        public string GridsSeparatedDisplay => IsPushApartEnabled
+            ? $"{GridsSeparated:N0}"
+            : "[Disabled]";
+
+        public string GridsSeparatedPushesDisplay => IsPushApartEnabled
+            ? $" ({PushApartActionsExecuted:N0} pushes)"
+            : "";
+        public string GridsSeparatedColor => IsPushApartEnabled ? "#00E676" : "#6B7280";
+
+        public string VoxelNormalsInvertedDisplay => IsVoxelArbitratorEnabled
+            ? $"{VoxelNormalsInverted:N0}"
+            : "[Disabled]";
+        public string VoxelNormalsColor => IsVoxelArbitratorEnabled ? "#818CF8" : "#6B7280";
+
+        public string ThrusterObstructionsDisplay => IsThrusterClearanceEnabled
+            ? $"{ThrusterObstructionsVaporized:N0}"
+            : "[Disabled]";
+        public string ThrusterObstructionsColor => IsThrusterClearanceEnabled ? "#FB923C" : "#6B7280";
+
+        public string VoxelCutoutsPreventedDisplay => IsVoxelCutoutSuppressionEnabled
+            ? $"{VoxelCutoutsPrevented:N0}"
+            : "[Disabled]";
+        public string VoxelCutoutsColor => IsVoxelCutoutSuppressionEnabled ? "#34D399" : "#6B7280";
+
+        public string CachesDisplay => IsVoxelArbitratorEnabled
+            ? $"{VoxelBucketsCached:N0} carved regions | {TerrainCacheEntries:N0} macro terrain"
+            : "[Disabled]";
+        public string CachesColor => IsVoxelArbitratorEnabled ? "#9CA3AF" : "#6B7280";
+
+        public string ContactCallbacksDisplay => IsGridDefenderEnabled
+            ? $"{ContactCallbacksPerSecond:F0}/s"
+            : "[Disabled]";
+        public string ContactCallbacksColor => IsGridDefenderEnabled ? "#E0E0E0" : "#6B7280";
+
+        public string VoxelRaycastsDisplay => IsVoxelArbitratorEnabled
+            ? $"{VoxelRaycastsPerSecond:F1}/s"
+            : "[Disabled]";
+        public string VoxelRaycastsColor => IsVoxelArbitratorEnabled ? "#E0E0E0" : "#6B7280";
 
         /// <summary>
         /// Percentage of evaluated collisions that were blocked (0.0% to 100.0%).
@@ -205,6 +308,22 @@ namespace PhysicsOptimizer.Services
         public void IncrementGridsSeparated()
         {
             Interlocked.Increment(ref _gridsSeparated);
+        }
+
+        /// <summary>
+        /// Increments the count of player self-rescues executed.
+        /// </summary>
+        public void IncrementPlayerRescues()
+        {
+            Interlocked.Increment(ref _playerRescuesExecuted);
+        }
+
+        /// <summary>
+        /// Increments the count of admin rescues executed.
+        /// </summary>
+        public void IncrementAdminRescues()
+        {
+            Interlocked.Increment(ref _adminRescuesExecuted);
         }
 
         /// <summary>
@@ -354,6 +473,9 @@ namespace PhysicsOptimizer.Services
             OnPropertyChanged(nameof(DebrisBlocked));
             OnPropertyChanged(nameof(CooldownThrottled));
             OnPropertyChanged(nameof(GridsSeparated));
+            OnPropertyChanged(nameof(PlayerRescuesExecuted));
+            OnPropertyChanged(nameof(AdminRescuesExecuted));
+            OnPropertyChanged(nameof(TotalRescuesExecuted));
             OnPropertyChanged(nameof(ArmorHitsOccluded));
             OnPropertyChanged(nameof(VoxelNormalsInverted));
             OnPropertyChanged(nameof(ThrusterObstructionsVaporized));
@@ -382,14 +504,35 @@ namespace PhysicsOptimizer.Services
             OnPropertyChanged(nameof(ActiveClangersCount));
             OnPropertyChanged(nameof(SessionTopClangers));
             OnPropertyChanged(nameof(RecentIncidents));
-            OnPropertyChanged(nameof(Zone0Status));
-            OnPropertyChanged(nameof(Zone1Status));
-            OnPropertyChanged(nameof(Zone2Status));
-            OnPropertyChanged(nameof(Zone3Status));
-            OnPropertyChanged(nameof(Zone0Color));
-            OnPropertyChanged(nameof(Zone1Color));
-            OnPropertyChanged(nameof(Zone2Color));
-            OnPropertyChanged(nameof(Zone3Color));
+            OnPropertyChanged(nameof(EvaluatedCollisionsDisplay));
+            OnPropertyChanged(nameof(EvaluatedCollisionsColor));
+            OnPropertyChanged(nameof(TotalBlockedDisplay));
+            OnPropertyChanged(nameof(TotalBlockedRatioDisplay));
+            OnPropertyChanged(nameof(TotalBlockedColor));
+            OnPropertyChanged(nameof(MissileHitsAllowedDisplay));
+            OnPropertyChanged(nameof(MissileHitsColor));
+            OnPropertyChanged(nameof(ArmorHitsOccludedDisplay));
+            OnPropertyChanged(nameof(ArmorHitsColor));
+            OnPropertyChanged(nameof(GridsSeparatedDisplay));
+            OnPropertyChanged(nameof(GridsSeparatedPushesDisplay));
+            OnPropertyChanged(nameof(GridsSeparatedColor));
+            OnPropertyChanged(nameof(PlayerRescuesDisplay));
+            OnPropertyChanged(nameof(PlayerRescuesColor));
+            OnPropertyChanged(nameof(AdminRescuesDisplay));
+            OnPropertyChanged(nameof(AdminRescuesColor));
+            OnPropertyChanged(nameof(TotalRescuesDisplay));
+            OnPropertyChanged(nameof(VoxelNormalsInvertedDisplay));
+            OnPropertyChanged(nameof(VoxelNormalsColor));
+            OnPropertyChanged(nameof(ThrusterObstructionsDisplay));
+            OnPropertyChanged(nameof(ThrusterObstructionsColor));
+            OnPropertyChanged(nameof(VoxelCutoutsPreventedDisplay));
+            OnPropertyChanged(nameof(VoxelCutoutsColor));
+            OnPropertyChanged(nameof(CachesDisplay));
+            OnPropertyChanged(nameof(CachesColor));
+            OnPropertyChanged(nameof(ContactCallbacksDisplay));
+            OnPropertyChanged(nameof(ContactCallbacksColor));
+            OnPropertyChanged(nameof(VoxelRaycastsDisplay));
+            OnPropertyChanged(nameof(VoxelRaycastsColor));
         }
 
         public List<Modules.GridDefender.ClangOffender> SessionTopClangers => Modules.GridDefender.GetSessionTopClangers(20);
@@ -399,6 +542,7 @@ namespace PhysicsOptimizer.Services
         {
             get
             {
+                if (!PhysicsOptimizerPlugin.IsServerOnline) return null;
                 var clangers = SessionTopClangers;
                 if (clangers != null && clangers.Count > 0 && clangers[0].IsActive)
                 {
@@ -408,14 +552,28 @@ namespace PhysicsOptimizer.Services
             }
         }
 
-        public bool HasActiveClangers => TopOffender != null;
-        public int ActiveClangersCount => SessionTopClangers?.Count(c => c.IsActive) ?? 0;
+        public bool HasActiveClangers => PhysicsOptimizerPlugin.IsServerOnline && TopOffender != null;
+        public int ActiveClangersCount => PhysicsOptimizerPlugin.IsServerOnline ? (SessionTopClangers?.Count(c => c.IsActive) ?? 0) : 0;
         public bool HasMultipleClangers => ActiveClangersCount > 1;
 
         public string AlertStatusText
         {
             get
             {
+                var serverState = PhysicsOptimizerPlugin.GetServerLifecycleState();
+                if (serverState == ServerLifecycleState.Offline)
+                {
+                    return "SERVER OFFLINE — Simulation suspended until server starts";
+                }
+                if (serverState == ServerLifecycleState.Starting)
+                {
+                    return "SERVER STARTING — Initializing world and physics solvers...";
+                }
+                if (serverState == ServerLifecycleState.Stopping)
+                {
+                    return "SERVER STOPPING — Unloading session and halting physics...";
+                }
+
                 float simSpeed = Sandbox.Game.Multiplayer.Sync.ServerSimulationRatio;
                 var top = TopOffender;
                 string multi = HasMultipleClangers ? $" (1 of {ActiveClangersCount} active)" : "";
@@ -423,7 +581,7 @@ namespace PhysicsOptimizer.Services
                 // 1. RED CRITICAL: Sim speed severely compromised (<0.80), or clanger causing lag (<0.90), or runaway explosion (>=20/s)
                 if (top != null && (simSpeed < 0.90f || top.CurrentRate >= 20))
                 {
-                    return $"CRITICAL CLANG ({simSpeed:F2} TPS) — Culprit: '{top.DisplayName}' ({top.CurrentRate}/s in {top.ZoneName}){multi}";
+                    return $"CRITICAL CLANG ({simSpeed:F2} TPS) — Culprit: '{top.DisplayName}' ({top.CurrentRate}/s at {top.LocationDisplay}){multi}";
                 }
 
                 if (simSpeed < 0.80f)
@@ -434,7 +592,7 @@ namespace PhysicsOptimizer.Services
                 // 2. YELLOW ADVISORY: Active clanger (>=5/s) while TPS is still healthy, or elevated solver contacts
                 if (top != null)
                 {
-                    return $"CLANG ADVISORY ({simSpeed:F2} TPS) — Construct '{top.DisplayName}' ({top.CurrentRate}/s in {top.ZoneName}){multi}";
+                    return $"CLANG ADVISORY ({simSpeed:F2} TPS) — Construct '{top.DisplayName}' ({top.CurrentRate}/s at {top.LocationDisplay}){multi}";
                 }
 
                 if (simSpeed < 0.95f || ContactCallbacksPerSecond > 2500)
@@ -451,6 +609,10 @@ namespace PhysicsOptimizer.Services
         {
             get
             {
+                var serverState = PhysicsOptimizerPlugin.GetServerLifecycleState();
+                if (serverState == ServerLifecycleState.Offline) return "#202026";
+                if (serverState == ServerLifecycleState.Starting || serverState == ServerLifecycleState.Stopping) return "#2B2618";
+
                 float simSpeed = Sandbox.Game.Multiplayer.Sync.ServerSimulationRatio;
                 var top = TopOffender;
                 if (simSpeed < 0.80f || (top != null && (simSpeed < 0.90f || top.CurrentRate >= 20))) return "#451212";
@@ -463,6 +625,10 @@ namespace PhysicsOptimizer.Services
         {
             get
             {
+                var serverState = PhysicsOptimizerPlugin.GetServerLifecycleState();
+                if (serverState == ServerLifecycleState.Offline) return "#4B5563";
+                if (serverState == ServerLifecycleState.Starting || serverState == ServerLifecycleState.Stopping) return "#D97706";
+
                 float simSpeed = Sandbox.Game.Multiplayer.Sync.ServerSimulationRatio;
                 var top = TopOffender;
                 if (simSpeed < 0.80f || (top != null && (simSpeed < 0.90f || top.CurrentRate >= 20))) return "#EF4444";
@@ -475,6 +641,10 @@ namespace PhysicsOptimizer.Services
         {
             get
             {
+                var serverState = PhysicsOptimizerPlugin.GetServerLifecycleState();
+                if (serverState == ServerLifecycleState.Offline) return "⚪";
+                if (serverState == ServerLifecycleState.Starting || serverState == ServerLifecycleState.Stopping) return "⏳";
+
                 float simSpeed = Sandbox.Game.Multiplayer.Sync.ServerSimulationRatio;
                 var top = TopOffender;
                 if (simSpeed < 0.80f || (top != null && (simSpeed < 0.90f || top.CurrentRate >= 20))) return "🔴";
@@ -483,60 +653,19 @@ namespace PhysicsOptimizer.Services
             }
         }
 
-        public (int active, int total) GetZoneStats(int zone)
-        {
-            var clangers = SessionTopClangers;
-            int count = 0;
-            int active = 0;
-            if (clangers != null)
-            {
-                foreach (var c in clangers)
-                {
-                    if (c.ZoneNumber == zone)
-                    {
-                        count++;
-                        if (c.IsActive) active++;
-                    }
-                }
-            }
-            return (active, count);
-        }
-
-        public string Zone0Status => GetZoneStatusText(0, "Zone 0 (Starter Hub, 0-20km)");
-        public string Zone1Status => GetZoneStatusText(1, "Zone 1 (Salvage, 20-35km)");
-        public string Zone2Status => GetZoneStatusText(2, "Zone 2 (Contested, 35-50km)");
-        public string Zone3Status => GetZoneStatusText(3, "Zone 3 (Deep Desert, >50km)");
-
-        public string Zone0Color => GetZoneColor(0);
-        public string Zone1Color => GetZoneColor(1);
-        public string Zone2Color => GetZoneColor(2);
-        public string Zone3Color => GetZoneColor(3);
-
-        private string GetZoneStatusText(int zone, string title)
-        {
-            var stats = GetZoneStats(zone);
-            if (stats.active > 0) return $"🔴 {title}: {stats.active} ACTIVE CLANGER!";
-            if (stats.total > 0) return $"🟡 {title}: Clean ({stats.total} logged earlier)";
-            return $"🟢 {title}: Clean";
-        }
-
-        private string GetZoneColor(int zone)
-        {
-            var stats = GetZoneStats(zone);
-            if (stats.active > 0) return "#EF4444";
-            if (stats.total > 0) return "#F59E0B";
-            return "#4CAF50";
-        }
-
         public string GenerateDiscordIncidentReport()
         {
-            float speed = Sandbox.Game.Multiplayer.Sync.ServerSimulationRatio;
+            var serverState = PhysicsOptimizerPlugin.GetServerLifecycleState();
+            float speed = PhysicsOptimizerPlugin.IsServerOnline ? Sandbox.Game.Multiplayer.Sync.ServerSimulationRatio : 0f;
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("```markdown");
-            sb.AppendLine($"# GVK Physics Incident Report ({DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC)");
-            sb.AppendLine($"* Server Sim Speed: {speed:F2} TPS");
+            sb.AppendLine($"# Physics Incident Report ({DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC) [{serverState.ToString().ToUpperInvariant()}]");
+            sb.AppendLine(PhysicsOptimizerPlugin.IsServerOnline
+                ? $"* Server Sim Speed: {speed:F2} TPS"
+                : $"* Server State: {serverState} (Simulation suspended)");
             sb.AppendLine($"* Evaluated Collisions: {TotalEvaluated:N0} (Blocked: {TotalBlocked:N0})");
             sb.AppendLine($"* Grids Nudged Apart: {GridsSeparated:N0} | Inverted Normals: {VoxelNormalsInverted:N0}");
+            sb.AppendLine($"* Vehicle Rescues: {TotalRescuesExecuted:N0} ({PlayerRescuesExecuted:N0} player, {AdminRescuesExecuted:N0} admin)");
 
             var topClangers = SessionTopClangers;
             if (topClangers != null && topClangers.Count > 0)
@@ -578,6 +707,23 @@ namespace PhysicsOptimizer.Services
             sb.AppendLine($"Internal Armor Saved: {ArmorHitsOccluded:N0}, Voxel Normals Inverted: {VoxelNormalsInverted:N0}");
             sb.AppendLine($"Grids Nudged Apart: {GridsSeparated:N0} (Total Pushes: {PushApartActionsExecuted:N0})");
             sb.AppendLine($"Thruster Obstructions Burned: {ThrusterObstructionsVaporized:N0}, Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}");
+            if (IsGridDefenderEnabled)
+            {
+                sb.AppendLine($"Evaluated Collisions: {TotalEvaluated:N0} (Blocked: {TotalBlocked:N0} [{BlockRatio:F1}%], Allowed: {TotalAllowed:N0})");
+                sb.AppendLine($"Low-Speed Blocked: {LowSpeedBlocked:N0}, Voxel Crashes: {VoxelCrashesBlocked:N0}, Ramming: {RammingBlocked:N0}");
+            }
+            else
+            {
+                sb.AppendLine("Grid Defender: [Disabled]");
+            }
+
+            sb.AppendLine(IsPmwEnabled ? $"PMW Torpedoes Allowed: {MissileHitsAllowed:N0}, Piloted Buggy Saves: {PilotedBuggySaves:N0}" : "PMW Torpedoes: [Disabled]");
+            sb.AppendLine(IsArmorOcclusionEnabled ? $"Internal Armor Saved: {ArmorHitsOccluded:N0}" : "Layered Armor Occlusion: [Disabled]");
+            sb.AppendLine(IsVoxelArbitratorEnabled ? $"Voxel Normals Inverted: {VoxelNormalsInverted:N0}" : "Voxel Normal Arbitrator: [Disabled]");
+            sb.AppendLine(IsPushApartEnabled ? $"Grids Nudged Apart: {GridsSeparated:N0} (Total Pushes: {PushApartActionsExecuted:N0})" : "Push-Apart: [Disabled]");
+            sb.AppendLine($"Vehicle Rescues: Players={PlayerRescuesExecuted:N0}, Admins={AdminRescuesExecuted:N0}");
+            sb.AppendLine(IsThrusterClearanceEnabled ? $"Thruster Obstructions Burned: {ThrusterObstructionsVaporized:N0}" : "Thruster Clearance: [Disabled]");
+            sb.AppendLine(IsVoxelCutoutSuppressionEnabled ? $"Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}" : "Voxel Cutout Suppression: [Disabled]");
 
             var topClangers = SessionTopClangers;
             if (topClangers != null && topClangers.Count > 0)
@@ -615,6 +761,8 @@ namespace PhysicsOptimizer.Services
             Interlocked.Exchange(ref _debrisBlocked, 0);
             Interlocked.Exchange(ref _cooldownThrottled, 0);
             Interlocked.Exchange(ref _gridsSeparated, 0);
+            Interlocked.Exchange(ref _playerRescuesExecuted, 0);
+            Interlocked.Exchange(ref _adminRescuesExecuted, 0);
             Interlocked.Exchange(ref _armorHitsOccluded, 0);
             Interlocked.Exchange(ref _voxelNormalsInverted, 0);
             Interlocked.Exchange(ref _thrusterObstructionsVaporized, 0);

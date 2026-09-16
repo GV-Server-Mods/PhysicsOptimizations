@@ -61,6 +61,8 @@ namespace PhysicsOptimizer.Modules
             public Vector3D StartPos;
             public bool VoxelPush;
             public bool ConvertToStatic;
+            public bool IsRescue;
+            public bool IsAdminRescue;
         }
 
         private sealed class EscapeRecord
@@ -79,13 +81,9 @@ namespace PhysicsOptimizer.Modules
             public int CurrentRate { get; set; }
             public DateTime LastClangUtc { get; set; }
             public Vector3D LastPosition { get; set; }
-            public int ZoneNumber { get; set; }
-            public string ZoneName { get; set; }
-            public double DistanceKm { get; set; }
-            public string Direction { get; set; }
+            public string LocationDisplay { get; set; }
             public const int ActiveClangThreshold = 5;
             public bool IsActive => CurrentRate >= ActiveClangThreshold;
-            public string LocationDisplay => $"{ZoneName} ({DistanceKm:F1} km {Direction})";
             public string StatusDisplay
             {
                 get
@@ -464,51 +462,28 @@ namespace PhysicsOptimizer.Modules
             return false;
         }
 
-        public static readonly Vector3D CrossroadsTower = new Vector3D(62495.55, 28019.04, 37195.71);
-        private const double Zone0RadiusSq = 20000.0 * 20000.0;
-        private const double Zone1RadiusSq = 35000.0 * 35000.0;
-        private const double Zone2RadiusSq = 50000.0 * 50000.0;
-
-        public static string GetKharakZone(Vector3D pos, out int zoneNumber, out double distanceKm, out string compassDir)
+        public static string GetUniversalLocation(Vector3D pos)
         {
-            double distSq = Vector3D.DistanceSquared(pos, CrossroadsTower);
-            double dist = Math.Sqrt(distSq);
-            distanceKm = dist / 1000.0;
-
-            Vector3D diff = pos - CrossroadsTower;
-            compassDir = GetBearing(diff.X, diff.Z);
-
-            if (distSq <= Zone0RadiusSq)
+            var planet = MyGamePruningStructure.GetClosestPlanet(pos);
+            if (planet != null && planet.PositionComp != null)
             {
-                zoneNumber = 0;
-                return "Zone 0 (Starter Hub)";
+                Vector3D planetCenter = planet.PositionComp.GetPosition();
+                double distCenter = Vector3D.Distance(pos, planetCenter);
+                if (distCenter <= planet.MaximumRadius * 1.5)
+                {
+                    double altKm = Math.Max(0.0, (distCenter - planet.AverageRadius) / 1000.0);
+                    string planetName = planet.Generator?.Id.SubtypeName;
+                    if (string.IsNullOrEmpty(planetName)) planetName = planet.StorageName ?? "Planet";
+                    return $"{planetName} ({altKm:F1} km alt)";
+                }
             }
-            if (distSq <= Zone1RadiusSq)
-            {
-                zoneNumber = 1;
-                return "Zone 1 (Salvage)";
-            }
-            if (distSq <= Zone2RadiusSq)
-            {
-                zoneNumber = 2;
-                return "Zone 2 (Contested)";
-            }
-            zoneNumber = 3;
-            return "Zone 3 (Deep Desert)";
-        }
 
-        private static string GetBearing(double dx, double dz)
-        {
-            double angle = Math.Atan2(dx, -dz) * (180.0 / Math.PI);
-            if (angle < 0) angle += 360.0;
-            if (angle >= 337.5 || angle < 22.5) return "N";
-            if (angle < 67.5) return "NE";
-            if (angle < 112.5) return "E";
-            if (angle < 157.5) return "SE";
-            if (angle < 202.5) return "S";
-            if (angle < 247.5) return "SW";
-            if (angle < 292.5) return "W";
-            return "NW";
+            double distOriginKm = pos.Length() / 1000.0;
+            if (distOriginKm < 1.0)
+            {
+                return "Deep Space (Origin)";
+            }
+            return $"Deep Space ({distOriginKm:N0} km)";
         }
 
         private static readonly ConcurrentQueue<PhysicsIncident> _incidentQueue = new();
@@ -589,9 +564,8 @@ namespace PhysicsOptimizer.Modules
 
             if (record.CurrentSecondClangs == 10)
             {
-                GetKharakZone(record.LastPosition, out int zNum, out double distKm, out string dir);
-                string zName = zNum == 0 ? "Z0 Hub" : zNum == 1 ? "Z1 Salvage" : zNum == 2 ? "Z2 Contested" : "Z3 Deep";
-                RecordIncident("🚨", $"Clang surge on '{record.DisplayName}' (10/s in {zName} - {distKm:F1}km {dir}).");
+                string loc = GetUniversalLocation(record.LastPosition);
+                RecordIncident("🚨", $"Clang surge on '{record.DisplayName}' (10/s at {loc}).");
             }
         }
 
@@ -649,8 +623,6 @@ namespace PhysicsOptimizer.Modules
                 if (rec == null || rec.TotalClangs <= 0) continue;
 
                 int currentRate = GetConstructClangRate(kvp.Key, currentFrame);
-                GetKharakZone(rec.LastPosition, out int zoneNum, out double distKm, out string dir);
-
                 list.Add(new ClangOffender
                 {
                     ConstructId = rec.ConstructId,
@@ -660,10 +632,7 @@ namespace PhysicsOptimizer.Modules
                     CurrentRate = currentRate,
                     LastClangUtc = rec.LastClangUtc,
                     LastPosition = rec.LastPosition,
-                    ZoneNumber = zoneNum,
-                    ZoneName = zoneNum == 0 ? "Z0 Hub" : zoneNum == 1 ? "Z1 Salvage" : zoneNum == 2 ? "Z2 Contested" : "Z3 Deep",
-                    DistanceKm = distKm,
-                    Direction = dir
+                    LocationDisplay = GetUniversalLocation(rec.LastPosition)
                 });
             }
 
@@ -1834,6 +1803,9 @@ namespace PhysicsOptimizer.Modules
                 Distance = (float)distance,
                 StartPos = grid.PositionComp.WorldVolume.Center,
                 VoxelPush = voxelPush
+                VoxelPush = voxelPush,
+                IsRescue = false,
+                IsAdminRescue = false
             });
 
             _plugin?.DefenseStats?.IncrementGridsSeparated();
@@ -1848,6 +1820,228 @@ namespace PhysicsOptimizer.Modules
             {
                 Log.Info(LogSource, $"[PUSH-APART] Queued push for '{grid.DisplayName}' {distance:F2}m along separation vector.");
             }
+        }
+
+        /// <summary>
+        /// Executes a one-shot push-apart rescue on a stuck construct, resolving macroscopic terrain normal
+        /// and multi-subgrid subterranean OBB support clearance using the exact same solver pipeline as Push-Apart.
+        /// </summary>
+        public bool ExecuteRescuePush(MyCubeGrid grid, double distance, bool uprightFlipped, bool isAdmin, out string failureReason)
+        {
+            failureReason = null;
+            if (grid == null || grid.MarkedForClose || grid.Closed)
+            {
+                failureReason = "Target vehicle is invalid or closed.";
+                return false;
+            }
+
+            MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+            if (topGrid.MarkedForClose || topGrid.Closed)
+            {
+                failureReason = "Target vehicle construct is closed.";
+                return false;
+            }
+
+            if (topGrid.IsStatic)
+            {
+                failureReason = "Static stations cannot be rescued.";
+                return false;
+            }
+
+            PhysicsOptimizerConfig config = _plugin?.Config;
+            Vector3D gridCenter = topGrid.PositionComp.WorldVolume.Center;
+            Vector3D up = topGrid.Physics != null && topGrid.Physics.Gravity.LengthSquared() > 0.1f
+                ? -Vector3D.Normalize(topGrid.Physics.Gravity)
+                : Vector3D.Up;
+
+            Vector3D separationDir = up;
+            double finalDistance = distance > 0 ? distance : (config?.PlayerRescuePushDistance ?? 2.5f);
+
+            MyPlanet planet = MyGamePruningStructure.GetClosestPlanet(gridCenter);
+            if (planet != null)
+            {
+                Vector3D planetCore = planet.PositionComp.WorldVolume.Center;
+                if (topGrid.Physics == null || topGrid.Physics.Gravity.LengthSquared() <= 0.1f)
+                {
+                    Vector3D radial = gridCenter - planetCore;
+                    if (radial.LengthSquared() > 0.001) up = Vector3D.Normalize(radial);
+                }
+
+                double sampleRadius = Math.Max(topGrid.PositionComp.WorldVolume.Radius, 3.0);
+                Vector3D terrainNormal = SampleMacroTerrainNormal(planet, gridCenter, up, sampleRadius, out Vector3D surfaceCenter);
+                separationDir = terrainNormal;
+
+                double centerDist = (gridCenter - planetCore).Length();
+                double surfaceDist = (surfaceCenter - planetCore).Length();
+                bool isMacroSubmerged = centerDist < surfaceDist;
+
+                double maxClearance = 0.0;
+                _pushMechanicalGroupBuffer ??= new List<MyCubeGrid>();
+                _pushMechanicalGroupBuffer.Clear();
+                try
+                {
+                    GridUtils.GetMechanicalGroupMembers(topGrid, _pushMechanicalGroupBuffer);
+                    foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
+                    {
+                        if (member == null || member.MarkedForClose || member.Closed) continue;
+                        MatrixD worldMatrix = member.WorldMatrix;
+                        MatrixD invWorld = member.PositionComp.WorldMatrixNormalizedInv;
+                        Vector3D localDir = Vector3D.TransformNormal(-separationDir, invWorld);
+
+                        BoundingBox localBox = member.PositionComp.LocalAABB;
+                        Vector3D localSupport = new Vector3D(
+                            localDir.X > 0 ? localBox.Max.X : localBox.Min.X,
+                            localDir.Y > 0 ? localBox.Max.Y : localBox.Min.Y,
+                            localDir.Z > 0 ? localBox.Max.Z : localBox.Min.Z);
+
+                        Vector3D deepestPoint = Vector3D.Transform(localSupport, worldMatrix);
+                        double pointClearance = Vector3D.Dot(surfaceCenter - deepestPoint, separationDir);
+                        if (pointClearance > maxClearance) maxClearance = pointClearance;
+                    }
+                }
+                finally
+                {
+                    _pushMechanicalGroupBuffer.Clear();
+                }
+
+                if (maxClearance > 0 || isMacroSubmerged)
+                {
+                    finalDistance = Math.Max(finalDistance, maxClearance + (config?.PushApartDistance ?? 0.5f));
+                }
+
+                if (uprightFlipped && topGrid.Physics != null && topGrid.Physics.Gravity.LengthSquared() > 0.1f)
+                {
+                    double orientationDot = Vector3D.Dot(topGrid.WorldMatrix.Up, up);
+                    if (orientationDot < 0.2)
+                    {
+                        UprightConstruct(topGrid, up);
+                    }
+                }
+            }
+            else
+            {
+                if (_lastVoxelContactNormals.TryGetValue(topGrid.EntityId, out Vector3D astNormal) && astNormal.LengthSquared() > 0.001)
+                {
+                    separationDir = Vector3D.Normalize(astNormal);
+                }
+                else
+                {
+                    separationDir = topGrid.WorldMatrix.Up;
+                }
+            }
+
+            // Clear old contact and penetration caches on all mechanical group members so Havok settles cleanly
+            _pushMechanicalGroupBuffer ??= new List<MyCubeGrid>();
+            _pushMechanicalGroupBuffer.Clear();
+            try
+            {
+                GridUtils.GetMechanicalGroupMembers(topGrid, _pushMechanicalGroupBuffer);
+                foreach (MyCubeGrid member in _pushMechanicalGroupBuffer)
+                {
+                    if (member == null) continue;
+                    _lastImpactPositions.TryRemove(member.EntityId, out _);
+                    _lastVoxelContactNormals.TryRemove(member.EntityId, out _);
+                    _lastVoxelPenetrations.TryRemove(member.EntityId, out _);
+                    _consecutiveContactFrames[member.EntityId] = 0;
+                    _consecutiveVoxelContactFrames.TryRemove(member.EntityId, out _);
+                    _pushApartAttempts.TryRemove(member.EntityId, out _);
+                    _lastEscapes.TryRemove(member.EntityId, out _);
+                }
+            }
+            finally
+            {
+                _pushMechanicalGroupBuffer.Clear();
+            }
+
+            ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+            ResetConstructClangTracking(topGrid.EntityId, currentFrame);
+
+            _pushQueue.Enqueue(new PushApartAction
+            {
+                GridId = topGrid.EntityId,
+                SeparationDir = separationDir,
+                Distance = (float)finalDistance,
+                StartPos = topGrid.PositionComp.WorldVolume.Center,
+                VoxelPush = true,
+                IsRescue = true,
+                IsAdminRescue = isAdmin
+            });
+
+            return true;
+        }
+
+        /// <summary>
+        /// Smoothly aligns a flipped rover's Up vector with planetary gravity Up while preserving horizontal forward yaw heading.
+        /// Transforms all mechanical subgrids synchronously via relative matrix multiplication.
+        /// </summary>
+        private static void UprightConstruct(MyCubeGrid mainGrid, Vector3D planetUp)
+        {
+            if (mainGrid == null || mainGrid.MarkedForClose || mainGrid.Closed) return;
+            MatrixD oldMain = mainGrid.WorldMatrix;
+            Vector3D forward = oldMain.Forward;
+            Vector3D horizontalForward = forward - (planetUp * Vector3D.Dot(forward, planetUp));
+            if (horizontalForward.LengthSquared() < 0.01)
+            {
+                Vector3D right = oldMain.Right;
+                Vector3D horizontalRight = right - (planetUp * Vector3D.Dot(right, planetUp));
+                if (horizontalRight.LengthSquared() > 0.01)
+                {
+                    horizontalForward = Vector3D.Cross(planetUp, Vector3D.Normalize(horizontalRight));
+                }
+                else
+                {
+                    horizontalForward = Vector3D.CalculatePerpendicularVector(planetUp);
+                }
+            }
+            else
+            {
+                horizontalForward = Vector3D.Normalize(horizontalForward);
+            }
+
+            MatrixD newMain = MatrixD.CreateWorld(oldMain.Translation, horizontalForward, planetUp);
+            MatrixD delta = MatrixD.Invert(oldMain) * newMain;
+
+            var groupMembers = new List<MyCubeGrid>();
+            try
+            {
+                GridUtils.GetMechanicalGroupMembers(mainGrid, groupMembers);
+                foreach (var member in groupMembers)
+                {
+                    if (member == null || member.MarkedForClose || member.Closed) continue;
+                    MatrixD m = member.WorldMatrix * delta;
+                    member.PositionComp.SetWorldMatrix(ref m);
+                    if (member.Physics != null)
+                    {
+                        member.Physics.LinearVelocity = Vector3.Zero;
+                        member.Physics.AngularVelocity = Vector3.Zero;
+                        member.Physics.RigidBody?.Activate();
+                    }
+                }
+            }
+            finally
+            {
+                groupMembers.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the construct is actively clanging or suffering Havok solver chatter,
+        /// exempting it from velocity limits during rescue requests.
+        /// </summary>
+        public static bool IsConstructClangingOrJittering(long constructId, ulong currentFrame)
+        {
+            if (constructId == 0) return false;
+            return GetConstructClangRate(constructId, currentFrame) > 0;
+        }
+
+        /// <summary>
+        /// Returns true if the grid has recorded recent collision or voxel contacts.
+        /// </summary>
+        public bool HasRecentContacts(long gridId)
+        {
+            if (_consecutiveVoxelContactFrames.TryGetValue(gridId, out int vc) && vc > 0) return true;
+            if (_consecutiveContactFrames.TryGetValue(gridId, out int gc) && gc > 0) return true;
+            return HadRecentVoxelContact(gridId);
         }
 
         private bool AllowOrScale(MyCubeGrid grid, ref float separatingVelocity, bool isMissile)
@@ -2075,8 +2269,28 @@ namespace PhysicsOptimizer.Modules
                             _consecutiveContactFrames[member.EntityId] = 0;
                         }
 
+                        if (action.IsRescue)
+                        {
+                            if (action.IsAdminRescue)
+                            {
+                                PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementAdminRescues();
+                                RecordIncident("👑", $"Admin crosshairs-rescued '{grid.DisplayName}' +{action.Distance:F1}m out of voxels.");
+                            }
+                            else
+                            {
+                                PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementPlayerRescues();
+                                RecordIncident("🛟", $"Player self-rescue nudged '{grid.DisplayName}' +{action.Distance:F1}m out of voxels.");
+                            }
+                        }
+                        else
+                        {
+                            RecordIncident("🚨", $"Push-Apart nudged '{grid.DisplayName}' +{action.Distance:F1}m out of voxels.");
+                        }
+
+                        PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementGridsSeparated();
                         PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementPushApartActionsExecuted();
                         ChatNotificationService.SendPushApartNotification(grid, action.Distance, false, config, MySandboxGame.Static?.SimulationFrameCounter ?? 0);
+                        ChatNotificationService.SendPushApartNotification(grid, action.Distance, false, config, MySandboxGame.Static?.SimulationFrameCounter ?? 0, action.IsRescue);
                     }
                     finally
                     {
