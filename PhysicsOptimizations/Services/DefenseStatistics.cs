@@ -169,7 +169,7 @@ namespace PhysicsOptimizer.Services
         public string PlayerRescuesColor => IsPlayerRescueEnabled ? "#38BDF8" : "#6B7280";
 
         public string AdminRescuesDisplay => $"{AdminRescuesExecuted:N0}";
-        public string AdminRescuesColor => "#FBBF24";
+        public string AdminRescuesColor => "#38BDF8";
 
         public string TotalRescuesDisplay => $"{TotalRescuesExecuted:N0}";
 
@@ -185,43 +185,43 @@ namespace PhysicsOptimizer.Services
             : "[Disabled]";
 
         public string TotalBlockedRatioDisplay => IsGridDefenderEnabled
-            ? $" ({BlockRatio:F1}%)"
+            ? $"({BlockRatio:F1}%)"
             : "";
-        public string TotalBlockedColor => IsGridDefenderEnabled ? "#4CAF50" : "#6B7280";
+        public string TotalBlockedColor => IsGridDefenderEnabled ? "#10B981" : "#6B7280";
 
         public string MissileHitsAllowedDisplay => IsPmwEnabled
             ? $"{MissileHitsAllowed:N0}"
             : "[Disabled]";
-        public string MissileHitsColor => IsPmwEnabled ? "#E91E63" : "#6B7280";
+        public string MissileHitsColor => IsPmwEnabled ? "#FB7185" : "#6B7280";
 
         public string ArmorHitsOccludedDisplay => IsArmorOcclusionEnabled
             ? $"{ArmorHitsOccluded:N0}"
             : "[Disabled]";
-        public string ArmorHitsColor => IsArmorOcclusionEnabled ? "#64B5F6" : "#6B7280";
+        public string ArmorHitsColor => IsArmorOcclusionEnabled ? "#10B981" : "#6B7280";
 
         public string GridsSeparatedDisplay => IsPushApartEnabled
             ? $"{GridsSeparated:N0}"
             : "[Disabled]";
 
         public string GridsSeparatedPushesDisplay => IsPushApartEnabled
-            ? $" ({PushApartActionsExecuted:N0} pushes)"
+            ? $"({PushApartActionsExecuted:N0} pushes)"
             : "";
-        public string GridsSeparatedColor => IsPushApartEnabled ? "#00E676" : "#6B7280";
+        public string GridsSeparatedColor => IsPushApartEnabled ? "#10B981" : "#6B7280";
 
         public string VoxelNormalsInvertedDisplay => IsVoxelArbitratorEnabled
             ? $"{VoxelNormalsInverted:N0}"
             : "[Disabled]";
-        public string VoxelNormalsColor => IsVoxelArbitratorEnabled ? "#818CF8" : "#6B7280";
+        public string VoxelNormalsColor => IsVoxelArbitratorEnabled ? "#E0E0E0" : "#6B7280";
 
         public string ThrusterObstructionsDisplay => IsThrusterClearanceEnabled
             ? $"{ThrusterObstructionsVaporized:N0}"
             : "[Disabled]";
-        public string ThrusterObstructionsColor => IsThrusterClearanceEnabled ? "#FB923C" : "#6B7280";
+        public string ThrusterObstructionsColor => IsThrusterClearanceEnabled ? "#E0E0E0" : "#6B7280";
 
         public string VoxelCutoutsPreventedDisplay => IsVoxelCutoutSuppressionEnabled
             ? $"{VoxelCutoutsPrevented:N0}"
             : "[Disabled]";
-        public string VoxelCutoutsColor => IsVoxelCutoutSuppressionEnabled ? "#34D399" : "#6B7280";
+        public string VoxelCutoutsColor => IsVoxelCutoutSuppressionEnabled ? "#E0E0E0" : "#6B7280";
 
         public string CachesDisplay => IsVoxelArbitratorEnabled
             ? $"{VoxelBucketsCached:N0} carved regions | {TerrainCacheEntries:N0} macro terrain"
@@ -300,6 +300,11 @@ namespace PhysicsOptimizer.Services
         {
             Interlocked.Increment(ref _totalAllowed);
             if (isMissile) Interlocked.Increment(ref _missileHitsAllowed);
+        }
+
+        public void IncrementMissileHits()
+        {
+            Interlocked.Increment(ref _missileHitsAllowed);
         }
 
         /// <summary>
@@ -536,7 +541,7 @@ namespace PhysicsOptimizer.Services
         }
 
         public List<Modules.GridDefender.ClangOffender> SessionTopClangers => Modules.GridDefender.GetSessionTopClangers(20);
-        public List<Modules.GridDefender.PhysicsIncident> RecentIncidents => Modules.GridDefender.GetRecentIncidents(4);
+        public List<Modules.GridDefender.PhysicsIncident> RecentIncidents => Modules.GridDefender.GetRecentIncidents(10);
 
         public Modules.GridDefender.ClangOffender TopOffender
         {
@@ -690,7 +695,7 @@ namespace PhysicsOptimizer.Services
                 sb.AppendLine("\n### Recent Physics Incidents:");
                 foreach (var inc in incidents)
                 {
-                    sb.AppendLine($"• {inc.FullText}");
+                    sb.AppendLine($"- {inc.FullText}");
                 }
             }
 
@@ -701,12 +706,6 @@ namespace PhysicsOptimizer.Services
         public string GetDiagnosticSummary()
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"Evaluated Collisions: {TotalEvaluated:N0} (Blocked: {TotalBlocked:N0} [{BlockRatio:F1}%], Allowed: {TotalAllowed:N0})");
-            sb.AppendLine($"Low-Speed Blocked: {LowSpeedBlocked:N0}, Voxel Crashes: {VoxelCrashesBlocked:N0}, Ramming: {RammingBlocked:N0}");
-            sb.AppendLine($"PMW Torpedoes Allowed: {MissileHitsAllowed:N0}, Piloted Buggy Saves: {PilotedBuggySaves:N0}");
-            sb.AppendLine($"Internal Armor Saved: {ArmorHitsOccluded:N0}, Voxel Normals Inverted: {VoxelNormalsInverted:N0}");
-            sb.AppendLine($"Grids Nudged Apart: {GridsSeparated:N0} (Total Pushes: {PushApartActionsExecuted:N0})");
-            sb.AppendLine($"Thruster Obstructions Burned: {ThrusterObstructionsVaporized:N0}, Voxel Cutouts Prevented: {VoxelCutoutsPrevented:N0}");
             if (IsGridDefenderEnabled)
             {
                 sb.AppendLine($"Evaluated Collisions: {TotalEvaluated:N0} (Blocked: {TotalBlocked:N0} [{BlockRatio:F1}%], Allowed: {TotalAllowed:N0})");
@@ -728,7 +727,7 @@ namespace PhysicsOptimizer.Services
             var topClangers = SessionTopClangers;
             if (topClangers != null && topClangers.Count > 0)
             {
-                sb.AppendLine("\n=== SESSION WALL OF SHAME (TOP CLANG OFFENDERS) ===");
+                sb.AppendLine("\n=== SESSION WALL OF CLANG (TOP CLANG OFFENDERS) ===");
                 for (int i = 0; i < Math.Min(10, topClangers.Count); i++)
                 {
                     var c = topClangers[i];

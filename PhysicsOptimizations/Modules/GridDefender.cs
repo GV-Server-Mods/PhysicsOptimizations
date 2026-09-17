@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Havok;
 using Sandbox;
@@ -38,6 +40,7 @@ namespace PhysicsOptimizer.Modules
         private const string LogSource = "GridDefender";
 
         public string Name => "Grid Defender";
+        public string Description => "Collision mitigation, kinetic damage defense, missile tracking, and layered armor occlusion.";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableGridDefender;
 
         private PhysicsOptimizerPlugin _plugin;
@@ -73,8 +76,14 @@ namespace PhysicsOptimizer.Modules
             public int Level;
         }
 
-        public sealed class ClangOffender
+        public sealed class ClangOffender : INotifyPropertyChanged
         {
+            public event PropertyChangedEventHandler PropertyChanged;
+            private void OnPropertyChanged([CallerMemberName] string propName = null)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propName));
+            }
+
             public long ConstructId { get; set; }
             public string DisplayName { get; set; }
             public int TotalClangs { get; set; }
@@ -83,6 +92,47 @@ namespace PhysicsOptimizer.Modules
             public DateTime LastClangUtc { get; set; }
             public Vector3D LastPosition { get; set; }
             public string LocationDisplay { get; set; }
+
+            private bool _isAnchored;
+            public bool IsAnchored
+            {
+                get => _isAnchored;
+                set
+                {
+                    if (_isAnchored != value)
+                    {
+                        _isAnchored = value;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(CanAnchor));
+                        OnPropertyChanged(nameof(AnchorButtonText));
+                        OnPropertyChanged(nameof(BannerAnchorButtonText));
+                    }
+                }
+            }
+
+            private bool _isDepowered;
+            public bool IsDepowered
+            {
+                get => _isDepowered;
+                set
+                {
+                    if (_isDepowered != value)
+                    {
+                        _isDepowered = value;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(CanDepower));
+                        OnPropertyChanged(nameof(DepowerButtonText));
+                        OnPropertyChanged(nameof(BannerDepowerButtonText));
+                    }
+                }
+            }
+
+            public bool CanAnchor => !IsAnchored;
+            public bool CanDepower => !IsDepowered;
+            public string AnchorButtonText => IsAnchored ? "⚓ Anchored" : "⚓ Anchor";
+            public string DepowerButtonText => IsDepowered ? "🔌 Depowered" : "🔌 Depower";
+            public string BannerAnchorButtonText => IsAnchored ? "⚓ ANCHORED" : "⚓ ANCHOR";
+            public string BannerDepowerButtonText => IsDepowered ? "🔌 DEPOWERED" : "🔌 DEPOWER";
             public const int ActiveClangThreshold = 5;
             public bool IsActive => CurrentRate >= ActiveClangThreshold;
             public string StatusDisplay
@@ -120,9 +170,14 @@ namespace PhysicsOptimizer.Modules
         {
             public DateTime UtcTime { get; set; }
             public string Icon { get; set; }
-            public string Message { get; set; }
+            public string BaseMessage { get; set; }
+            public string GroupKey { get; set; }
+            public int RepeatCount { get; set; } = 1;
+
             public string FormattedTime => UtcTime.ToLocalTime().ToString("HH:mm:ss");
-            public string FullText => $"{FormattedTime} {Icon} {Message}";
+            public string DisplayMessage => RepeatCount > 1 ? $"{BaseMessage} (x{RepeatCount})" : BaseMessage;
+            public string Message => DisplayMessage;
+            public string FullText => $"{FormattedTime} {Icon} {DisplayMessage}";
         }
 
         private sealed class ConstructClangRecord
@@ -135,6 +190,7 @@ namespace PhysicsOptimizer.Modules
             public int PreviousSecondClangs;
             public ulong CurrentSecondStartFrame;
             public ulong LastClangFrame;
+            public ulong LastClangSurgeIncidentFrame;
             public DateTime LastClangUtc;
             public Vector3D LastPosition;
         }
@@ -487,39 +543,106 @@ namespace PhysicsOptimizer.Modules
             return $"Deep Space ({distOriginKm:N0} km)";
         }
 
-        private static readonly ConcurrentQueue<PhysicsIncident> _incidentQueue = new();
-        private const int MaxIncidentHistory = 10;
+        private const int MaxIncidentHistory = 50;
+        private const int MaxWallOfClangCapacity = 20;
+        private static readonly object _incidentLock = new();
+        private static readonly List<PhysicsIncident> _incidentHistory = new();
 
-        public static void RecordIncident(string icon, string message)
+        public static void RecordIncident(string icon, string message, string groupKey = null)
         {
-            _incidentQueue.Enqueue(new PhysicsIncident
+            if (string.IsNullOrEmpty(message)) return;
+
+            string key = groupKey ?? $"{icon}:{message}";
+            DateTime now = DateTime.UtcNow;
+
+            lock (_incidentLock)
             {
-                UtcTime = DateTime.UtcNow,
-                Icon = icon,
-                Message = message
-            });
-            while (_incidentQueue.Count > MaxIncidentHistory)
-            {
-                _incidentQueue.TryDequeue(out _);
+                if (_incidentHistory.Count > 0)
+                {
+                    var last = _incidentHistory[_incidentHistory.Count - 1];
+                    if (last.GroupKey == key || (last.Icon == icon && last.BaseMessage == message))
+                    {
+                        if ((now - last.UtcTime).TotalSeconds < 30.0)
+                        {
+                            last.UtcTime = now;
+                            last.RepeatCount++;
+                            last.BaseMessage = message;
+                            return;
+                        }
+                    }
+                }
+
+                _incidentHistory.Add(new PhysicsIncident
+                {
+                    UtcTime = now,
+                    Icon = icon,
+                    BaseMessage = message,
+                    GroupKey = key,
+                    RepeatCount = 1
+                });
+
+                while (_incidentHistory.Count > MaxIncidentHistory)
+                {
+                    _incidentHistory.RemoveAt(0);
+                }
             }
         }
 
-        public static List<PhysicsIncident> GetRecentIncidents(int maxResults = 5)
+        public static List<PhysicsIncident> GetRecentIncidents(int maxResults = 10)
         {
-            var arr = _incidentQueue.ToArray();
-            var list = new List<PhysicsIncident>(arr.Length);
-            for (int i = arr.Length - 1; i >= 0 && list.Count < maxResults; i--)
+            lock (_incidentLock)
             {
-                list.Add(arr[i]);
+                int count = Math.Min(maxResults, _incidentHistory.Count);
+                var list = new List<PhysicsIncident>(count);
+                for (int i = _incidentHistory.Count - 1; i >= 0 && list.Count < maxResults; i--)
+                {
+                    list.Add(_incidentHistory[i]);
+                }
+                return list;
             }
-            return list;
+        }
+
+        private static void PruneOldestClangRecord()
+        {
+            if (_constructClangRecords.IsEmpty) return;
+            long worstId = 0;
+            DateTime oldestUtc = DateTime.MaxValue;
+            int lowestPeak = int.MaxValue;
+
+            foreach (var kvp in _constructClangRecords)
+            {
+                ConstructClangRecord r = kvp.Value;
+                if (r == null) continue;
+                if (r.LastClangUtc < oldestUtc || (r.LastClangUtc == oldestUtc && r.PeakRate < lowestPeak))
+                {
+                    oldestUtc = r.LastClangUtc;
+                    lowestPeak = r.PeakRate;
+                    worstId = kvp.Key;
+                }
+            }
+
+            if (worstId != 0)
+            {
+                _constructClangRecords.TryRemove(worstId, out _);
+            }
         }
 
         private static void RecordBlockedClang(MyCubeGrid grid, ulong currentFrame)
         {
-            if (grid == null || currentFrame == 0) return;
-            MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+            if (grid == null || currentFrame == 0 || grid.IsStatic) return;
+            MyCubeGrid topGrid = GridUtils.GetMainDynamicGrid(grid) ?? grid;
+            if (topGrid.IsStatic) return;
             long constructId = topGrid.EntityId;
+
+            // When capacity is reached, the most recent offender kicks off the oldest idle offender
+            if (!_constructClangRecords.ContainsKey(constructId))
+            {
+                while (_constructClangRecords.Count >= MaxWallOfClangCapacity)
+                {
+                    PruneOldestClangRecord();
+                }
+            }
+
             ConstructClangRecord record = _constructClangRecords.GetOrAdd(constructId, id => new ConstructClangRecord
             {
                 ConstructId = id,
@@ -564,9 +687,18 @@ namespace PhysicsOptimizer.Modules
             }
 
             if (record.CurrentSecondClangs == 10)
+                if (record.CurrentSecondClangs >= 10 && currentFrame >= record.LastClangSurgeIncidentFrame + 600)
+                {
+                    record.LastClangSurgeIncidentFrame = currentFrame;
+                    string loc = GetUniversalLocation(record.LastPosition);
+                    RecordIncident("🚨", $"Clang surge on '{record.DisplayName}' (10/s at {loc}).");
+                    RecordIncident("🚨", $"Clang surge on '{record.DisplayName}' ({record.CurrentSecondClangs}/s at {loc}).", $"clang:{constructId}");
+                }
+            if (record.CurrentSecondClangs >= 10 && currentFrame >= record.LastClangSurgeIncidentFrame + 600)
             {
+                record.LastClangSurgeIncidentFrame = currentFrame;
                 string loc = GetUniversalLocation(record.LastPosition);
-                RecordIncident("🚨", $"Clang surge on '{record.DisplayName}' (10/s at {loc}).");
+                RecordIncident("🚨", $"Clang surge on '{record.DisplayName}' ({record.CurrentSecondClangs}/s at {loc}).", $"clang:{constructId}");
             }
         }
 
@@ -624,6 +756,19 @@ namespace PhysicsOptimizer.Modules
                 if (rec == null || rec.TotalClangs <= 0) continue;
 
                 int currentRate = GetConstructClangRate(kvp.Key, currentFrame);
+                bool isAnchored = false;
+                bool isDepowered = false;
+                if (MyEntities.TryGetEntityById(rec.ConstructId, out MyEntity ent) && ent is MyCubeGrid grid && !grid.MarkedForClose && !grid.Closed)
+                {
+                    MyCubeGrid topGrid = GridUtils.GetMainDynamicGrid(grid) ?? grid;
+                    isAnchored = topGrid.IsStatic;
+                    var dist = topGrid.GridSystems?.ResourceDistributor;
+                    if (dist != null)
+                    {
+                        isDepowered = dist.ResourceStateByType(Sandbox.Game.EntityComponents.MyResourceDistributorComponent.ElectricityId, withRecompute: false) == VRage.MyResourceStateEnum.NoPower;
+                    }
+                }
+
                 list.Add(new ClangOffender
                 {
                     ConstructId = rec.ConstructId,
@@ -633,15 +778,19 @@ namespace PhysicsOptimizer.Modules
                     CurrentRate = currentRate,
                     LastClangUtc = rec.LastClangUtc,
                     LastPosition = rec.LastPosition,
-                    LocationDisplay = GetUniversalLocation(rec.LastPosition)
+                    LocationDisplay = GetUniversalLocation(rec.LastPosition),
+                    IsAnchored = isAnchored,
+                    IsDepowered = isDepowered
                 });
             }
 
             list.Sort((a, b) =>
             {
                 if (a.IsActive != b.IsActive) return a.IsActive ? -1 : 1;
-                if (a.IsActive) return b.CurrentRate.CompareTo(a.CurrentRate);
-                return b.TotalClangs.CompareTo(a.TotalClangs);
+                if (a.IsActive && a.CurrentRate != b.CurrentRate) return b.CurrentRate.CompareTo(a.CurrentRate);
+                if (a.PeakRate != b.PeakRate) return b.PeakRate.CompareTo(a.PeakRate);
+                if (a.TotalClangs != b.TotalClangs) return b.TotalClangs.CompareTo(a.TotalClangs);
+                return b.LastClangUtc.CompareTo(a.LastClangUtc);
             });
 
             if (list.Count > maxResults)
@@ -692,7 +841,7 @@ namespace PhysicsOptimizer.Modules
         /// Dampens all active clangers currently detected by the defense engine.
         /// Must be invoked on the game simulation thread.
         /// </summary>
-        public static bool NudgeConstruct(long constructId, float distanceMeters = 1.0f)
+        public static bool NudgeConstruct(long constructId, float distanceMeters = 0f)
         {
             if (!MyEntities.TryGetEntityById(constructId, out MyEntity ent) || ent is not MyCubeGrid grid)
             {
@@ -704,6 +853,7 @@ namespace PhysicsOptimizer.Modules
 
             Vector3D upDir = Vector3D.Up;
             var planet = MyGamePruningStructure.GetClosestPlanet(pos);
+            double altDiff = 0.0;
             if (planet != null)
             {
                 Vector3D grav = planet.Components?.Get<MyGravityProviderComponent>()?.GetWorldGravity(pos) ?? Vector3D.Zero;
@@ -711,9 +861,22 @@ namespace PhysicsOptimizer.Modules
                 {
                     upDir = -Vector3D.Normalize(grav);
                 }
+
+                Vector3D closestVoxel = planet.GetClosestSurfacePointGlobal(ref pos);
+                altDiff = (pos - planet.PositionComp.GetPosition()).Length() - (closestVoxel - planet.PositionComp.GetPosition()).Length();
             }
 
-            Vector3D offset = upDir * distanceMeters;
+            // Adaptive distance: if distanceMeters <= 0, use at least one full block thickness
+            // Large grid: 2.5m, Small grid: 0.5m (minimum 1.0m).
+            // If subterranean (altDiff < 0), add penetration depth to escape the surface.
+            float actualDistance = distanceMeters > 0f ? distanceMeters : Math.Max(topGrid.GridSize, 1.0f);
+            if (distanceMeters <= 0f && altDiff < 0.0)
+            {
+                float surfaceEscape = (float)(-altDiff + topGrid.GridSize);
+                actualDistance = Math.Max(actualDistance, surfaceEscape);
+            }
+
+            Vector3D offset = upDir * actualDistance;
             var group = new List<MyCubeGrid>();
             GridUtils.GetMechanicalGroupMembers(topGrid, group);
 
@@ -734,7 +897,7 @@ namespace PhysicsOptimizer.Modules
                 }
             }
 
-            RecordIncident("🚀", $"Nudged '{topGrid.DisplayName}' +{distanceMeters:F1}m along gravity up-vector.");
+            RecordIncident("🚀", $"Nudged '{topGrid.DisplayName}' +{actualDistance:F1}m along gravity up-vector.");
             return true;
         }
 
@@ -745,18 +908,71 @@ namespace PhysicsOptimizer.Modules
                 return false;
             }
 
-            MyCubeGrid topGrid = GridUtils.GetMainGrid(grid) ?? grid;
+            MyCubeGrid topGrid = GridUtils.GetMainDynamicGrid(grid) ?? grid;
             if (topGrid.IsStatic) return false;
 
-            topGrid.OnConvertedToStationRequest();
-            if (topGrid.Physics != null)
+            var group = new List<MyCubeGrid>();
+            GridUtils.GetMechanicalGroupMembers(topGrid, group);
+            if (group.Count == 0) group.Add(topGrid);
+
+            // Arrest physics across the entire mechanical group to prevent violent recoil
+            foreach (var member in group)
             {
-                topGrid.Physics.LinearVelocity = Vector3.Zero;
-                topGrid.Physics.AngularVelocity = Vector3.Zero;
+                if (member == null || member.MarkedForClose || member.Closed) continue;
+                if (member.Physics != null)
+                {
+                    member.Physics.LinearVelocity = Vector3.Zero;
+                    member.Physics.AngularVelocity = Vector3.Zero;
+                    if (member.Physics.RigidBody != null)
+                    {
+                        member.Physics.RigidBody.LinearVelocity = Vector3.Zero;
+                        member.Physics.RigidBody.AngularVelocity = Vector3.Zero;
+                        member.Physics.RigidBody.Deactivate();
+                    }
+                }
+
+                // Force transform update so replication layer marks physics/transform dirty for clients
+                var wm = member.WorldMatrix;
+                member.PositionComp?.SetWorldMatrix(ref wm, null, forceUpdate: true);
             }
 
-            RecordIncident("⚓", $"Converted base grid '{topGrid.DisplayName}' to Static Station.");
-            return true;
+            string targetName = topGrid.DisplayName;
+
+            // 1. Unconditionally execute ConvertToStatic directly on the server
+            try
+            {
+                topGrid.ConvertToStatic();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(LogSource, $"ConvertToStatic local call failed on '{targetName}': {ex.Message}");
+            }
+
+            if (!topGrid.IsStatic)
+            {
+                topGrid.Physics?.ConvertToStatic();
+            }
+
+            // 2. Broadcast ConvertToStatic to all connected clients
+            if (MyMultiplayer.Static != null)
+            {
+                try
+                {
+                    MyMultiplayer.RaiseEvent(topGrid, (MyCubeGrid x) => x.ConvertToStatic);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(LogSource, $"ConvertToStatic RPC broadcast failed on '{targetName}': {ex.Message}");
+                }
+            }
+
+            if (topGrid.IsStatic)
+            {
+                RecordIncident("⚓", $"Converted base grid of '{targetName}' to Static Station.");
+                return true;
+            }
+
+            return false;
         }
 
         public static bool DepowerConstruct(long constructId)
@@ -952,6 +1168,8 @@ namespace PhysicsOptimizer.Modules
                     if (Interlocked.Increment(ref engagement.ImpactCount) == 1 && !engagement.NotificationSent)
                     {
                         engagement.NotificationSent = true;
+                        stats?.IncrementMissileHits();
+                        RecordIncident("🎯", $"PMW torpedo '{engagement.MissileName}' struck '{engagement.TargetName}' ({engagement.InitialSpeed:F1} m/s).");
                         ChatNotificationService.SendPmwStrikeNotification(missileObj, targetObj, engagement.InitialSpeed, config);
                     }
 
@@ -968,14 +1186,18 @@ namespace PhysicsOptimizer.Modules
                 if (config.EnableDebugLogging && impactSpeed >= 1.5f && ShouldLog(_lastRammingLogFrames, grid.EntityId, currentFrame, 120))
                 {
                     if (otherEntity is MyVoxelBase)
-                        Log.Info(LogSource, $"[DRIVING] Low-speed voxel contact on '{grid.DisplayName}' - normal driving, suppression harmless.");
+                    {
+                        Log.Info(LogSource, $"[VOXEL] Safe Ground Impact: '{grid.DisplayName}' grounded against terrain at {impactSpeed:F1} m/s (damage suppressed).");
+                    }
                     else
-                        Log.Info(LogSource, $"[DOCKING] Safe Docking: Suppressed low-speed bump on '{grid.DisplayName}'.");
+                    {
+                        Log.Info(LogSource, $"[PARKING] Safe Touch: '{grid.DisplayName}' bumped '{otherEntity.DisplayName}' at {impactSpeed:F1} m/s (damage suppressed).");
+                    }
                 }
                 return BlockDeformation(grid, currentFrame, stats, isLowSpeed: true);
             }
 
-            // 6. Extreme Velocity Anti-Freeze Limit (Non-missiles only)
+            // 6. Max Deformation Velocity Cap (Supersonic collision protection)
             if (config.MaxDeformationVelocity > 0 && impactSpeed > config.MaxDeformationVelocity)
             {
                 if (config.EnableDebugLogging && ShouldLog(_lastExtremeSpeedLogFrames, grid.EntityId, currentFrame, 60))
@@ -996,7 +1218,8 @@ namespace PhysicsOptimizer.Modules
                     string strikingName = grid.IsStatic ? otherEntity.DisplayName : grid.DisplayName;
                     Log.Info(LogSource, $"[STATION] Protected: '{strikingName}' struck static station '{stationName}' at {impactSpeed:F1} m/s (damage suppressed).");
                 }
-                return BlockDeformation(grid, currentFrame, stats, isStation: true);
+                MyCubeGrid dynamicGrid = !grid.IsStatic ? grid : (otherEntity as MyCubeGrid);
+                return BlockDeformation(dynamicGrid ?? grid, currentFrame, stats, isStation: true);
             }
 
             // B. Ship vs Voxel Protection (Asteroids, terrain, and off-target missiles hitting dirt)
@@ -2124,6 +2347,7 @@ namespace PhysicsOptimizer.Modules
             {
                 RecordIncident("🎯", $"PMW torpedo impact confirmed on '{grid.DisplayName}'.");
             }
+            stats?.IncrementAllowed(isMissile: false);
             return true;
         }
 
@@ -2243,20 +2467,26 @@ namespace PhysicsOptimizer.Modules
                                     }
                                 }
 
+                                var wm = member.WorldMatrix;
+                                member.PositionComp?.SetWorldMatrix(ref wm, null, forceUpdate: true);
+
                                 try
                                 {
-                                    if (MyMultiplayer.Static != null)
-                                    {
-                                        MyMultiplayer.RaiseEvent(member, (MyCubeGrid x) => x.ConvertToStatic);
-                                    }
-                                    else
-                                    {
-                                        member.ConvertToStatic();
-                                    }
+                                    member.ConvertToStatic();
                                 }
                                 catch
                                 {
-                                    member.ConvertToStatic();
+                                }
+
+                                if (MyMultiplayer.Static != null)
+                                {
+                                    try
+                                    {
+                                        MyMultiplayer.RaiseEvent(member, (MyCubeGrid x) => x.ConvertToStatic);
+                                    }
+                                    catch
+                                    {
+                                    }
                                 }
 
                                 if (!member.IsStatic)
@@ -2383,6 +2613,7 @@ namespace PhysicsOptimizer.Modules
                             {
                                 PhysicsOptimizerPlugin.Instance?.DefenseStats?.IncrementAdminRescues();
                                 RecordIncident("👑", $"Admin crosshairs-rescued '{grid.DisplayName}' +{action.Distance:F1}m out of voxels.");
+                                RecordIncident("🛠️", $"Admin crosshairs-rescued '{grid.DisplayName}' +{action.Distance:F1}m out of voxels.");
                             }
                             else
                             {
@@ -2577,23 +2808,21 @@ namespace PhysicsOptimizer.Modules
                 TrimDictionary(_lastExtremeSpeedLogFrames, currentFrame, 600);
                 TrimDictionary(_lastVoxelArbitratorLogFrames, currentFrame, 600);
 
-                // Decay or evict construct clang records
+                // Decay per-second clang rates, but retain offender history indefinitely until server restart
                 foreach (var kvp in _constructClangRecords)
                 {
                     ConstructClangRecord rec = kvp.Value;
                     if (rec == null) continue;
-                    if (currentFrame > 0 && rec.LastClangFrame > 0)
+                    if (currentFrame > 0 && rec.LastClangFrame > 0 && currentFrame > rec.LastClangFrame + 60)
                     {
-                        if (currentFrame > rec.LastClangFrame + 600)
-                        {
-                            _constructClangRecords.TryRemove(kvp.Key, out _);
-                        }
-                        else if (currentFrame > rec.LastClangFrame + 60)
-                        {
-                            rec.CurrentSecondClangs = 0;
-                            rec.PreviousSecondClangs = 0;
-                        }
+                        rec.CurrentSecondClangs = 0;
+                        rec.PreviousSecondClangs = 0;
                     }
+                }
+
+                while (_constructClangRecords.Count > MaxWallOfClangCapacity)
+                {
+                    PruneOldestClangRecord();
                 }
             }
             catch (Exception ex)

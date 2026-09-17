@@ -128,6 +128,34 @@ namespace PhysicsOptimizer.Utils
             return main;
         }
 
+        /// <summary>
+        /// Gets the primary dynamic grid in a mechanical group (typically the main mobile chassis).
+        /// Never returns a static station if dynamic members exist. Falls back to GetMainGrid if all are static.
+        /// </summary>
+        public static MyCubeGrid GetMainDynamicGrid(MyCubeGrid grid)
+        {
+            if (grid == null || grid.MarkedForClose || grid.Closed) return grid;
+            var group = MyCubeGridGroups.Static?.Mechanical?.GetGroup(grid);
+            if (group?.Nodes == null || group.Nodes.Count <= 1) return grid;
+
+            MyCubeGrid mainDynamic = null;
+            int maxBlocks = -1;
+            foreach (var node in group.Nodes)
+            {
+                var g = node?.NodeData;
+                if (g != null && !g.MarkedForClose && !g.Closed && !g.IsStatic)
+                {
+                    int count = g.BlocksCount;
+                    if (count > maxBlocks)
+                    {
+                        maxBlocks = count;
+                        mainDynamic = g;
+                    }
+                }
+            }
+            return mainDynamic ?? GetMainGrid(grid);
+        }
+
         [ThreadStatic]
         private static List<MyCubeGrid> _vehicleCheckBuffer;
 

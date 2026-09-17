@@ -3,11 +3,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using PhysicsOptimizer.Utils;
 
 namespace PhysicsOptimizer.Views
 {
     public partial class PhysicsOptimizerControl : UserControl
     {
+        private const string LogSource = "UI";
         private PhysicsOptimizerPlugin Plugin { get; }
         private readonly DispatcherTimer _telemetryTimer;
 
@@ -122,6 +124,35 @@ namespace PhysicsOptimizer.Views
                 var img = icon;
                 dispatcher.BeginInvoke(new Action(() =>
                     MessageBox.Show(msg, title, MessageBoxButton.OK, img)));
+            }, "PhysicsOptimizer." + title);
+        }
+
+        /// <summary>
+        /// Executes triage actions silently on the game simulation thread without blocking modal message boxes,
+        /// refreshing telemetry properties immediately upon completion.
+        /// </summary>
+        private void RunOnGameThreadSilent(string title, Action gameThreadWork)
+        {
+            if (Sandbox.MySandboxGame.Static == null) return;
+
+            var dispatcher = Dispatcher;
+            Sandbox.MySandboxGame.Static.Invoke(() =>
+            {
+                try
+                {
+                    gameThreadWork();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(LogSource, $"Failed to execute '{title}': {ex.Message}");
+                }
+                finally
+                {
+                    dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        Plugin?.DefenseStats?.NotifyAll();
+                    }));
+                }
             }, "PhysicsOptimizer." + title);
         }
 
@@ -349,7 +380,16 @@ namespace PhysicsOptimizer.Views
         {
             var top = Plugin?.DefenseStats?.TopOffender;
             if (top == null) return;
+            top.IsAnchored = true;
             AnchorOffender(top);
+        }
+
+        private void BannerDepowerTopOffender_Click(object sender, RoutedEventArgs e)
+        {
+            var top = Plugin?.DefenseStats?.TopOffender;
+            if (top == null) return;
+            top.IsDepowered = true;
+            DepowerOffender(top);
         }
 
         private void BannerCopyGpsTopOffender_Click(object sender, RoutedEventArgs e)
@@ -361,7 +401,7 @@ namespace PhysicsOptimizer.Views
 
         #endregion
 
-        #region Session Wall of Shame Actions
+        #region Session Wall of Clang Actions
 
         private void OffenderGps_OnClick(object sender, RoutedEventArgs e)
         {
@@ -391,6 +431,7 @@ namespace PhysicsOptimizer.Views
         {
             if (sender is Button btn && btn.Tag is Modules.GridDefender.ClangOffender offender)
             {
+                offender.IsAnchored = true;
                 AnchorOffender(offender);
             }
         }
@@ -399,11 +440,12 @@ namespace PhysicsOptimizer.Views
         {
             if (sender is Button btn && btn.Tag is Modules.GridDefender.ClangOffender offender)
             {
+                offender.IsDepowered = true;
                 DepowerOffender(offender);
             }
         }
 
-        private void ClearWallOfShame_OnClick(object sender, RoutedEventArgs e)
+        private void ClearWallOfClang_OnClick(object sender, RoutedEventArgs e)
         {
             Modules.GridDefender.ClearClangRecords();
             Plugin?.DefenseStats?.NotifyAll();
@@ -432,53 +474,33 @@ namespace PhysicsOptimizer.Views
 
         private void FreezeOffender(Modules.GridDefender.ClangOffender offender)
         {
-            RunOnGameThread("Freeze Construct", () =>
+            RunOnGameThreadSilent("Freeze Construct", () =>
             {
-                bool success = Modules.GridDefender.DampenConstruct(offender.ConstructId);
-                return success
-                    ? $"Successfully arrested physics and dampened velocities on '{offender.DisplayName}'."
-                    : $"Could not find active construct '{offender.DisplayName}' (ID: {offender.ConstructId}). It may have been closed or despawned.";
+                Modules.GridDefender.DampenConstruct(offender.ConstructId);
             });
         }
 
         private void NudgeOffender(Modules.GridDefender.ClangOffender offender)
         {
-            RunOnGameThread("Nudge Construct", () =>
+            RunOnGameThreadSilent("Nudge Construct", () =>
             {
-                bool success = Modules.GridDefender.NudgeConstruct(offender.ConstructId, 1.0f);
-                return success
-                    ? $"Successfully nudged '{offender.DisplayName}' +1.0m upward along local gravity."
-                    : $"Could not nudge '{offender.DisplayName}' (ID: {offender.ConstructId}). It may not be trapped or is no longer in world.";
+                Modules.GridDefender.NudgeConstruct(offender.ConstructId, 0f);
             });
         }
 
         private void AnchorOffender(Modules.GridDefender.ClangOffender offender)
         {
-            var result = MessageBox.Show(
-                $"Are you sure you want to convert '{offender.DisplayName}' to a STATIC STATION?\n\nThis will permanently freeze the construct in place.",
-                "Confirm Anchor",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-
-            if (result != MessageBoxResult.Yes) return;
-
-            RunOnGameThread("Anchor Construct", () =>
+            RunOnGameThreadSilent("Anchor Construct", () =>
             {
-                bool success = Modules.GridDefender.AnchorConstruct(offender.ConstructId);
-                return success
-                    ? $"Successfully converted base grid of '{offender.DisplayName}' to a Static Station."
-                    : $"Could not convert '{offender.DisplayName}' (ID: {offender.ConstructId}) to station.";
+                Modules.GridDefender.AnchorConstruct(offender.ConstructId);
             });
         }
 
         private void DepowerOffender(Modules.GridDefender.ClangOffender offender)
         {
-            RunOnGameThread("Depower Construct", () =>
+            RunOnGameThreadSilent("Depower Construct", () =>
             {
-                bool success = Modules.GridDefender.DepowerConstruct(offender.ConstructId);
-                return success
-                    ? $"Successfully shut down all power producers across '{offender.DisplayName}'."
-                    : $"Could not find active power systems on '{offender.DisplayName}' (ID: {offender.ConstructId}).";
+                Modules.GridDefender.DepowerConstruct(offender.ConstructId);
             });
         }
 

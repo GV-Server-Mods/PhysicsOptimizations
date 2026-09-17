@@ -84,6 +84,7 @@ namespace PhysicsOptimizer.Modules
 
                 int activeBodies = 0;
                 int sleepingBodies = 0;
+                int staticGrids = 0;
 
                 _cleanupBuffer.Clear();
 
@@ -94,6 +95,18 @@ namespace PhysicsOptimizer.Modules
                     if (entity is MyCubeGrid grid)
                     {
                         if (grid.MarkedForClose || grid.IsStatic || grid.Physics?.RigidBody == null)
+                            if (grid.MarkedForClose || grid.Closed)
+                            {
+                                continue;
+                            }
+
+                        if (grid.IsStatic)
+                        {
+                            staticGrids++;
+                            continue;
+                        }
+
+                        if (grid.Physics?.RigidBody == null)
                         {
                             continue;
                         }
@@ -138,6 +151,7 @@ namespace PhysicsOptimizer.Modules
                                 rb.Deactivate();
                                 tracker.IsForcedSleep = true;
                                 _plugin.Telemetry?.IncrementForcedSleepEvents();
+                                GridDefender.RecordIncident("💤", $"Grid '{grid.DisplayName}' put to Havok sleep (idle {requiredSeconds}s).");
 
                                 if (config.EnableDebugLogging)
                                 {
@@ -152,6 +166,7 @@ namespace PhysicsOptimizer.Modules
                             if (tracker.IsForcedSleep)
                             {
                                 rb.Activate();
+                                GridDefender.RecordIncident("⚡", $"Grid '{grid.DisplayName}' awakened (pilot/movement).");
                             }
                             tracker.IdleSeconds = 0;
                             tracker.IsForcedSleep = false;
@@ -187,6 +202,7 @@ namespace PhysicsOptimizer.Modules
                 }
 
                 _plugin?.Telemetry?.UpdateActiveAndSleepingRigidBodies(activeBodies, sleepingBodies);
+                _plugin?.Telemetry?.UpdateActiveAndSleepingRigidBodies(activeBodies, sleepingBodies, staticGrids);
                 _plugin?.Telemetry?.UpdateGridSleepTelemetry(_trackers.Count, currentlyForcedSleep);
             }
             catch (Exception ex)
@@ -313,6 +329,8 @@ namespace PhysicsOptimizer.Modules
             if (!IsEnabled) return;
             if (grid?.Physics?.RigidBody == null || grid.MarkedForClose || grid.Closed) return;
 
+            bool wasForcedSleep = _trackers.TryGetValue(grid.EntityId, out var tracker) && tracker.IsForcedSleep;
+
             if (!grid.Physics.RigidBody.IsActive)
             {
                 grid.Physics.RigidBody.Activate();
@@ -322,7 +340,12 @@ namespace PhysicsOptimizer.Modules
                 }
             }
 
-            if (_trackers.TryGetValue(grid.EntityId, out var tracker))
+            if (wasForcedSleep)
+            {
+                GridDefender.RecordIncident("⚡", $"Grid '{grid.DisplayName}' awakened ({reason}).");
+            }
+
+            if (tracker != null)
             {
                 tracker.IdleSeconds = 0;
                 tracker.IsForcedSleep = false;

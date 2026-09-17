@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
 using Sandbox;
@@ -25,6 +26,29 @@ namespace PhysicsOptimizer.Modules
     public static class ThrusterClearance
     {
         private const string LogSource = "ThrusterClearance";
+
+        private static readonly ConcurrentDictionary<long, ulong> _activeThrusterIds = new();
+        private static ulong _lastPruneFrame;
+
+        public static int ActiveThrustersCount
+        {
+            get
+            {
+                ulong currentFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+                if (currentFrame > _lastPruneFrame + 60)
+                {
+                    _lastPruneFrame = currentFrame;
+                    foreach (var kvp in _activeThrusterIds)
+                    {
+                        if (currentFrame > kvp.Value + 120)
+                        {
+                            _activeThrusterIds.TryRemove(kvp.Key, out _);
+                        }
+                    }
+                }
+                return _activeThrusterIds.Count;
+            }
+        }
 
         [ThreadStatic]
         private static List<MyPhysics.HitInfo> _thrusterHitList;
@@ -70,6 +94,8 @@ namespace PhysicsOptimizer.Modules
 
             // Inactive thrusters deal no damage
             if (__instance.CurrentStrength <= 0f && !MyFakes.INACTIVE_THRUSTER_DMG) return false;
+
+            _activeThrusterIds[__instance.EntityId] = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
 
             try
             {

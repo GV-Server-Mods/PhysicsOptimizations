@@ -173,6 +173,7 @@ namespace PhysicsOptimizer.Modules
                                 state.IsSuspensionAsleep = true;
                                 _sleepingGridIds[grid.EntityId] = 1;
                                 HasAnySleepingRovers = true;
+                                GridDefender.RecordIncident("💤", $"Rover '{grid.DisplayName}' parked: {wheelSystem.WheelCount} suspensions put to sleep.");
 
                                 if (_plugin.Config.EnableDebugLogging)
                                 {
@@ -255,6 +256,7 @@ namespace PhysicsOptimizer.Modules
                 state.StationaryTicks = 0;
                 _sleepingGridIds.TryRemove(grid.EntityId, out _);
                 HasAnySleepingRovers = !_sleepingGridIds.IsEmpty;
+                GridDefender.RecordIncident("🛞", $"Rover '{grid.DisplayName}' suspension awakened ({reason}).");
 
                 if (_plugin?.Config != null && _plugin.Config.EnableDebugLogging)
                 {

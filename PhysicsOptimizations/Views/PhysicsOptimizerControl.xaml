@@ -90,6 +90,28 @@
                                 </Setter.Value>
                         </Setter>
                 </Style>
+                <Style x:Key="DualColorProgressBarStyle"
+                       TargetType="ProgressBar">
+                        <Setter Property="Height"
+                                Value="6"/>
+                        <Setter Property="BorderThickness"
+                                Value="0"/>
+                        <Setter Property="Template">
+                                <Setter.Value>
+                                        <ControlTemplate TargetType="ProgressBar">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        CornerRadius="2"
+                                                        ClipToBounds="True">
+                                                        <Grid Name="PART_Track">
+                                                                <Border Name="PART_Indicator"
+                                                                        Background="{TemplateBinding Foreground}"
+                                                                        HorizontalAlignment="Left"/>
+                                                        </Grid>
+                                                </Border>
+                                        </ControlTemplate>
+                                </Setter.Value>
+                        </Setter>
+                </Style>
         </UserControl.Resources>
 
         <Grid Margin="15">
@@ -622,7 +644,7 @@
                                                                            FontWeight="Bold"
                                                                            Foreground="#60A5FA"
                                                                            Margin="0,0,0,4"/>
-                                                                <TextBlock Text="Zero-cost collision defense and kinetic damage interception system. Intercepts Keen's deformation solver to suppress accidental terrain crashes, grief ramming, and subgrid Clang while preserving authentic Havok momentum. Valid player-made missiles (PMWs) deal full kinetic deformation damage, external armor layers occlude interior blocks, kinetic dampening stops rotational death spins, stuck overlapping grids are gently separated, and thruster damage checks use optimized multi-nozzle raycasts."
+                                                                <TextBlock Text="Zero-cost collision defense and kinetic damage interception system. Intercepts Keen's deformation solver to suppress accidental terrain clangs, grief ramming, and subgrid Clang while preserving authentic Havok momentum. Valid player-made missiles (PMWs) deal full kinetic deformation damage, external armor layers occlude interior blocks, kinetic dampening stops rotational death spins, stuck overlapping grids are gently separated, and thruster damage checks use optimized multi-nozzle raycasts."
                                                                            Foreground="#D1D5DB"
                                                                            TextWrapping="Wrap"/>
                                                         </StackPanel>
@@ -638,7 +660,7 @@
                                                                           ToolTip="Master switch for Grid Defender collision protection, anti-clang damping, and grid separation."/>
 
                                                                 <StackPanel IsEnabled="{Binding Config.EnableGridDefender}">
-                                                                        <TextBlock Text="Master switch for collision defense and kinetic damage interception. Intercepts Keen's deformation solver to suppress crash damage, scale impact multipliers, and separate grids."
+                                                                        <TextBlock Text="Master switch for collision defense and kinetic damage interception. Intercepts Keen's deformation solver to suppress clang damage, scale impact multipliers, and separate grids."
                                                                                    Foreground="#9CA3AF"
                                                                                    FontSize="11"
                                                                                    Margin="16,0,0,8"
@@ -684,7 +706,7 @@
                                                         <!-- Ship, Rover & Station Protection -->
                                                         <GroupBox Header="🚀 Ship, Rover &amp; Station Protection">
                                                                 <StackPanel>
-                                                                        <TextBlock Text="Protects non-missile ships, rovers, stations, and subgrids against collision deformation from ramming, terrain crashes, Clang, and debris."
+                                                                        <TextBlock Text="Protects non-missile ships, rovers, stations, and subgrids against collision deformation from ramming, terrain clangs, subgrid Clang, and debris."
                                                                                    Foreground="#9CA3AF"
                                                                                    FontSize="11"
                                                                                    Margin="16,0,0,8"
@@ -693,7 +715,7 @@
                                                                                   IsChecked="{Binding Config.ProtectShipsAgainstRamming}"
                                                                                   Margin="16,2,0,2"
                                                                                   ToolTip="Blocks impact damage when full-sized ships or rovers collide with each other, preventing grief ramming and accidental dock collisions."/>
-                                                                        <CheckBox Content="Protect Ships &amp; Rovers From Voxel (Planet/Asteroid) Crashes"
+                                                                        <CheckBox Content="Protect Ships &amp; Rovers From Voxel (Planet/Asteroid) Clangs"
                                                                                   IsChecked="{Binding Config.ProtectShipsAgainstVoxels}"
                                                                                   Margin="16,2,0,2"
                                                                                   ToolTip="Blocks impact damage when rovers or ships hit terrain, dunes, or asteroids. Keeps rovers driving smoothly without deformation lag."/>
@@ -747,7 +769,7 @@
                                                                         <WrapPanel Margin="16,2,0,2"
                                                                                    VerticalAlignment="Center"
                                                                                    IsEnabled="{Binding Config.IsSpeedGatesApplicable}">
-                                                                                <TextBlock Text="Anti-crash: Skip deformation processing above"
+                                                                                <TextBlock Text="Anti-clang: Skip deformation processing above"
                                                                                            Foreground="#CCCCCC"
                                                                                            VerticalAlignment="Center"
                                                                                            Margin="0,0,5,0"/>
@@ -1216,13 +1238,13 @@
                                                         <!-- Voxel & Terrain Protection -->
                                                         <GroupBox Header="🌍 Voxel &amp; Terrain Protection">
                                                                 <StackPanel>
-                                                                        <CheckBox Content="Suppress Explosion &amp; Crash Voxel Cutouts"
+                                                                        <CheckBox Content="Suppress Explosion &amp; Clang Voxel Cutouts"
                                                                                   IsChecked="{Binding Config.SuppressAllVoxelExplosionDamage}"
                                                                                   FontWeight="SemiBold"
                                                                                   Margin="0,0,0,6"
-                                                                                  ToolTip="Disables voxel crater cutouts from explosions, warheads, weapons, and crashes. Drill mining (hand &amp; ship drills) remains 100% operational!"/>
+                                                                                  ToolTip="Disables voxel crater cutouts from explosions, warheads, weapons, and clangs. Drill mining (hand &amp; ship drills) remains 100% operational!"/>
                                                                         <StackPanel IsEnabled="{Binding Config.SuppressAllVoxelExplosionDamage}">
-                                                                                <TextBlock Text="Disables voxel crater cutouts from crashes, warheads, and weapons to preserve roads and terrain while leaving drill mining operational."
+                                                                                <TextBlock Text="Disables voxel crater cutouts from clangs, warheads, and weapons to preserve roads and terrain while leaving drill mining operational."
                                                                                            Foreground="#9CA3AF"
                                                                                            FontSize="11"
                                                                                            Margin="16,0,0,8"
@@ -1316,7 +1338,7 @@
                                                                                         Margin="2,0"
                                                                                         FontSize="11"
                                                                                         ToolTip="Instantly dampens velocities and forces rigid bodies to sleep on the primary clanger."/>
-                                                                                <Button Content="🚀 NUDGE +1m"
+                                                                                <Button Content="🚀 NUDGE"
                                                                                         Click="BannerNudgeTopOffender_Click"
                                                                                         Background="#D97706"
                                                                                         Foreground="White"
@@ -1325,8 +1347,9 @@
                                                                                         Padding="8,3"
                                                                                         Margin="2,0"
                                                                                         FontSize="11"
-                                                                                        ToolTip="Nudges the trapped grid 1.0 meter along the local planetary gravity up-vector."/>
-                                                                                <Button Content="⚓ ANCHOR"
+                                                                                        ToolTip="Nudges the trapped grid along the local planetary gravity up-vector to clear terrain or obstructions."/>
+                                                                                <Button Content="{Binding DefenseStats.TopOffender.BannerAnchorButtonText, FallbackValue='⚓ ANCHOR'}"
+                                                                                        IsEnabled="{Binding DefenseStats.TopOffender.CanAnchor, FallbackValue=False}"
                                                                                         Click="BannerAnchorTopOffender_Click"
                                                                                         Background="#4B5563"
                                                                                         Foreground="White"
@@ -1336,6 +1359,17 @@
                                                                                         Margin="2,0"
                                                                                         FontSize="11"
                                                                                         ToolTip="Converts the construct's base grid into a static station and zeroes velocity."/>
+                                                                                <Button Content="{Binding DefenseStats.TopOffender.BannerDepowerButtonText, FallbackValue='🔌 DEPOWER'}"
+                                                                                        IsEnabled="{Binding DefenseStats.TopOffender.CanDepower, FallbackValue=False}"
+                                                                                        Click="BannerDepowerTopOffender_Click"
+                                                                                        Background="#4B5563"
+                                                                                        Foreground="White"
+                                                                                        FontWeight="Bold"
+                                                                                        BorderThickness="0"
+                                                                                        Padding="8,3"
+                                                                                        Margin="2,0"
+                                                                                        FontSize="11"
+                                                                                        ToolTip="Powers off all reactors, batteries, and hydrogen engines across the construct."/>
                                                                                 <Button Content="📍 GPS"
                                                                                         Click="BannerCopyGpsTopOffender_Click"
                                                                                         Background="#1F2937"
@@ -1499,29 +1533,34 @@
                                                                                                    DockPanel.Dock="Right"/>
                                                                                 </DockPanel>
 
-                                                                                <TextBlock Margin="0,2,0,2">
-                                                                                        <Run Text="- Forced Grid Sleep: "
+                                                                                <TextBlock Margin="0,2,0,2"
+                                                                                           ToolTip="Total dynamic vs static grids across the server physics world. Dynamic grids have simulated Havok rigid bodies; static stations are fixed collision geometry.">
+                                                                                        <Run Text="- Server Grids: "
+                                                                                             Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.ServerGridsDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.ServerGridsColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+
+                                                                                <TextBlock Margin="0,2,0,2"
+                                                                                           ToolTip="Dynamic grids currently sleeping in Havok (0 CPU) vs total dynamic grids, including grids put to sleep by this plugin.">
+                                                                                        <Run Text="- Dynamic Sleep: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.DynamicGridsSleepDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.DynamicGridsSleepColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <ProgressBar Value="{Binding Telemetry.DynamicSleepRatioPercent, Mode=OneWay}"
+                                                                                <ProgressBar Style="{StaticResource DualColorProgressBarStyle}"
+                                                                                             Value="{Binding Telemetry.DynamicSleepRatioPercent, Mode=OneWay}"
                                                                                              Maximum="100"
                                                                                              Height="6"
                                                                                              Margin="0,0,0,4"
-                                                                                             Foreground="#4CAF50"
-                                                                                             Background="#26262B"
-                                                                                             BorderThickness="0"/>
+                                                                                             Foreground="#10B981"
+                                                                                             Background="#B45309"
+                                                                                             ToolTip="Emerald: Dynamic Grids Sleeping (0 CPU) | Amber: Dynamic Grids Active (Solver Calculating)"/>
 
-                                                                                <TextBlock Margin="0,2,0,0">
-                                                                                        <Run Text="- Rigid Bodies: "
-                                                                                             Foreground="#9CA3AF"/>
-                                                                                        <Run Text="{Binding Telemetry.RigidBodiesDisplay, Mode=OneWay}"
-                                                                                             FontWeight="SemiBold"
-                                                                                             Foreground="{Binding Telemetry.RigidBodiesColor, Mode=OneWay}"/>
-                                                                                </TextBlock>
-                                                                                <TextBlock Margin="0,2,0,0">
+                                                                                <TextBlock Margin="0,2,0,0"
+                                                                                           ToolTip="Floating ore items merged into single physics entities to eliminate Havok clutter.">
                                                                                         <Run Text="- Merged Ore: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.MergedOreDisplay, Mode=OneWay}"
@@ -1555,10 +1594,10 @@
 
                                                                 <!-- CARD 2: ROVER & SUBGRID STATUS -->
                                                                 <GroupBox Grid.Column="1"
-                                                                          Header="🚜 Rover &amp; Subgrids"
+                                                                          Header="🚜 Mobility &amp; Subgrids"
                                                                           Margin="4,0,4,0">
                                                                         <StackPanel>
-                                                                                <TextBlock>
+                                                                                <TextBlock ToolTip="Active tracked rovers and how many parked rovers currently have suspensions frozen.">
                                                                                         <Run Text="- Tracked Rovers: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.RoversDisplay, Mode=OneWay}"
@@ -1566,42 +1605,64 @@
                                                                                              Foreground="{Binding Telemetry.RoversColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
 
-                                                                                <TextBlock Margin="0,4,0,2">
-                                                                                        <Run Text="- Sleeping Wheels: "
+                                                                                <TextBlock Margin="0,4,0,2"
+                                                                                           ToolTip="Individual wheel suspensions across all tracked rovers (Sleeping / Total Tracked).">
+                                                                                        <Run Text="- Tracked Wheels: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.SleepingWheelsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.SleepingWheelsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <ProgressBar Value="{Binding Telemetry.SleepingWheelsRatioPercent, Mode=OneWay}"
+                                                                                <ProgressBar Style="{StaticResource DualColorProgressBarStyle}"
+                                                                                             Value="{Binding Telemetry.SleepingWheelsRatioPercent, Mode=OneWay}"
                                                                                              Maximum="100"
                                                                                              Height="6"
                                                                                              Margin="0,0,0,4"
-                                                                                             Foreground="#00E676"
-                                                                                             Background="#26262B"
-                                                                                             BorderThickness="0"/>
+                                                                                             Foreground="#10B981"
+                                                                                             Background="#B45309"
+                                                                                             ToolTip="Emerald: Wheels Sleeping | Amber: Wheels Active"/>
 
-                                                                                <TextBlock Margin="0,2,0,2">
+                                                                                <TextBlock Margin="0,2,0,2"
+                                                                                           ToolTip="Pistons, rotors, and hinges with angular velocity dampening applied to eliminate subgrid physics jitter.">
                                                                                         <Run Text="- Subgrid Joints: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.SubgridJointsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.SubgridJointsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <ProgressBar Value="{Binding Telemetry.StabilizedJointsRatioPercent, Mode=OneWay}"
+                                                                                <ProgressBar Style="{StaticResource DualColorProgressBarStyle}"
+                                                                                             Value="{Binding Telemetry.StabilizedJointsRatioPercent, Mode=OneWay}"
                                                                                              Maximum="100"
                                                                                              Height="6"
                                                                                              Margin="0,0,0,4"
-                                                                                             Foreground="#BA68C8"
-                                                                                             Background="#26262B"
-                                                                                             BorderThickness="0"/>
+                                                                                             Foreground="#38BDF8"
+                                                                                             Background="#374151"
+                                                                                             ToolTip="Sky Blue: Joints Dampened | Slate: Joints Undampened"/>
 
-                                                                                <TextBlock Margin="0,2,0,0">
+                                                                                <TextBlock Margin="0,2,0,2"
+                                                                                           ToolTip="Adaptive Time-Of-Impact: Discrete TOI (low CPU overhead) vs Continuous TOI (high-speed penetration protection).">
                                                                                         <Run Text="- Adaptive TOI: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding Telemetry.AdaptiveTOIDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding Telemetry.AdaptiveTOIColor, Mode=OneWay}"/>
+                                                                                </TextBlock>
+                                                                                <ProgressBar Style="{StaticResource DualColorProgressBarStyle}"
+                                                                                             Value="{Binding Telemetry.DiscreteTOIRatioPercent, Mode=OneWay}"
+                                                                                             Maximum="100"
+                                                                                             Height="6"
+                                                                                             Margin="0,0,0,4"
+                                                                                             Foreground="#38BDF8"
+                                                                                             Background="#EA580C"
+                                                                                             ToolTip="Sky Blue: Discrete TOI (Fast) | Orange: Continuous TOI (Critical)"/>
+
+                                                                                <TextBlock Margin="0,2,0,0"
+                                                                                           ToolTip="Active thrusters evaluated with performant nozzle raycasts instead of expensive volumetric shape-casts.">
+                                                                                        <Run Text="- Thruster Clearance: "
+                                                                                             Foreground="#9CA3AF"/>
+                                                                                        <Run Text="{Binding Telemetry.ThrustersDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding Telemetry.ThrustersColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
                                                                         </StackPanel>
                                                                 </GroupBox>
@@ -1611,87 +1672,83 @@
                                                                           Header="🛡️ Collision &amp; Armor Defense"
                                                                           Margin="4,0,0,0">
                                                                         <StackPanel>
-                                                                                <TextBlock>
+                                                                                <TextBlock ToolTip="Total deformation collision pairs evaluated by GridDefender.">
                                                                                         <Run Text="- Evaluated Collisions: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.EvaluatedCollisionsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.EvaluatedCollisionsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
-                                                                                        <Run Text="- Crashes Blocked: "
+                                                                                <TextBlock ToolTip="Total collisions blocked from deforming blocks (with blocked ratio).">
+                                                                                        <Run Text="- Clangs Blocked: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.TotalBlockedDisplay, Mode=OneWay}"
                                                                                              FontWeight="Bold"
-                                                                                             Foreground="#4CAF50"/>
-                                                                                        <Run Text=" ("/>
+                                                                                             Foreground="#10B981"/>
+                                                                                        <Run Text=" "/>
                                                                                         <Run Text="{Binding DefenseStats.TotalBlockedRatioDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.TotalBlockedColor, Mode=OneWay}"/>
-                                                                                        <Run Text=")"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
+                                                                                <TextBlock ToolTip="Legitimate high-speed PMW kinetic and explosive torpedo impacts allowed through defense.">
                                                                                         <Run Text="- PMW Torpedo Impacts: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.MissileHitsAllowedDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.MissileHitsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
+                                                                                <TextBlock ToolTip="Internal functional blocks saved from deformation by outer armor layer occlusion.">
                                                                                         <Run Text="- Internal Blocks Saved: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.ArmorHitsOccludedDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.ArmorHitsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
+                                                                                <TextBlock ToolTip="Overlapping or penetrating grids gently nudged apart to prevent Clang explosions.">
                                                                                         <Run Text="- Grids Nudged Apart: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.GridsSeparatedDisplay, Mode=OneWay}"
                                                                                              FontWeight="Bold"
-                                                                                             Foreground="#00E676"/>
-                                                                                        <Run Text=" ("/>
+                                                                                             Foreground="#10B981"/>
+                                                                                        <Run Text=" "/>
                                                                                         <Run Text="{Binding DefenseStats.GridsSeparatedPushesDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.GridsSeparatedColor, Mode=OneWay}"/>
-                                                                                        <Run Text=")"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
+                                                                                <TextBlock ToolTip="Vehicles automatically rescued from voxel trapping on dynamic conversion or admin command.">
                                                                                         <Run Text="- Vehicle Rescues: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.PlayerRescuesDisplay, Mode=OneWay}"
                                                                                              FontWeight="Bold"
                                                                                              Foreground="#38BDF8"/>
-                                                                                        <Run Text=" (👑 "/>
+                                                                                        <Run Text=" ("/>
                                                                                         <Run Text="{Binding DefenseStats.AdminRescuesDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
-                                                                                             Foreground="#FBBF24"/>
+                                                                                             Foreground="{Binding DefenseStats.AdminRescuesColor, Mode=OneWay}"/>
                                                                                         <Run Text=" admin)"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
-                                                                                        <Run Text="- Dual Clamps Inverted: "
+                                                                                <TextBlock ToolTip="Voxel Arbitrator interventions: inverted surface normals clamped and voxel cutout holes prevented.">
+                                                                                        <Run Text="- Voxel Arbitrations: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.VoxelNormalsInvertedDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.VoxelNormalsColor, Mode=OneWay}"/>
+                                                                                        <Run Text=" norm / "/>
+                                                                                        <Run Text="{Binding DefenseStats.VoxelCutoutsPreventedDisplay, Mode=OneWay}"
+                                                                                             FontWeight="SemiBold"
+                                                                                             Foreground="{Binding DefenseStats.VoxelCutoutsColor, Mode=OneWay}"/>
+                                                                                        <Run Text=" hole"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
+                                                                                <TextBlock ToolTip="Obstructions inside own thruster nozzles vaporized before damaging parent ship.">
                                                                                         <Run Text="- Thruster Blocks Burned: "
                                                                                              Foreground="#9CA3AF"/>
                                                                                         <Run Text="{Binding DefenseStats.ThrusterObstructionsDisplay, Mode=OneWay}"
                                                                                              FontWeight="SemiBold"
                                                                                              Foreground="{Binding DefenseStats.ThrusterObstructionsColor, Mode=OneWay}"/>
                                                                                 </TextBlock>
-                                                                                <TextBlock>
-                                                                                        <Run Text="- Voxel Cutouts Prevented: "
-                                                                                             Foreground="#9CA3AF"/>
-                                                                                        <Run Text="{Binding DefenseStats.VoxelCutoutsPreventedDisplay, Mode=OneWay}"
-                                                                                             FontWeight="SemiBold"
-                                                                                             Foreground="{Binding DefenseStats.VoxelCutoutsColor, Mode=OneWay}"/>
-                                                                                </TextBlock>
                                                                                 <TextBlock Foreground="#9CA3AF"
                                                                                            FontSize="10"
-                                                                                           Margin="0,3,0,0">
+                                                                                           Margin="0,2,0,0">
                                                                                         <Run Text="Caches: "/>
                                                                                         <Run Text="{Binding DefenseStats.CachesDisplay, Mode=OneWay}"
                                                                                              Foreground="{Binding DefenseStats.CachesColor, Mode=OneWay}"/>
@@ -1709,50 +1766,54 @@
                                                                                    FontStyle="Italic"
                                                                                    Margin="4,2"
                                                                                    Visibility="{Binding DefenseStats.RecentIncidents, Converter={StaticResource EmptyColToVis}}"/>
-                                                                        <ItemsControl ItemsSource="{Binding DefenseStats.RecentIncidents}">
-                                                                                <ItemsControl.ItemTemplate>
-                                                                                        <DataTemplate>
-                                                                                                <Border Background="#1A1A1E"
-                                                                                                        BorderBrush="#2D2D35"
-                                                                                                        BorderThickness="1"
-                                                                                                        CornerRadius="3"
-                                                                                                        Padding="8,4"
-                                                                                                        Margin="0,2">
-                                                                                                        <DockPanel LastChildFill="True">
-                                                                                                                <TextBlock Text="{Binding FormattedTime}"
-                                                                                                                           FontWeight="SemiBold"
-                                                                                                                           Foreground="#60A5FA"
-                                                                                                                           Margin="0,0,8,0"
-                                                                                                                           VerticalAlignment="Center"
-                                                                                                                           DockPanel.Dock="Left"/>
-                                                                                                                <TextBlock Text="{Binding Icon}"
-                                                                                                                           FontSize="13"
-                                                                                                                           Margin="0,0,6,0"
-                                                                                                                           VerticalAlignment="Center"
-                                                                                                                           DockPanel.Dock="Left"/>
-                                                                                                                <TextBlock Text="{Binding Message}"
-                                                                                                                           Foreground="#E5E7EB"
-                                                                                                                           VerticalAlignment="Center"
-                                                                                                                           TextWrapping="Wrap"/>
-                                                                                                        </DockPanel>
-                                                                                                </Border>
-                                                                                        </DataTemplate>
-                                                                                </ItemsControl.ItemTemplate>
-                                                                        </ItemsControl>
+                                                                        <ScrollViewer MaxHeight="220"
+                                                                                      VerticalScrollBarVisibility="Auto"
+                                                                                      HorizontalScrollBarVisibility="Disabled">
+                                                                                <ItemsControl ItemsSource="{Binding DefenseStats.RecentIncidents}">
+                                                                                        <ItemsControl.ItemTemplate>
+                                                                                                <DataTemplate>
+                                                                                                        <Border Background="#1A1A1E"
+                                                                                                                BorderBrush="#2D2D35"
+                                                                                                                BorderThickness="1"
+                                                                                                                CornerRadius="3"
+                                                                                                                Padding="6,3"
+                                                                                                                Margin="0,1">
+                                                                                                                <DockPanel LastChildFill="True">
+                                                                                                                        <TextBlock Text="{Binding FormattedTime}"
+                                                                                                                                   FontWeight="SemiBold"
+                                                                                                                                   Foreground="#60A5FA"
+                                                                                                                                   Margin="0,0,8,0"
+                                                                                                                                   VerticalAlignment="Center"
+                                                                                                                                   DockPanel.Dock="Left"/>
+                                                                                                                        <TextBlock Text="{Binding Icon}"
+                                                                                                                                   FontSize="12"
+                                                                                                                                   Margin="0,0,6,0"
+                                                                                                                                   VerticalAlignment="Center"
+                                                                                                                                   DockPanel.Dock="Left"/>
+                                                                                                                        <TextBlock Text="{Binding DisplayMessage}"
+                                                                                                                                   Foreground="#E5E7EB"
+                                                                                                                                   VerticalAlignment="Center"
+                                                                                                                                   TextWrapping="Wrap"/>
+                                                                                                                </DockPanel>
+                                                                                                        </Border>
+                                                                                                </DataTemplate>
+                                                                                        </ItemsControl.ItemTemplate>
+                                                                                </ItemsControl>
+                                                                        </ScrollViewer>
                                                                 </StackPanel>
                                                         </GroupBox>
 
-                                                        <!-- LAYER 5: FULL-WIDTH SESSION WALL OF SHAME -->
+                                                        <!-- LAYER 5: FULL-WIDTH SESSION WALL OF CLANG -->
                                                         <GroupBox Margin="0,0,0,12">
                                                                 <GroupBox.Header>
                                                                         <DockPanel LastChildFill="False">
-                                                                                <TextBlock Text="🏆 Session Wall of Shame — Top Clang Culprits (Last 20 Logged)"
+                                                                                <TextBlock Text="🏆 Session Wall of Clang — Top Clang Culprits (Last 20 Logged)"
                                                                                            FontWeight="Bold"
                                                                                            Foreground="#F87171"
                                                                                            VerticalAlignment="Center"
                                                                                            DockPanel.Dock="Left"/>
                                                                                 <Button Content="🔄 Clear History"
-                                                                                        Click="ClearWallOfShame_OnClick"
+                                                                                        Click="ClearWallOfClang_OnClick"
                                                                                         Padding="6,2"
                                                                                         Margin="0"
                                                                                         Background="#374151"
@@ -1840,7 +1901,7 @@
                                                                                                                                 Margin="2,0"
                                                                                                                                 FontSize="11"
                                                                                                                                 ToolTip="Instantly dampens velocities and puts construct rigid bodies to sleep."/>
-                                                                                                                        <Button Content="🚀 Nudge +1m"
+                                                                                                                        <Button Content="🚀 Nudge"
                                                                                                                                 Tag="{Binding}"
                                                                                                                                 Click="OffenderNudge_OnClick"
                                                                                                                                 Background="#B45309"
@@ -1849,8 +1910,9 @@
                                                                                                                                 Padding="6,3"
                                                                                                                                 Margin="2,0"
                                                                                                                                 FontSize="11"
-                                                                                                                                ToolTip="Nudges this construct 1.0 meter along the local planetary gravity up-vector."/>
-                                                                                                                        <Button Content="⚓ Anchor"
+                                                                                                                                ToolTip="Nudges this construct along the local planetary gravity up-vector to clear terrain or obstructions."/>
+                                                                                                                        <Button Content="{Binding AnchorButtonText, FallbackValue='⚓ Anchor'}"
+                                                                                                                                IsEnabled="{Binding CanAnchor, FallbackValue=False}"
                                                                                                                                 Tag="{Binding}"
                                                                                                                                 Click="OffenderAnchor_OnClick"
                                                                                                                                 Background="#374151"
@@ -1860,7 +1922,8 @@
                                                                                                                                 Margin="2,0"
                                                                                                                                 FontSize="11"
                                                                                                                                 ToolTip="Converts construct base grid to a Static Station and freezes physics."/>
-                                                                                                                        <Button Content="🔌 Depower"
+                                                                                                                        <Button Content="{Binding DepowerButtonText, FallbackValue='🔌 Depower'}"
+                                                                                                                                IsEnabled="{Binding CanDepower, FallbackValue=False}"
                                                                                                                                 Tag="{Binding}"
                                                                                                                                 Click="OffenderDepower_OnClick"
                                                                                                                                 Background="#4B5563"

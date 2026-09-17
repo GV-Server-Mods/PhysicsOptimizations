@@ -24,53 +24,75 @@ namespace PhysicsOptimizer.Services
         public bool IsOreMergeEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableOreMerge;
         public bool IsSubgridStabilizerEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableSubgridStabilizer;
         public bool IsAdaptiveCollisionEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableAdaptiveCollision;
+        public bool IsThrusterClearanceEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableThrusterClearance;
+
+        public int ActiveThrustersCount => Modules.ThrusterClearance.ActiveThrustersCount;
 
         // Progress bar percentages (0 to 100)
-        public double DynamicSleepRatioPercent => (IsRigidBodySleepEnabled && TrackedGridsCount > 0) ? (double)GridsCurrentlyForcedSleep / TrackedGridsCount * 100.0 : 0.0;
-        public double SleepingWheelsRatioPercent => (IsWheelOptimizerEnabled && TotalRoverWheelsCount > 0) ? (double)SleepingWheelsCount / TotalRoverWheelsCount * 100.0 : 0.0;
-        public double StabilizedJointsRatioPercent => (IsSubgridStabilizerEnabled && TrackedSubgridConstraints > 0) ? (double)StabilizedSubgridConstraints / TrackedSubgridConstraints * 100.0 : 0.0;
+        public double DynamicSleepRatioPercent => (IsRigidBodySleepEnabled && DynamicGridsCount > 0)
+            ? (double)SleepingRigidBodies / DynamicGridsCount * 100.0
+            : 0.0;
+        public double SleepingWheelsRatioPercent => (IsWheelOptimizerEnabled && TotalRoverWheelsCount > 0)
+            ? (double)SleepingWheelsCount / TotalRoverWheelsCount * 100.0
+            : 0.0;
+        public double StabilizedJointsRatioPercent => (IsSubgridStabilizerEnabled && TrackedSubgridConstraints > 0)
+            ? (double)StabilizedSubgridConstraints / TrackedSubgridConstraints * 100.0
+            : 0.0;
+        public double DiscreteTOIRatioPercent => (IsAdaptiveCollisionEnabled && TrackedTOIGridsCount > 0)
+            ? (double)DiscreteTOIGridsCount / TrackedTOIGridsCount * 100.0
+            : 0.0;
 
-        // Formatted display strings for UI
         // Formatted display strings and colors for UI
-        public string RigidBodiesDisplay => IsRigidBodySleepEnabled
-            ? $"{ActiveRigidBodies:N0} Act / {SleepingRigidBodies:N0} Slp"
+        public string ServerGridsDisplay => IsRigidBodySleepEnabled
+            ? $"{DynamicGridsCount:N0} dynamic / {StaticGridsCount:N0} static"
             : "[Disabled]";
-        public string RigidBodiesColor => IsRigidBodySleepEnabled ? "#E0E0E0" : "#6B7280";
+        public string ServerGridsColor => IsRigidBodySleepEnabled ? "#E0E0E0" : "#6B7280";
 
         public string DynamicGridsSleepDisplay => IsRigidBodySleepEnabled
-            ? $"{GridsCurrentlyForcedSleep:N0} / {TrackedGridsCount:N0} ({ForcedSleepEventsTotal:N0} events)"
+            ? $"{SleepingRigidBodies:N0} / {DynamicGridsCount:N0} ({GridsCurrentlyForcedSleep:N0} forced)"
             : "[Disabled]";
-        public string DynamicGridsSleepColor => IsRigidBodySleepEnabled ? "#4CAF50" : "#6B7280";
+        public string DynamicGridsSleepColor => IsRigidBodySleepEnabled ? "#10B981" : "#6B7280";
 
         public string MergedOreDisplay => IsOreMergeEnabled
             ? $"{OreStacksMergedTotal:N0} ({OreEntitiesEliminatedTotal:N0} eliminated)"
             : "[Disabled]";
         public string MergedOreColor => IsOreMergeEnabled ? "#E0E0E0" : "#6B7280";
 
+        public string ThrustersDisplay => IsThrusterClearanceEnabled
+            ? $"{ActiveThrustersCount:N0} active"
+            : "[Disabled]";
+        public string ThrustersColor => IsThrusterClearanceEnabled ? "#E0E0E0" : "#6B7280";
+
         public string RoversDisplay => IsWheelOptimizerEnabled
             ? $"{TrackedRoversCount:N0} (Parked: {ParkedRoversAsleep:N0} asleep)"
             : "[Disabled]";
         public string RoversColor => IsWheelOptimizerEnabled ? "#E0E0E0" : "#6B7280";
 
+        public string WheelsDisplay => IsWheelOptimizerEnabled
+            ? $"{TotalRoverWheelsCount:N0} tracked ({SleepingWheelsCount:N0} sleeping)"
+            : "[Disabled]";
+        public string WheelsColor => IsWheelOptimizerEnabled ? "#10B981" : "#6B7280";
+
         public string SleepingWheelsDisplay => IsWheelOptimizerEnabled
             ? $"{SleepingWheelsCount:N0} / {TotalRoverWheelsCount:N0} sleeping"
             : "[Disabled]";
-        public string SleepingWheelsColor => IsWheelOptimizerEnabled ? "#00E676" : "#6B7280";
+        public string SleepingWheelsColor => IsWheelOptimizerEnabled ? "#10B981" : "#6B7280";
 
         public string SubgridJointsDisplay => IsSubgridStabilizerEnabled
             ? $"{StabilizedSubgridConstraints:N0} / {TrackedSubgridConstraints:N0} dampened"
             : "[Disabled]";
-        public string SubgridJointsColor => IsSubgridStabilizerEnabled ? "#BA68C8" : "#6B7280";
+        public string SubgridJointsColor => IsSubgridStabilizerEnabled ? "#38BDF8" : "#6B7280";
 
         public string AdaptiveTOIDisplay => IsAdaptiveCollisionEnabled
             ? $"{DiscreteTOIGridsCount:N0} Disc / {ContinuousTOIGridsCount:N0} Cont"
             : "[Disabled]";
-        public string AdaptiveTOIColor => IsAdaptiveCollisionEnabled ? "#60A5FA" : "#6B7280";
+        public string AdaptiveTOIColor => IsAdaptiveCollisionEnabled ? "#38BDF8" : "#6B7280";
 
         // Live gauges
         private float _serverSimulationSpeed = 1.0f;
         private int _activeRigidBodies;
         private int _sleepingRigidBodies;
+        private int _staticGridsCount;
 
         private int _trackedRoversCount;
         private int _parkedRoversAsleep;
@@ -143,10 +165,19 @@ namespace PhysicsOptimizer.Services
             set => _sleepingRigidBodies = value;
         }
 
-        public void UpdateActiveAndSleepingRigidBodies(int active, int sleeping)
+        public int StaticGridsCount
+        {
+            get => _staticGridsCount;
+            set => _staticGridsCount = value;
+        }
+
+        public int DynamicGridsCount => _activeRigidBodies + _sleepingRigidBodies;
+
+        public void UpdateActiveAndSleepingRigidBodies(int active, int sleeping, int staticGrids = 0)
         {
             _activeRigidBodies = active;
             _sleepingRigidBodies = sleeping;
+            _staticGridsCount = staticGrids;
         }
 
         public int TrackedRoversCount
