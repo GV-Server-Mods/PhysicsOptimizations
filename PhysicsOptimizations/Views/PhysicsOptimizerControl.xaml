@@ -181,6 +181,7 @@
                                                                            Foreground="#60A5FA"
                                                                            Margin="0,0,0,4"/>
                                                                 <TextBlock Text="Six cooperative Havok load reducers, each with its own master toggle below: Wheel Optimizer parks suspension raycasts on idle rovers, Rigid Body Sleep puts motionless grids into Havok sleep, Ore Merge consolidates floating ore stacks, Subgrid Stabilizer dampens resting mechanical joints, Adaptive Collision demotes cruising grids to Discrete collision, and Thruster Clearance replaces flame shape-casts with multi-nozzle raycasts. Disabling the suite master switch pauses all six while leaving Grid Defender fully active."
+                                                                <TextBlock Text="Seven cooperative Havok load reducers, each with its own master toggle below: Wheel Optimizer parks suspension raycasts on idle rovers, Rigid Body Sleep puts motionless grids into Havok sleep, Ore Merge consolidates floating ore stacks, Subgrid Stabilizer dampens resting mechanical joints, Adaptive Collision demotes cruising grids to Discrete collision, Thruster Clearance replaces flame shape-casts with multi-nozzle raycasts, and Tree Physics Optimizer disables server-side flora collision meshes. Disabling the suite master switch pauses all seven while leaving Grid Defender fully active."
                                                                            Foreground="#D1D5DB"
                                                                            FontSize="11"
                                                                            TextWrapping="Wrap"/>
@@ -621,6 +622,22 @@
                                                                                    Margin="0,4,0,2"
                                                                                    TextWrapping="Wrap"/>
                                                                 </StackPanel>
+                                                        </StackPanel>
+                                                </GroupBox>
+
+                                                <!-- Tree & Flora Physics Optimizer -->
+                                                <GroupBox Header="🌲 Tree &amp; Flora Physics Optimizer">
+                                                        <StackPanel>
+                                                                <CheckBox Content="Disable Tree &amp; Flora Collision Physics"
+                                                                          IsChecked="{Binding Config.DisableTreePhysics}"
+                                                                          FontWeight="SemiBold"
+                                                                          Margin="0,0,0,6"
+                                                                          ToolTip="Suppresses server-side Havok static compound shape baking and rigid body creation for planet trees and flora. Requires the companion GVK_TreeNoPhysics mod on clients to prevent client desync."/>
+                                                                <TextBlock Text="Completely eliminates server-side Havok tree shape baking, broadphase collision queries, and breakable debris math on dedicated servers. When paired with the companion GVK_TreeNoPhysics mod on clients, rovers and ships phase smoothly through trees with zero client desync."
+                                                                           Foreground="#9CA3AF"
+                                                                           FontSize="11"
+                                                                           Margin="16,0,0,4"
+                                                                           TextWrapping="Wrap"/>
                                                         </StackPanel>
                                                 </GroupBox>
                                         </StackPanel>

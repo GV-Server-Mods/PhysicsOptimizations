@@ -57,6 +57,7 @@ namespace PhysicsOptimizer
         public SubgridStabilizer SubgridStabilizer { get; private set; }
         public AdaptiveCollision AdaptiveCollision { get; private set; }
         public GridDefender GridDefender { get; private set; }
+        public TreePhysicsOptimizer TreePhysicsOptimizer { get; private set; }
 
         private readonly List<IPhysicsOptimizer> _optimizers = [];
 
@@ -136,6 +137,7 @@ namespace PhysicsOptimizer
             SubgridStabilizer = new SubgridStabilizer();
             AdaptiveCollision = new AdaptiveCollision();
             GridDefender = new GridDefender();
+            TreePhysicsOptimizer = new TreePhysicsOptimizer();
 
             _optimizers.Add(WheelOptimizer);
             _optimizers.Add(RigidBodySleep);
@@ -143,6 +145,7 @@ namespace PhysicsOptimizer
             _optimizers.Add(SubgridStabilizer);
             _optimizers.Add(AdaptiveCollision);
             _optimizers.Add(GridDefender);
+            _optimizers.Add(TreePhysicsOptimizer);
 
             foreach (var optimizer in _optimizers)
             {
@@ -164,6 +167,7 @@ namespace PhysicsOptimizer
                     SubgridStabilizer.RegisterPatches(ctx);
                     GridDefender.RegisterPatches(ctx);
                     ThrusterClearance.RegisterPatches(ctx);
+                    TreePhysicsOptimizer.RegisterPatches(ctx);
                     PhysicsOptimizerPatches.RegisterPatches(ctx);
 
                     patchManager.Commit();

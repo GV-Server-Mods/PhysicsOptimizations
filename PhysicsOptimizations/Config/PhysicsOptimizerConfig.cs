@@ -73,6 +73,9 @@ namespace PhysicsOptimizer.Config
         private bool _enforceDiscreteSmallGrids = false;
         private int _discreteSmallGridMinBlocks = 40;
 
+        // --- Tree & Flora Physics Optimizer ---
+        private bool _disableTreePhysics = true;
+
         // --- Thruster Clearance Optimizer ---
         private bool _enableThrusterClearance = true;
         private ThrusterDamageMode _thrusterDamageMode = ThrusterDamageMode.Optimized;
@@ -201,6 +204,7 @@ namespace PhysicsOptimizer.Config
         public bool EnforceDiscreteSmallGrids { get => _enforceDiscreteSmallGrids; set => SetValue(ref _enforceDiscreteSmallGrids, value); }
         public int DiscreteSmallGridMinBlocks { get => _discreteSmallGridMinBlocks; set => SetValue(ref _discreteSmallGridMinBlocks, Math.Max(0, value)); }
 
+        public bool DisableTreePhysics { get => _disableTreePhysics; set => SetValue(ref _disableTreePhysics, value); }
         public bool EnableThrusterClearance { get => _enableThrusterClearance; set => SetValue(ref _enableThrusterClearance, value); }
 
         public ThrusterDamageMode ThrusterDamageMode
