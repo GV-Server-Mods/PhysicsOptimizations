@@ -90,7 +90,7 @@ All modules are driven off the plugin's shared frame counter, run server-authori
 
 ---
 
-## 4. The 13 Torch PatchManager Patch Targets
+## 4. The 16 Torch PatchManager Patch Targets
 
 Every game method this plugin patches, in registration order. All targets are registered into `PatchConflictAudit` at registration time.
 
@@ -109,8 +109,11 @@ Every game method this plugin patches, in registration order. All targets are re
 | 11 | `MyThrust.ThrustDamageAsync` (fallback `DamageGrid`) | Prefix | `ThrusterClearance.cs` | System 11 (Thruster Clearance) |
 | 12 | `MyMechanicalConnectionBlockBase.Detach(MyCubeGrid, bool)` | Suffix | `SubgridStabilizer.cs` | System 5 (Detach Broadphase Reset) |
 | 13 | `MyCubeGrid.CreateSplit` (static) | Suffix | `SubgridStabilizer.cs` | System 5 (Grid Split Broadphase Reset) |
+| 14 | `MyEnvironmentSector.EnablePhysics(bool)` | Prefix | `TreePhysicsOptimizer.cs` | Tree & Flora Physics Optimizer |
+| 15 | `MySession.TryRegisterSessionComponent` (private) | Prefix | `VanillaTrim.cs` | System 14 (Session Component Trim) |
+| 16 | `MyProceduralWorldGenerator.TrackEntity(MyEntity)` | Prefix | `VanillaTrim.cs` | System 14 (Procedural Tracking Trim) |
 
-**Hard rules**: never add a 14th target without running the compatibility audit (see Design Notes); never patch `MyEntityComponentUpdater.*` / the per-entity update dispatch family (Concealment's home turf); never strip `GC.Collect` call sites transpiled by `se-performance-improvements`.
+**Hard rules**: never add another target without running the compatibility audit (see Design Notes); never patch `MyEntityComponentUpdater.*` / the per-entity update dispatch family (Concealment's home turf); never strip `GC.Collect` call sites transpiled by `se-performance-improvements`.
 
 ---
 
@@ -260,6 +263,14 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 * **Prefixes on `MyExplosion.ApplyExplosionOnVoxel` and `MyExplosion.CutOutVoxelMap`**: When `SuppressAllVoxelExplosionDamage` is enabled, both methods are skipped entirely - warhead and missile detonations deal their normal block damage but carve **zero** craters into terrain meshes, saving the massive CPU cost of voxel deformation while keeping mining drills (which don't route through explosions) fully functional. Each suppressed cutout increments `VoxelCutoutsPrevented`.
 * **Global Flag Sync**: The defense engine additionally holds `MyFakes.DEFORMATION_EXPLOSIONS = false` for the lifetime of the config, disabling Keen's deformation-explosion carve path at the source, and restores the vanilla flag on plugin dispose.
 
+### ✂️ System 14: Vanilla Trim
+*File: `Modules/VanillaTrim.cs`*
+
+* **Prefix on `MySession.TryRegisterSessionComponent`**: Skips vanilla (non-mod) session components that can never act on GVK before they are constructed, so their `LoadData`, event hooks and ticks never run. Decided at world load; restart to apply changes. Nothing is written to the save's `SessionComponentDisabled`, so removing the plugin restores vanilla.
+* **Allowlist only** (audited against the decompiled server: not `IsRequiredByGame`, no un-null-checked references in game code or installed mods): `MyPlanetaryEncountersGenerator` (hooks every grid add/remove/static change even with planetary encounters off), `MySessionComponentItemTriggeredContracts` and `MySessionComponentGridTriggeredContracts` (react only to Keen-spawner grids with `EnableEconomy` on), `MyContractRiskSessionComponent` (ambush drones for Keen economy Deliver/Grid Hauling contracts only).
+* **Never trim**: `MySessionComponentEconomy` (every store block's buy/sell/offer path and faction reputation math) and `MySessionComponentContractSystem` (MES missions use `MyAPIGateway.ContractSystem`).
+* **Prefix on `MyProceduralWorldGenerator.TrackEntity`**: With `EnableEconomy` off and `ProceduralDensity`/`EncounterDensity` both 0, no generator module can produce anything, so newly added characters and grids are not tracked. The generator stays loaded because respawn, jump drives and planet init query it. Any of those settings on restores vanilla tracking.
+
 ---
 
 ## 6. In-Game & Console Admin Commands (`!phys`)
@@ -276,6 +287,7 @@ All commands require `Admin` permission level (`MyPromoteLevel.Admin`) and work 
 | `!phys toggle <feature>` | Toggles a single feature (see token list below). Saves config automatically. |
 | `!phys reload` | Reloads configuration from `PhysicsOptimizer.cfg` on disk. |
 | `!phys resetstats` | Resets all live telemetry gauges and defense counters to zero. |
+| `!phys trim` | Shows Vanilla Trim settings, the components skipped at the last world load, and entities not tracked by the procedural generator. |
 
 **`!phys toggle` feature tokens** (aliases in parentheses):
 
@@ -418,11 +430,21 @@ Configuration persists to `Instance\PhysicsOptimizer.cfg` under the Torch server
 | `EnableThrusterClearance` | `bool` | `true` | Replaces volumetric Havok shape casts with tiered 1/5/9-ray nozzle raycasts. |
 | `ThrusterDamageMode` | `enum` | `Optimized` | `Optimized` (anti-exploit: own-construct instant vaporization, landing pads immune) or `VanillaLike` (gradual thermal damage on own construct and external grids). |
 
+### Vanilla Trim
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableVanillaTrim` | `bool` | `true` | Master toggle for all trims below. |
+| `TrimPlanetaryEncounters` | `bool` | `true` | Skip loading `MyPlanetaryEncountersGenerator` (restart required). |
+| `TrimItemTriggeredContracts` | `bool` | `true` | Skip loading `MySessionComponentItemTriggeredContracts` (restart required). |
+| `TrimGridTriggeredContracts` | `bool` | `true` | Skip loading `MySessionComponentGridTriggeredContracts` (restart required). |
+| `TrimContractRisk` | `bool` | `true` | Skip loading `MyContractRiskSessionComponent` (restart required). |
+| `TrimProceduralTracking` | `bool` | `true` | Stop procedural generator entity tracking while economy is off and asteroid/encounter density are 0. |
+
 ---
 
-## 8. Torch WPF Server Interface (3-Tab Dashboard)
+## 8. Torch WPF Server Interface (4-Tab Dashboard)
 
-The Torch server window hosts the plugin's management UI across 3 tabs:
+The Torch server window hosts the plugin's management UI across 4 tabs:
 
 ### Tab 1: Physics Optimizations
 Every optimizer module shares this consolidated tab: Wheel Optimizer (symmetrical wheel well collision filtering, parked rover suspension sleeping), Rigid Body Sleep (linear/angular velocity thresholds, idle countdown), Ore Merge (proximity radius, interval tick rate, floating object density), Subgrid Stabilizer (joint angular velocity threshold, motionless frame window, small utility subgrid collision masking), Adaptive Collision (discrete demotion / continuous promotion speed thresholds, grid-size overrides, terrain altitude floor, dynamic grid proximity bubbles), and Thruster Clearance.
@@ -430,7 +452,10 @@ Every optimizer module shares this consolidated tab: Wheel Optimizer (symmetrica
 ### Tab 2: Grid Defender
 Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), voxel normal force arbitrator, PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, and voxel cutout suppression.
 
-### Tab 3: Live Telemetry
+### Tab 3: Vanilla Trim
+Master toggle, a live status line (components skipped at the last world load, entities not tracked), per-component session trims, and the procedural tracking trim.
+
+### Tab 4: Live Telemetry
 A diagnostics strip (debug logging, console telemetry heartbeat, push-apart diagnostics, push-apart/voxel-arbitrator debug GPS markers, and player chat alert toggles) sits above real-time gauges updating at a configurable UI rate (default 500ms) across 4 operational cards:
 - **Card A (Havok Simulation Health)**: Sim speed, active/sleeping bodies, sleeping dynamic grids, ore merge stats, and real-time hot-path rates (Havok contacts/s, arbitrator raycasts/s, push actions/s, GC delta counts & heap memory).
 - **Card B (Rover & Subgrid Status)**: Tracked rovers, parked rovers asleep, sleeping wheels, stabilized subgrid joints, and Discrete/Continuous TOI distribution.
@@ -495,6 +520,7 @@ Audited against the plugin's full patch surface (all 13 targets, Section 4). Ver
 * Their wheel patch is a client-side `MyWheel.CheckTrail` fix; our suspension patches (`CreateConstraint`, `CubeGrid_OnPhysicsChanged`, `Update`) do not collide.
 * Their grid patches hit `MyCubeGrid.MergeGridInternal` / `PasteBlocksServer`; we patch `CreateSplit`. Different methods.
 * Their voxel patch is `IMyStorageExtensions.GetMaterialAt` pooling; our explosion/voxel patches hit `MyExplosion.ApplyExplosionOnVoxel` / `CutOutVoxelMap` and `MyGridPhysics` contact callbacks. No interplay.
+* Vanilla Trim targets (`MySession.TryRegisterSessionComponent`, `MyProceduralWorldGenerator.TrackEntity`) are outside their `MySession` `GC.Collect` sites (ctor/`Unload`) and outside Concealment's update-dispatch family.
 
 **Hard rule**: never patch the methods listed above. Their patches carry `EnsureCode` original-IL hash verification - if another patcher touches those methods first, their patch fails closed with a logged error at their startup. Also avoid stripping `GC.Collect` call sites they transpile (`MyPlanetTextureMapProvider.*`, `HkBaseSystem.Quit`, `MySession.Unload`/ctor, `MySimpleProfiler.LogPerformanceTestResults`).
 

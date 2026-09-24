@@ -371,6 +371,26 @@ namespace PhysicsOptimizer.Commands
             Context.Respond("[PhysicsOptimizer] Configuration reloaded from disk.");
         }
 
+        [Command("trim", "Shows Vanilla Trim settings and what was skipped at the last world load.")]
+        [Permission(MyPromoteLevel.Admin)]
+        public void Trim()
+        {
+            if (Plugin?.Config == null)
+            {
+                Context.Respond("PhysicsOptimizer is not initialized.");
+                return;
+            }
+
+            var cfg = Plugin.Config;
+            var sb = new StringBuilder();
+            sb.AppendLine("=== [Vanilla Trim] ===");
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Enabled: {0} (component changes apply on restart)", cfg.EnableVanillaTrim));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Planetary Encounters: {0} | Item Contracts: {1} | Grid Contracts: {2} | Contract Risk: {3}", cfg.TrimPlanetaryEncounters, cfg.TrimItemTriggeredContracts, cfg.TrimGridTriggeredContracts, cfg.TrimContractRisk));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Procedural Tracking Trim: {0} | Entities Not Tracked: {1}", cfg.TrimProceduralTracking, Modules.VanillaTrim.EntitiesNotTracked));
+            sb.AppendLine("Skipped at last world load: " + Modules.VanillaTrim.GetSkippedSummary());
+            Context.Respond(sb.ToString());
+        }
+
         [Command("resetstats", "Resets the live telemetry gauges and defense counters.")]
         [Permission(MyPromoteLevel.Admin)]
         public void ResetStats()

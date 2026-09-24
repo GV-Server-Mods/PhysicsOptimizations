@@ -58,6 +58,7 @@ namespace PhysicsOptimizer
         public AdaptiveCollision AdaptiveCollision { get; private set; }
         public GridDefender GridDefender { get; private set; }
         public TreePhysicsOptimizer TreePhysicsOptimizer { get; private set; }
+        public VanillaTrim VanillaTrim { get; private set; }
 
         private readonly List<IPhysicsOptimizer> _optimizers = [];
 
@@ -138,6 +139,7 @@ namespace PhysicsOptimizer
             AdaptiveCollision = new AdaptiveCollision();
             GridDefender = new GridDefender();
             TreePhysicsOptimizer = new TreePhysicsOptimizer();
+            VanillaTrim = new VanillaTrim();
 
             _optimizers.Add(WheelOptimizer);
             _optimizers.Add(RigidBodySleep);
@@ -146,6 +148,7 @@ namespace PhysicsOptimizer
             _optimizers.Add(AdaptiveCollision);
             _optimizers.Add(GridDefender);
             _optimizers.Add(TreePhysicsOptimizer);
+            _optimizers.Add(VanillaTrim);
 
             foreach (var optimizer in _optimizers)
             {
@@ -168,6 +171,7 @@ namespace PhysicsOptimizer
                     GridDefender.RegisterPatches(ctx);
                     ThrusterClearance.RegisterPatches(ctx);
                     TreePhysicsOptimizer.RegisterPatches(ctx);
+                    VanillaTrim.RegisterPatches(ctx);
                     PhysicsOptimizerPatches.RegisterPatches(ctx);
 
                     patchManager.Commit();
@@ -332,6 +336,12 @@ namespace PhysicsOptimizer
 
         private void OnSessionStateChanged(ITorchSession session, TorchSessionState newState)
         {
+            // Torch raises Loading after Keen has already registered session components, so reset on Unloaded instead.
+            if (newState == TorchSessionState.Unloaded)
+            {
+                Modules.VanillaTrim.ResetSessionStatus();
+            }
+
             if (newState != TorchSessionState.Loaded)
             {
                 Telemetry?.UpdateServerSimulationSpeed(0f);
