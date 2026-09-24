@@ -143,8 +143,8 @@ namespace PhysicsOptimizer.Config
         private bool _trimItemTriggeredContracts = true;
         private bool _trimGridTriggeredContracts = true;
         private bool _trimContractRisk = true;
-        private bool _trimProceduralTracking = true;
-        private bool _forceEncounterDensityZero = true;
+        private bool _disableProceduralEncounters = true;
+        private bool _trimWcVanillaTurretLogic = true;
 
         // --- Speed Gates & Rate Limits (Fallback) ---
         private float _minDrivingVelocity = 10.0f;
@@ -417,8 +417,8 @@ namespace PhysicsOptimizer.Config
         public bool TrimItemTriggeredContracts { get => _trimItemTriggeredContracts; set => SetValue(ref _trimItemTriggeredContracts, value); }
         public bool TrimGridTriggeredContracts { get => _trimGridTriggeredContracts; set => SetValue(ref _trimGridTriggeredContracts, value); }
         public bool TrimContractRisk { get => _trimContractRisk; set => SetValue(ref _trimContractRisk, value); }
-        public bool TrimProceduralTracking { get => _trimProceduralTracking; set => SetValue(ref _trimProceduralTracking, value); }
-        public bool ForceEncounterDensityZero { get => _forceEncounterDensityZero; set => SetValue(ref _forceEncounterDensityZero, value); }
+        public bool DisableProceduralEncounters { get => _disableProceduralEncounters; set => SetValue(ref _disableProceduralEncounters, value); }
+        public bool TrimWcVanillaTurretLogic { get => _trimWcVanillaTurretLogic; set => SetValue(ref _trimWcVanillaTurretLogic, value); }
 
         public float MinDrivingVelocity
         {

@@ -90,7 +90,7 @@ All modules are driven off the plugin's shared frame counter, run server-authori
 
 ---
 
-## 4. The 17 Torch PatchManager Patch Targets
+## 4. The 19 Torch PatchManager Patch Targets
 
 Every game method this plugin patches, in registration order. All targets are registered into `PatchConflictAudit` at registration time.
 
@@ -113,6 +113,8 @@ Every game method this plugin patches, in registration order. All targets are re
 | 15 | `MySession.TryRegisterSessionComponent` (private) | Prefix | `VanillaTrim.cs` | System 14 (Session Component Trim) |
 | 16 | `MyProceduralWorldGenerator.TrackEntity(MyEntity)` | Prefix | `VanillaTrim.cs` | System 14 (Procedural Tracking Trim) |
 | 17 | `MyProceduralWorldGenerator.LoadData` | Prefix | `VanillaTrim.cs` | System 14 (Force Encounter Density 0) |
+| 18 | `MyLargeTurretTargetingSystem.CheckAndSelectNearTargetsParallel` | Prefix | `VanillaTrimBlocks.cs` | System 14 (WC Vanilla Turret Logic Trim) |
+| 19 | `MyLargeConveyorTurretBase.UpdateBeforeSimulation100` (block override) | Prefix | `VanillaTrimBlocks.cs` | System 14 (WC Vanilla Turret Logic Trim) |
 
 **Hard rules**: never add another target without running the compatibility audit (see Design Notes); never patch `MyEntityComponentUpdater.*` / the per-entity update dispatch family (Concealment's home turf); never strip `GC.Collect` call sites transpiled by `se-performance-improvements`.
 
@@ -272,6 +274,12 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 * **Never trim**: `MySessionComponentEconomy` (every store block's buy/sell/offer path and faction reputation math) and `MySessionComponentContractSystem` (MES missions use `MyAPIGateway.ContractSystem`).
 * **Prefix on `MyProceduralWorldGenerator.TrackEntity`**: With `EnableEconomy` off and `ProceduralDensity`/`EncounterDensity` both 0, no generator module can produce anything, so newly added characters and grids are not tracked. The generator stays loaded because respawn, jump drives and planet init query it. Any of those settings on restores vanilla tracking.
 * **Prefix on `MyProceduralWorldGenerator.LoadData`**: Forces `EncounterDensity` to 0 in memory right before the generator reads it. Keen's `ShouldSerializeEncounterDensity()` only writes the value when it is above 0, while the field default is 0.35, so a configured 0 is dropped on save and reloads as 0.35. The generator is the only runtime reader of the setting.
+* **Rejected: idle seat trim.** Keen already stops per-frame updates on empty seats: `MyCockpit` only registers `EACH_FRAME` while a pilot is attached (`Init` with a saved pilot, `AttachPilot`, `OnControlAcquired`) and `OnControlReleased` clears it. Cryo chambers inherit this. The steady cockpit cost in block-type profiles comes from piloted seats and the 10/100-tick updates (oxygen, screens, AI pilot) every seat keeps.
+* **WC Vanilla Turret Logic Trim** (WeaponCore-only servers):
+  * Prefix on `MyLargeTurretTargetingSystem.CheckAndSelectNearTargetsParallel`: vanilla keeps running this server target search every 10 ticks under WeaponCore because it is gated by working/target flags/ammo, never `AiEnabled`. Skipped when the owner is a `MyLargeTurretBase`, or a `MyTurretControlBlock` with `AIEnabled == false` (WC's `ControlComponent` forces that on every controller it takes over, and vanilla only uses the result when AI is on). Searchlights share the same class and are never skipped.
+  * Prefix on `MyLargeConveyorTurretBase.UpdateBeforeSimulation100`: the only server work is the vanilla conveyor ammo pull, duplicated by WC's own inventory pulls. The prefix runs the block's 100-tick game logic itself (the rest of the base chain is client-only sound) and skips the pull.
+  * ToolCore tools are conveyor sorters fired through a piloted seat, so no block trim touches them.
+* **Rejected: slowing projector buildability re-checks.** On GVK every welding projection is run by the Multigrid Projector plugin, which prefixes `MyProjectorBase.UpdateAfterSimulation` and replaces the vanilla body (and its 2000 ms cadence) with its own. Under MGP, `MyShipWelder.FindProjectedBlocks` and M&M read MGP's cached block states, so slowing that cadence would delay combat repairs. Patching the vanilla constant would only reach projections MGP does not handle.
 
 ---
 
@@ -440,8 +448,8 @@ Configuration persists to `Instance\PhysicsOptimizer.cfg` under the Torch server
 | `TrimItemTriggeredContracts` | `bool` | `true` | Skip loading `MySessionComponentItemTriggeredContracts` (restart required). |
 | `TrimGridTriggeredContracts` | `bool` | `true` | Skip loading `MySessionComponentGridTriggeredContracts` (restart required). |
 | `TrimContractRisk` | `bool` | `true` | Skip loading `MyContractRiskSessionComponent` (restart required). |
-| `TrimProceduralTracking` | `bool` | `true` | Stop procedural generator entity tracking while economy is off and asteroid/encounter density are 0. |
-| `ForceEncounterDensityZero` | `bool` | `true` | Force `EncounterDensity` to 0 at procedural generator load, working around Keen dropping a saved 0 (restart required). |
+| `DisableProceduralEncounters` | `bool` | `true` | Force `EncounterDensity` to 0 at procedural generator load (Keen drops a saved 0 and reloads 0.35), and stop entity tracking while economy is off and asteroid density is 0 too. Restart required. |
+| `TrimWcVanillaTurretLogic` | `bool` | `true` | Skip vanilla target search and conveyor ammo pull on vanilla turret types, and target search on AI-off Custom Turret Controllers. WeaponCore-only servers. Live. |
 
 ---
 
@@ -456,7 +464,7 @@ Every optimizer module shares this consolidated tab: Wheel Optimizer (symmetrica
 Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), voxel normal force arbitrator, PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, and voxel cutout suppression.
 
 ### Tab 3: Vanilla Trim
-Master toggle, a live status line (components skipped at the last world load, entities not tracked), per-component session trims, and the procedural tracking trim.
+Master toggle, a live status line (components skipped at the last world load, encounter density forcing, entities not tracked, turret searches and ammo pulls skipped), per-component session trims, the procedural generator trims, and the live WC turret logic trim.
 
 ### Tab 4: Live Telemetry
 A diagnostics strip (debug logging, console telemetry heartbeat, push-apart diagnostics, push-apart/voxel-arbitrator debug GPS markers, and player chat alert toggles) sits above real-time gauges updating at a configurable UI rate (default 500ms) across 4 operational cards:

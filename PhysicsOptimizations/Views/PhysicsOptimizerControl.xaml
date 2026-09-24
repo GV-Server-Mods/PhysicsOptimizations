@@ -1339,18 +1339,28 @@
 
                                                 <GroupBox Header="🌐 Procedural World Generator">
                                                         <StackPanel IsEnabled="{Binding Config.EnableVanillaTrim}">
-                                                                <CheckBox Content="Stop Idle Procedural Entity Tracking"
-                                                                          IsChecked="{Binding Config.TrimProceduralTracking}"
+                                                                <CheckBox Content="Disable Procedural Encounter Generation (restart required)"
+                                                                          IsChecked="{Binding Config.DisableProceduralEncounters}"
                                                                           Margin="0,2,0,2"
-                                                                          ToolTip="Skips MyProceduralWorldGenerator.TrackEntity for newly added characters and grids. Only active while EnableEconomy is off and ProceduralDensity and EncounterDensity are both 0."/>
-                                                                <CheckBox Content="Force Encounter Density to 0 (restart required)"
-                                                                          IsChecked="{Binding Config.ForceEncounterDensityZero}"
-                                                                          Margin="0,2,0,2"
-                                                                          ToolTip="Keen only saves EncounterDensity when it is above 0 and reloads a missing value as 0.35, so a configured 0 never sticks. This sets it to 0 in memory right before the procedural generator loads. The generator is the only runtime reader of this setting."/>
-                                                                <TextBlock Text="The generator stays loaded (respawn, jump drives and planets query it); it just stops tracking every character and moving grid when none of its modules can generate anything. Tracking trim needs EncounterDensity at 0, which the force option guarantees."
+                                                                          ToolTip="Forces EncounterDensity to 0 right before the procedural generator loads (Keen only saves it when above 0 and reloads a missing value as 0.35, so a configured 0 never sticks), then stops tracking newly added characters and grids. Tracking only stops while EnableEconomy is off and ProceduralDensity is 0 as well."/>
+                                                                <TextBlock Text="The generator stays loaded (respawn, jump drives and planets query it); it just stops building space-encounter cells around every player and moving grid, and stops tracking entities once none of its modules can generate anything."
                                                                            Foreground="#9CA3AF"
                                                                            FontSize="11"
                                                                            Margin="16,0,0,4"
+                                                                           TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                </GroupBox>
+
+                                                <GroupBox Header="🔧 Blocks (live, no restart)">
+                                                        <StackPanel IsEnabled="{Binding Config.EnableVanillaTrim}">
+                                                                <CheckBox Content="Skip Vanilla Turret Logic WeaponCore Duplicates (WeaponCore-only servers)"
+                                                                          IsChecked="{Binding Config.TrimWcVanillaTurretLogic}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="Under WeaponCore, vanilla turrets still run Keen's target search every 10 ticks and a conveyor ammo pull every 100 ticks; WC does both itself. Skips them for vanilla turret types, and skips the target search for Custom Turret Controllers with AI off (WC turns AI off on every controller it takes over). Searchlights share the targeting code and are never skipped. Only enable when every turret on the server is WeaponCore-driven."/>
+                                                                <TextBlock Text="ToolCore tools are conveyor-sorter blocks, so the turret trim never touches them."
+                                                                           Foreground="#9CA3AF"
+                                                                           FontSize="10"
+                                                                           Margin="0,6,0,2"
                                                                            TextWrapping="Wrap"/>
                                                         </StackPanel>
                                                 </GroupBox>

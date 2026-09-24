@@ -17,6 +17,7 @@ namespace PhysicsOptimizer.Modules
     /// <summary>
     /// Vanilla Trim: stops vanilla session components that can never do anything on GVK from loading,
     /// and stops the procedural world generator tracking entities while it has nothing to generate.
+    /// Block-level trims (WC turret logic) live in VanillaTrimBlocks.
     /// Component skips are decided at world load (restart required); nothing is written to the save,
     /// so removing the plugin restores vanilla behavior.
     /// </summary>
@@ -48,7 +49,8 @@ namespace PhysicsOptimizer.Modules
             get
             {
                 string skipped = GetSkippedSummary();
-                return $"Skipped at last world load: {skipped}\n{GetEncounterDensitySummary()}\nEntities not tracked by the procedural generator this session: {EntitiesNotTracked}";
+                return $"Skipped at last world load: {skipped}\n{GetEncounterDensitySummary()}\nEntities not tracked by the procedural generator this session: {EntitiesNotTracked}\n" +
+                       $"Vanilla turret target searches / ammo pulls skipped this session: {VanillaTrimBlocks.TurretSearchesSkipped} / {VanillaTrimBlocks.TurretAmmoPullsSkipped}";
             }
         }
 
@@ -91,6 +93,7 @@ namespace PhysicsOptimizer.Modules
             }
             Interlocked.Exchange(ref _entitiesNotTracked, 0);
             _forcedEncounterDensityFrom = 0f;
+            VanillaTrimBlocks.ResetSessionStatus();
         }
 
         public static string GetEncounterDensitySummary()
@@ -117,23 +120,25 @@ namespace PhysicsOptimizer.Modules
             RegisterPrefix(ctx,
                 typeof(MySession).GetMethod("TryRegisterSessionComponent", BindingFlags.Instance | BindingFlags.NonPublic, null,
                     new[] { typeof(Type), typeof(bool), typeof(MyModContext) }, null),
-                nameof(Prefix_TryRegisterSessionComponent),
+                typeof(VanillaTrim), nameof(Prefix_TryRegisterSessionComponent),
                 "MySession.TryRegisterSessionComponent");
 
             RegisterPrefix(ctx,
                 typeof(MyProceduralWorldGenerator).GetMethod("TrackEntity", BindingFlags.Instance | BindingFlags.Public, null,
                     new[] { typeof(MyEntity) }, null),
-                nameof(Prefix_TrackEntity),
+                typeof(VanillaTrim), nameof(Prefix_TrackEntity),
                 "MyProceduralWorldGenerator.TrackEntity");
 
             RegisterPrefix(ctx,
                 typeof(MyProceduralWorldGenerator).GetMethod("LoadData", BindingFlags.Instance | BindingFlags.Public, null,
                     Type.EmptyTypes, null),
-                nameof(Prefix_ProceduralLoadData),
+                typeof(VanillaTrim), nameof(Prefix_ProceduralLoadData),
                 "MyProceduralWorldGenerator.LoadData");
+
+            VanillaTrimBlocks.RegisterPatches(ctx);
         }
 
-        private static void RegisterPrefix(PatchContext ctx, MethodInfo target, string prefixName, string label)
+        internal static void RegisterPrefix(PatchContext ctx, MethodInfo target, Type prefixOwner, string prefixName, string label)
         {
             try
             {
@@ -143,7 +148,7 @@ namespace PhysicsOptimizer.Modules
                     return;
                 }
 
-                var prefix = typeof(VanillaTrim).GetMethod(prefixName, BindingFlags.Static | BindingFlags.Public);
+                var prefix = prefixOwner.GetMethod(prefixName, BindingFlags.Static | BindingFlags.Public);
                 ctx.GetPattern(target).Prefixes.Add(prefix);
                 PatchConflictAudit.RegisterTarget(target);
                 Log.Info(LogSource, $"Registered {label} Prefix hook.");
@@ -197,7 +202,7 @@ namespace PhysicsOptimizer.Modules
         public static void Prefix_ProceduralLoadData()
         {
             var cfg = PhysicsOptimizerPlugin.Instance?.Config;
-            if (cfg == null || !cfg.Enabled || !cfg.EnableVanillaTrim || !cfg.ForceEncounterDensityZero) return;
+            if (cfg == null || !cfg.Enabled || !cfg.EnableVanillaTrim || !cfg.DisableProceduralEncounters) return;
 
             var settings = MySession.Static?.Settings;
             if (settings == null || settings.EncounterDensity == 0f) return;
@@ -215,7 +220,7 @@ namespace PhysicsOptimizer.Modules
         public static bool Prefix_TrackEntity()
         {
             var cfg = PhysicsOptimizerPlugin.Instance?.Config;
-            if (cfg == null || !cfg.Enabled || !cfg.EnableVanillaTrim || !cfg.TrimProceduralTracking) return true;
+            if (cfg == null || !cfg.Enabled || !cfg.EnableVanillaTrim || !cfg.DisableProceduralEncounters) return true;
 
             var settings = MySession.Static?.Settings;
             if (settings == null || settings.EnableEconomy || settings.ProceduralDensity != 0f || settings.EncounterDensity != 0f) return true;
