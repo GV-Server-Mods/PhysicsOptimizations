@@ -42,6 +42,7 @@ namespace PhysicsOptimizer.Views
                 }
                 Plugin?.Telemetry?.NotifyAllPropertiesChanged();
                 Plugin?.DefenseStats?.NotifyAll();
+                Plugin?.VanillaTrim?.RefreshStatus();
 
                 if (PhysicsOptimizerPlugin.IsServerOnline)
                 {

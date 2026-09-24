@@ -158,7 +158,7 @@
                         </WrapPanel>
                 </Border>
 
-                <!-- Main Tab Control (3 Tabs) -->
+                <!-- Main Tab Control (4 Tabs) -->
                 <TabControl Grid.Row="1"
                             Background="#252526"
                             BorderBrush="#333333">
@@ -180,7 +180,6 @@
                                                                            FontWeight="Bold"
                                                                            Foreground="#60A5FA"
                                                                            Margin="0,0,0,4"/>
-                                                                <TextBlock Text="Six cooperative Havok load reducers, each with its own master toggle below: Wheel Optimizer parks suspension raycasts on idle rovers, Rigid Body Sleep puts motionless grids into Havok sleep, Ore Merge consolidates floating ore stacks, Subgrid Stabilizer dampens resting mechanical joints, Adaptive Collision demotes cruising grids to Discrete collision, and Thruster Clearance replaces flame shape-casts with multi-nozzle raycasts. Disabling the suite master switch pauses all six while leaving Grid Defender fully active."
                                                                 <TextBlock Text="Seven cooperative Havok load reducers, each with its own master toggle below: Wheel Optimizer parks suspension raycasts on idle rovers, Rigid Body Sleep puts motionless grids into Havok sleep, Ore Merge consolidates floating ore stacks, Subgrid Stabilizer dampens resting mechanical joints, Adaptive Collision demotes cruising grids to Discrete collision, Thruster Clearance replaces flame shape-casts with multi-nozzle raycasts, and Tree Physics Optimizer disables server-side flora collision meshes. Disabling the suite master switch pauses all seven while leaving Grid Defender fully active."
                                                                            Foreground="#D1D5DB"
                                                                            FontSize="11"
@@ -1274,7 +1273,102 @@
                                 </ScrollViewer>
                         </TabItem>
 
-                        <!-- TAB 3: LIVE TELEMETRY & PANIC COCKPIT -->
+                        <!-- TAB 3: VANILLA TRIM -->
+                        <TabItem Header="Vanilla Trim">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                              Padding="10">
+                                        <StackPanel>
+                                                <Border Background="#1F2937"
+                                                        BorderBrush="#3B82F6"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Padding="10"
+                                                        Margin="0,0,0,12">
+                                                        <StackPanel>
+                                                                <TextBlock Text="✂️ Vanilla Trim Overview:"
+                                                                           FontWeight="Bold"
+                                                                           Foreground="#60A5FA"
+                                                                           Margin="0,0,0,4"/>
+                                                                <TextBlock Text="Stops Keen systems that can never do anything on GVK from loading at all, so their startup scans, event hooks and update ticks never run. Only components verified as safe to omit are offered here; nothing is written to the world save, so disabling this restores vanilla behavior. Component changes take effect on the next server restart."
+                                                                           Foreground="#D1D5DB"
+                                                                           FontSize="11"
+                                                                           TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                </Border>
+
+                                                <GroupBox Header="✂️ Master Vanilla Trim">
+                                                        <StackPanel>
+                                                                <CheckBox Content="Enable Vanilla Trim"
+                                                                          IsChecked="{Binding Config.EnableVanillaTrim}"
+                                                                          FontWeight="Bold"
+                                                                          Margin="0,0,0,6"
+                                                                          ToolTip="Master switch for every trim below. Component trims apply at the next world load."/>
+                                                                <TextBlock Text="{Binding VanillaTrim.StatusText, Mode=OneWay}"
+                                                                           Foreground="#9CA3AF"
+                                                                           FontSize="11"
+                                                                           Margin="16,0,0,4"
+                                                                           TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                </GroupBox>
+
+                                                <GroupBox Header="🧩 Session Components (restart required)">
+                                                        <StackPanel IsEnabled="{Binding Config.EnableVanillaTrim}">
+                                                                <CheckBox Content="Planetary Encounters Generator"
+                                                                          IsChecked="{Binding Config.TrimPlanetaryEncounters}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="MyPlanetaryEncountersGenerator. Even with planetary encounters off it hooks every grid add/remove/static change and indexes every static grid. MES does not use it."/>
+                                                                <CheckBox Content="Item-Triggered Contracts"
+                                                                          IsChecked="{Binding Config.TrimItemTriggeredContracts}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="MySessionComponentItemTriggeredContracts. Hooks every player inventory; only acts on Keen economy spawns with EnableEconomy on."/>
+                                                                <CheckBox Content="Grid-Triggered Contracts"
+                                                                          IsChecked="{Binding Config.TrimGridTriggeredContracts}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="MySessionComponentGridTriggeredContracts. Only reacts to grids from Keen's own spawners with EnableEconomy on; never sees MES spawns."/>
+                                                                <CheckBox Content="Contract Risk (drone ambushes)"
+                                                                          IsChecked="{Binding Config.TrimContractRisk}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="MyContractRiskSessionComponent. Only spawns ambush drones for Keen economy Deliver/Grid Hauling contracts. MES and player contracts carry no risk."/>
+                                                                <TextBlock Text="Keep off-limits: the Economy component (runs every store block and reputation math) and the Contract System (MES missions use it)."
+                                                                           Foreground="#9CA3AF"
+                                                                           FontSize="10"
+                                                                           Margin="0,6,0,2"
+                                                                           TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                </GroupBox>
+
+                                                <GroupBox Header="🌐 Procedural World Generator">
+                                                        <StackPanel IsEnabled="{Binding Config.EnableVanillaTrim}">
+                                                                <CheckBox Content="Disable Procedural Encounter Generation (restart required)"
+                                                                          IsChecked="{Binding Config.DisableProceduralEncounters}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="Forces EncounterDensity to 0 right before the procedural generator loads (Keen only saves it when above 0 and reloads a missing value as 0.35, so a configured 0 never sticks), then stops tracking newly added characters and grids. Tracking only stops while EnableEconomy is off and ProceduralDensity is 0 as well."/>
+                                                                <TextBlock Text="The generator stays loaded (respawn, jump drives and planets query it); it just stops building space-encounter cells around every player and moving grid, and stops tracking entities once none of its modules can generate anything."
+                                                                           Foreground="#9CA3AF"
+                                                                           FontSize="11"
+                                                                           Margin="16,0,0,4"
+                                                                           TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                </GroupBox>
+
+                                                <GroupBox Header="🔧 Blocks (live, no restart)">
+                                                        <StackPanel IsEnabled="{Binding Config.EnableVanillaTrim}">
+                                                                <CheckBox Content="Skip Vanilla Turret Logic WeaponCore Duplicates (WeaponCore-only servers)"
+                                                                          IsChecked="{Binding Config.TrimWcVanillaTurretLogic}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="Under WeaponCore, vanilla turrets still run Keen's target search every 10 ticks and a conveyor ammo pull every 100 ticks; WC does both itself. Skips them for vanilla turret types, and skips the target search for Custom Turret Controllers with AI off (WC turns AI off on every controller it takes over). Searchlights share the targeting code and are never skipped. Only enable when every turret on the server is WeaponCore-driven."/>
+                                                                <TextBlock Text="ToolCore tools are conveyor-sorter blocks, so the turret trim never touches them."
+                                                                           Foreground="#9CA3AF"
+                                                                           FontSize="10"
+                                                                           Margin="0,6,0,2"
+                                                                           TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                </GroupBox>
+                                        </StackPanel>
+                                </ScrollViewer>
+                        </TabItem>
+
+                        <!-- TAB 4: LIVE TELEMETRY & PANIC COCKPIT -->
                         <TabItem Header="Live Telemetry &amp; Actions">
                                 <Grid Margin="12,10,12,10">
                                         <Grid.RowDefinitions>

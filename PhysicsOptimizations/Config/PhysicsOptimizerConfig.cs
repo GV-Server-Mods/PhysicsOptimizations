@@ -137,6 +137,15 @@ namespace PhysicsOptimizer.Config
         private float _playerRescueMaxStaticObbDepthMeters = 4.0f;
         private bool _enableTerminalConvertToShipAutoRescue = true;
 
+        // --- Vanilla Trim ---
+        private bool _enableVanillaTrim = true;
+        private bool _trimPlanetaryEncounters = true;
+        private bool _trimItemTriggeredContracts = true;
+        private bool _trimGridTriggeredContracts = true;
+        private bool _trimContractRisk = true;
+        private bool _disableProceduralEncounters = true;
+        private bool _trimWcVanillaTurretLogic = true;
+
         // --- Speed Gates & Rate Limits (Fallback) ---
         private float _minDrivingVelocity = 10.0f;
         private int _deformationCooldownFrames = 30;
@@ -401,6 +410,15 @@ namespace PhysicsOptimizer.Config
             set => SetValue(ref _playerRescueMaxStaticObbDepthMeters, Math.Max(0.5f, Math.Min(20.0f, value)));
         }
         public bool EnableTerminalConvertToShipAutoRescue { get => _enableTerminalConvertToShipAutoRescue; set => SetValue(ref _enableTerminalConvertToShipAutoRescue, value); }
+
+        // --- Vanilla Trim ---
+        public bool EnableVanillaTrim { get => _enableVanillaTrim; set => SetValue(ref _enableVanillaTrim, value); }
+        public bool TrimPlanetaryEncounters { get => _trimPlanetaryEncounters; set => SetValue(ref _trimPlanetaryEncounters, value); }
+        public bool TrimItemTriggeredContracts { get => _trimItemTriggeredContracts; set => SetValue(ref _trimItemTriggeredContracts, value); }
+        public bool TrimGridTriggeredContracts { get => _trimGridTriggeredContracts; set => SetValue(ref _trimGridTriggeredContracts, value); }
+        public bool TrimContractRisk { get => _trimContractRisk; set => SetValue(ref _trimContractRisk, value); }
+        public bool DisableProceduralEncounters { get => _disableProceduralEncounters; set => SetValue(ref _disableProceduralEncounters, value); }
+        public bool TrimWcVanillaTurretLogic { get => _trimWcVanillaTurretLogic; set => SetValue(ref _trimWcVanillaTurretLogic, value); }
 
         public float MinDrivingVelocity
         {
