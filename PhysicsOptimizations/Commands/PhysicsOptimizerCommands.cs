@@ -387,7 +387,9 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "Enabled: {0} (component changes apply on restart)", cfg.EnableVanillaTrim));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Planetary Encounters: {0} | Item Contracts: {1} | Grid Contracts: {2} | Contract Risk: {3}", cfg.TrimPlanetaryEncounters, cfg.TrimItemTriggeredContracts, cfg.TrimGridTriggeredContracts, cfg.TrimContractRisk));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Procedural Tracking Trim: {0} | Entities Not Tracked: {1}", cfg.TrimProceduralTracking, Modules.VanillaTrim.EntitiesNotTracked));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Force Encounter Density 0: {0}", cfg.ForceEncounterDensityZero));
             sb.AppendLine("Skipped at last world load: " + Modules.VanillaTrim.GetSkippedSummary());
+            sb.AppendLine(Modules.VanillaTrim.GetEncounterDensitySummary());
             Context.Respond(sb.ToString());
         }
 

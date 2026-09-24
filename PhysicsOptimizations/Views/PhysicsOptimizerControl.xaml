@@ -1343,7 +1343,11 @@
                                                                           IsChecked="{Binding Config.TrimProceduralTracking}"
                                                                           Margin="0,2,0,2"
                                                                           ToolTip="Skips MyProceduralWorldGenerator.TrackEntity for newly added characters and grids. Only active while EnableEconomy is off and ProceduralDensity and EncounterDensity are both 0."/>
-                                                                <TextBlock Text="The generator stays loaded (respawn, jump drives and planets query it); it just stops tracking every character and moving grid when none of its modules can generate anything. Set EncounterDensity to 0 in the world settings for this to engage."
+                                                                <CheckBox Content="Force Encounter Density to 0 (restart required)"
+                                                                          IsChecked="{Binding Config.ForceEncounterDensityZero}"
+                                                                          Margin="0,2,0,2"
+                                                                          ToolTip="Keen only saves EncounterDensity when it is above 0 and reloads a missing value as 0.35, so a configured 0 never sticks. This sets it to 0 in memory right before the procedural generator loads. The generator is the only runtime reader of this setting."/>
+                                                                <TextBlock Text="The generator stays loaded (respawn, jump drives and planets query it); it just stops tracking every character and moving grid when none of its modules can generate anything. Tracking trim needs EncounterDensity at 0, which the force option guarantees."
                                                                            Foreground="#9CA3AF"
                                                                            FontSize="11"
                                                                            Margin="16,0,0,4"

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using System.Threading;
 using Sandbox.Game.World;
@@ -33,6 +34,7 @@ namespace PhysicsOptimizer.Modules
         private static readonly object SkippedLock = new();
         private static readonly List<string> SkippedComponents = new();
         private static long _entitiesNotTracked;
+        private static float _forcedEncounterDensityFrom;
 
         public string Name => "Vanilla Trim";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnableVanillaTrim;
@@ -46,7 +48,7 @@ namespace PhysicsOptimizer.Modules
             get
             {
                 string skipped = GetSkippedSummary();
-                return $"Skipped at last world load: {skipped}\nEntities not tracked by the procedural generator this session: {EntitiesNotTracked}";
+                return $"Skipped at last world load: {skipped}\n{GetEncounterDensitySummary()}\nEntities not tracked by the procedural generator this session: {EntitiesNotTracked}";
             }
         }
 
@@ -88,6 +90,15 @@ namespace PhysicsOptimizer.Modules
                 SkippedComponents.Clear();
             }
             Interlocked.Exchange(ref _entitiesNotTracked, 0);
+            _forcedEncounterDensityFrom = 0f;
+        }
+
+        public static string GetEncounterDensitySummary()
+        {
+            float from = _forcedEncounterDensityFrom;
+            return from > 0f
+                ? $"Encounter density forced to 0 at last world load (world/config had {from.ToString("0.##", CultureInfo.InvariantCulture)})"
+                : "Encounter density not forced at last world load (already 0 or trim off)";
         }
 
         public static string GetSkippedSummary()
@@ -114,6 +125,12 @@ namespace PhysicsOptimizer.Modules
                     new[] { typeof(MyEntity) }, null),
                 nameof(Prefix_TrackEntity),
                 "MyProceduralWorldGenerator.TrackEntity");
+
+            RegisterPrefix(ctx,
+                typeof(MyProceduralWorldGenerator).GetMethod("LoadData", BindingFlags.Instance | BindingFlags.Public, null,
+                    Type.EmptyTypes, null),
+                nameof(Prefix_ProceduralLoadData),
+                "MyProceduralWorldGenerator.LoadData");
         }
 
         private static void RegisterPrefix(PatchContext ctx, MethodInfo target, string prefixName, string label)
@@ -169,6 +186,25 @@ namespace PhysicsOptimizer.Modules
                 case ContractRiskType: return cfg.TrimContractRisk;
                 default: return false;
             }
+        }
+
+        /// <summary>
+        /// Prefix hook on MyProceduralWorldGenerator.LoadData. Keen only serializes EncounterDensity when it is
+        /// above 0 while its field default is 0.35, so a configured 0 is dropped on save and reloads as 0.35.
+        /// Forcing it here, right before the generator reads it, is the only way 0 sticks. The generator is
+        /// the sole runtime reader of EncounterDensity, so nothing else is affected.
+        /// </summary>
+        public static void Prefix_ProceduralLoadData()
+        {
+            var cfg = PhysicsOptimizerPlugin.Instance?.Config;
+            if (cfg == null || !cfg.Enabled || !cfg.EnableVanillaTrim || !cfg.ForceEncounterDensityZero) return;
+
+            var settings = MySession.Static?.Settings;
+            if (settings == null || settings.EncounterDensity == 0f) return;
+
+            _forcedEncounterDensityFrom = settings.EncounterDensity;
+            settings.EncounterDensity = 0f;
+            Log.Info(LogSource, $"Forced EncounterDensity from {_forcedEncounterDensityFrom.ToString(CultureInfo.InvariantCulture)} to 0 before procedural generator load.");
         }
 
         /// <summary>

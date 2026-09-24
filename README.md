@@ -90,7 +90,7 @@ All modules are driven off the plugin's shared frame counter, run server-authori
 
 ---
 
-## 4. The 16 Torch PatchManager Patch Targets
+## 4. The 17 Torch PatchManager Patch Targets
 
 Every game method this plugin patches, in registration order. All targets are registered into `PatchConflictAudit` at registration time.
 
@@ -112,6 +112,7 @@ Every game method this plugin patches, in registration order. All targets are re
 | 14 | `MyEnvironmentSector.EnablePhysics(bool)` | Prefix | `TreePhysicsOptimizer.cs` | Tree & Flora Physics Optimizer |
 | 15 | `MySession.TryRegisterSessionComponent` (private) | Prefix | `VanillaTrim.cs` | System 14 (Session Component Trim) |
 | 16 | `MyProceduralWorldGenerator.TrackEntity(MyEntity)` | Prefix | `VanillaTrim.cs` | System 14 (Procedural Tracking Trim) |
+| 17 | `MyProceduralWorldGenerator.LoadData` | Prefix | `VanillaTrim.cs` | System 14 (Force Encounter Density 0) |
 
 **Hard rules**: never add another target without running the compatibility audit (see Design Notes); never patch `MyEntityComponentUpdater.*` / the per-entity update dispatch family (Concealment's home turf); never strip `GC.Collect` call sites transpiled by `se-performance-improvements`.
 
@@ -270,6 +271,7 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 * **Allowlist only** (audited against the decompiled server: not `IsRequiredByGame`, no un-null-checked references in game code or installed mods): `MyPlanetaryEncountersGenerator` (hooks every grid add/remove/static change even with planetary encounters off), `MySessionComponentItemTriggeredContracts` and `MySessionComponentGridTriggeredContracts` (react only to Keen-spawner grids with `EnableEconomy` on), `MyContractRiskSessionComponent` (ambush drones for Keen economy Deliver/Grid Hauling contracts only).
 * **Never trim**: `MySessionComponentEconomy` (every store block's buy/sell/offer path and faction reputation math) and `MySessionComponentContractSystem` (MES missions use `MyAPIGateway.ContractSystem`).
 * **Prefix on `MyProceduralWorldGenerator.TrackEntity`**: With `EnableEconomy` off and `ProceduralDensity`/`EncounterDensity` both 0, no generator module can produce anything, so newly added characters and grids are not tracked. The generator stays loaded because respawn, jump drives and planet init query it. Any of those settings on restores vanilla tracking.
+* **Prefix on `MyProceduralWorldGenerator.LoadData`**: Forces `EncounterDensity` to 0 in memory right before the generator reads it. Keen's `ShouldSerializeEncounterDensity()` only writes the value when it is above 0, while the field default is 0.35, so a configured 0 is dropped on save and reloads as 0.35. The generator is the only runtime reader of the setting.
 
 ---
 
@@ -439,6 +441,7 @@ Configuration persists to `Instance\PhysicsOptimizer.cfg` under the Torch server
 | `TrimGridTriggeredContracts` | `bool` | `true` | Skip loading `MySessionComponentGridTriggeredContracts` (restart required). |
 | `TrimContractRisk` | `bool` | `true` | Skip loading `MyContractRiskSessionComponent` (restart required). |
 | `TrimProceduralTracking` | `bool` | `true` | Stop procedural generator entity tracking while economy is off and asteroid/encounter density are 0. |
+| `ForceEncounterDensityZero` | `bool` | `true` | Force `EncounterDensity` to 0 at procedural generator load, working around Keen dropping a saved 0 (restart required). |
 
 ---
 
