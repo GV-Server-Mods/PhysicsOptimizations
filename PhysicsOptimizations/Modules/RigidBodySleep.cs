@@ -2,12 +2,17 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
+using Havok;
+using Sandbox;
+using Sandbox.Engine.Physics;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
 using Torch.Managers.PatchManager;
+using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
+using VRageMath;
 using PhysicsOptimizer.Config;
 using PhysicsOptimizer.Services;
 using PhysicsOptimizer.Utils;
@@ -22,6 +27,14 @@ namespace PhysicsOptimizer.Modules
     public class RigidBodySleep : IPhysicsOptimizer
     {
         private const string LogSource = "RigidBodySleep";
+        // Havok re-wake backoff: after this many consecutive deactivations that Havok undoes,
+        // stop retrying the grid for BackoffSeconds (avoids a deactivate/reactivate loop every second).
+        private const int MaxFailedSleepAttempts = 3;
+        private const int BackoffSeconds = 60;
+        // No-op mass refresh guard: below these deltas a vanilla mass re-apply is skipped on force-slept grids
+        private const float NegligibleMassRatio = 0.01f;
+        private const float NegligibleComShiftSq = 0.1f * 0.1f;
+        private static readonly FieldInfo _gridShapeMassProps = typeof(MyGridShape).GetField("m_massProperties", BindingFlags.Instance | BindingFlags.NonPublic);
 
         public string Name => "Rigid Body Sleep";
         public bool IsEnabled => _plugin?.Config != null && _plugin.Config.Enabled && _plugin.Config.EnablePhysicsOptimizations && _plugin.Config.EnableRigidBodySleep;
@@ -34,6 +47,14 @@ namespace PhysicsOptimizer.Modules
             public WeakReference<MyCubeGrid> GridRef;
             public int IdleSeconds;
             public bool IsForcedSleep;
+            public int FailedSleepAttempts;
+            public ulong RetryAfterFrame;
+            public bool SleptAsParkedRover;
+            // Debug-only wake probe: logs who re-activated a forced-sleep body
+            public ulong SleptAtSimFrame;
+            public bool WakeLogged;
+            public MyPhysicsComponentBase ProbedPhysics;
+            public Action<MyPhysicsComponentBase, bool> WakeProbe;
         }
 
         private readonly ConcurrentDictionary<long, GridIdleTracker> _trackers = new();
@@ -49,6 +70,9 @@ namespace PhysicsOptimizer.Modules
 
         public void Update(ulong frameCounter)
         {
+            // Debug-only wake tracer follows the debug logging toggle at runtime
+            SleepWakeTracer.Sync(_plugin?.Config != null && _plugin.Config.EnableDebugLogging);
+
             bool enabled = IsEnabled && _plugin?.Config != null;
             if (!enabled)
             {
@@ -80,6 +104,10 @@ namespace PhysicsOptimizer.Modules
                 var config = _plugin.Config;
                 float linThreshSq = config.SleepLinearVelocityThreshold * config.SleepLinearVelocityThreshold;
                 float angThreshSq = config.SleepAngularVelocityThreshold * config.SleepAngularVelocityThreshold;
+                float roverLin = Math.Max(0f, config.RoverSleepLinearThreshold);
+                float roverAng = Math.Max(0f, config.RoverSleepAngularThreshold);
+                float roverLinThreshSq = roverLin * roverLin;
+                float roverAngThreshSq = roverAng * roverAng;
                 int requiredSeconds = config.IdleSecondsBeforeSleep;
 
                 int activeBodies = 0;
@@ -123,6 +151,13 @@ namespace PhysicsOptimizer.Modules
                             sleepingBodies++;
                         }
 
+                        // Wheels share a Havok constraint island with their chassis: deactivating one alone is
+                        // undone immediately. They sleep/wake with the chassis, so never target them directly.
+                        if (GridDefender.IsWheelSubgrid(grid, out _))
+                        {
+                            continue;
+                        }
+
                         // Check if grid is unpiloted and at rest
                         bool isPiloted = IsGridPiloted(grid);
                         bool isSupported = IsGridSafelySupportedOrNotInGravity(grid);
@@ -141,15 +176,66 @@ namespace PhysicsOptimizer.Modules
                             _trackers[grid.EntityId] = tracker;
                         }
 
-                        if (!isPiloted && isSupported && linSq <= linThreshSq && angSq <= angThreshSq
-                            && !GridDefender.HadRecentVoxelContact(grid.EntityId)) // GridDefender: sleeping bodies emit no contact callbacks - keep grinding grids awake so push-apart can rescue them
+                        if (tracker.WakeProbe != null && !config.EnableDebugLogging)
+                        {
+                            DetachWakeProbe(tracker);
+                        }
+
+                        if (tracker.IsForcedSleep)
+                        {
+                            if (isActive)
+                            {
+                                // Havok re-activated a body we deactivated (constraint island or contact woke it).
+                                // Clear the flag so telemetry reflects reality, and back off repeat offenders.
+                                tracker.IsForcedSleep = false;
+                                tracker.SleptAsParkedRover = false;
+                                tracker.IdleSeconds = 0;
+                                if (++tracker.FailedSleepAttempts >= MaxFailedSleepAttempts)
+                                {
+                                    tracker.FailedSleepAttempts = 0;
+                                    tracker.RetryAfterFrame = frameCounter + (ulong)(BackoffSeconds * 60);
+                                    GridDefender.RecordIncident("⏸", $"Grid '{grid.DisplayName}' keeps waking in Havok; sleep paused {BackoffSeconds}s.");
+
+                                    if (config.EnableDebugLogging)
+                                    {
+                                        Log.Info(LogSource, $"Grid '{grid.DisplayName}' re-woken by Havok {MaxFailedSleepAttempts}x; pausing sleep attempts for {BackoffSeconds}s.");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                tracker.FailedSleepAttempts = 0;
+                            }
+                        }
+
+                        // Parked rovers: suspension jitter exceeds the general thresholds and wheel-terrain contact is
+                        // forwarded to the chassis, so gate on rover thresholds and the chassis's own voxel contact only.
+                        var wheelSystem = grid.GridSystems?.WheelSystem;
+                        bool isParkedRover = wheelSystem != null && wheelSystem.WheelCount > 0 && wheelSystem.HandBrake;
+                        bool linOk = linSq <= (isParkedRover ? roverLinThreshSq : linThreshSq);
+                        bool angOk = angSq <= (isParkedRover ? roverAngThreshSq : angThreshSq);
+                        // GridDefender: sleeping bodies emit no contact callbacks - keep grinding grids awake so push-apart can rescue them
+                        bool voxelGrinding = isParkedRover
+                            ? GridDefender.HadRecentOwnVoxelContact(grid.EntityId)
+                            : GridDefender.HadRecentVoxelContact(grid.EntityId);
+                        // A rover slept as parked must wake when its handbrake is released (timer/PB), not stay frozen
+                        bool handbrakeReleased = tracker.SleptAsParkedRover && !isParkedRover;
+
+                        if (!isPiloted && isSupported && linOk && angOk && !voxelGrinding && !handbrakeReleased)
                         {
                             tracker.IdleSeconds++;
-                            if (tracker.IdleSeconds >= requiredSeconds && isActive)
+                            if (tracker.IdleSeconds >= requiredSeconds && isActive && frameCounter >= tracker.RetryAfterFrame)
                             {
                                 // Deactivate Havok rigid body into sleep mode
-                                rb.Deactivate();
+                                ForceDeactivate(grid);
                                 tracker.IsForcedSleep = true;
+                                tracker.SleptAsParkedRover = isParkedRover;
+                                tracker.SleptAtSimFrame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+                                tracker.WakeLogged = false;
+                                if (config.EnableDebugLogging)
+                                {
+                                    AttachWakeProbe(grid, tracker);
+                                }
                                 _plugin.Telemetry?.IncrementForcedSleepEvents();
                                 GridDefender.RecordIncident("💤", $"Grid '{grid.DisplayName}' put to Havok sleep (idle {requiredSeconds}s).");
 
@@ -163,13 +249,16 @@ namespace PhysicsOptimizer.Modules
                         {
                             // Conditions no longer hold (pilot entered, drifting, bumped): reactivate the frozen body.
                             // Cockpit/damage wake hooks cannot fire while the body stays deactivated.
-                            if (tracker.IsForcedSleep)
-                            {
-                                rb.Activate();
-                                GridDefender.RecordIncident("⚡", $"Grid '{grid.DisplayName}' awakened (pilot/movement).");
-                            }
+                            bool wasForcedSleep = tracker.IsForcedSleep;
+                            // Clear before Activate so the debug wake probe ignores our own wake
                             tracker.IdleSeconds = 0;
                             tracker.IsForcedSleep = false;
+                            tracker.SleptAsParkedRover = false;
+                            if (wasForcedSleep)
+                            {
+                                rb.Activate();
+                                GridDefender.RecordIncident("⚡", $"Grid '{grid.DisplayName}' awakened ({(handbrakeReleased ? "handbrake released" : "pilot/movement")}).");
+                            }
                         }
                     }
                 }
@@ -187,7 +276,10 @@ namespace PhysicsOptimizer.Modules
 
                     for (int i = 0; i < _cleanupBuffer.Count; i++)
                     {
-                        _trackers.TryRemove(_cleanupBuffer[i], out _);
+                        if (_trackers.TryRemove(_cleanupBuffer[i], out var stale))
+                        {
+                            DetachWakeProbe(stale);
+                        }
                     }
                     _cleanupBuffer.Clear();
                 }
@@ -298,6 +390,8 @@ namespace PhysicsOptimizer.Modules
             int woke = 0;
             foreach (var kvp in _trackers)
             {
+                kvp.Value.IsForcedSleep = false;
+                DetachWakeProbe(kvp.Value);
                 if (!kvp.Value.GridRef.TryGetTarget(out var grid)) continue;
                 var rb = grid.Physics?.RigidBody;
                 if (rb != null && !grid.Closed && !grid.MarkedForClose && !rb.IsActive)
@@ -313,6 +407,89 @@ namespace PhysicsOptimizer.Modules
             }
         }
 
+        /// <summary>
+        /// Forces the grid's whole simulation island (chassis + wheels/subgrids) asleep. HkEntity.Deactivate()
+        /// is only a request (HkRigidBody_RequestDeactivation) that Havok ignores while the island still fails
+        /// its own rest test - e.g. suspension jitter on a parked rover - so it rarely sticks on constrained grids.
+        /// </summary>
+        private static void ForceDeactivate(MyCubeGrid grid)
+        {
+            var rb = grid.Physics.RigidBody;
+            var world = grid.Physics.HavokWorld;
+            if (world != null)
+            {
+                try
+                {
+                    world.DeactivateSimulationIslandRigidBodies(rb);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(ex, LogSource, $"Island deactivation failed on '{grid.DisplayName}'; falling back to deactivation request.");
+                }
+            }
+            rb.Deactivate();
+        }
+
+        /// <summary>
+        /// Debug-only: hooks the body's activation event to log what re-activates a forced-sleep grid.
+        /// Fires synchronously, so the stack shows a managed caller (block/system/mod) or the Havok step
+        /// (contact/island wake). Detached on the update thread only (the event is not thread safe).
+        /// </summary>
+        private void AttachWakeProbe(MyCubeGrid grid, GridIdleTracker tracker)
+        {
+            var physics = grid.Physics;
+            if (physics == null) return;
+            if (tracker.WakeProbe != null)
+            {
+                if (ReferenceEquals(tracker.ProbedPhysics, physics)) return;
+                DetachWakeProbe(tracker); // physics body was rebuilt
+            }
+
+            string name = grid.DisplayName;
+            tracker.WakeProbe = (body, active) =>
+            {
+                if (!active || !tracker.IsForcedSleep || tracker.WakeLogged) return;
+                tracker.WakeLogged = true;
+                ulong now = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+                Log.Info(LogSource, $"Havok WAKE PROBE: forced-sleep grid '{name}' re-activated {now - tracker.SleptAtSimFrame} frames after sleep. Caller:\n{TrimStack(Environment.StackTrace)}");
+            };
+            tracker.ProbedPhysics = physics;
+            physics.OnBodyActiveStateChanged += tracker.WakeProbe;
+        }
+
+        private static void DetachWakeProbe(GridIdleTracker tracker)
+        {
+            if (tracker.WakeProbe == null) return;
+            try
+            {
+                if (tracker.ProbedPhysics != null)
+                {
+                    tracker.ProbedPhysics.OnBodyActiveStateChanged -= tracker.WakeProbe;
+                }
+            }
+            catch (Exception)
+            {
+                // Body already torn down
+            }
+            tracker.WakeProbe = null;
+            tracker.ProbedPhysics = null;
+        }
+
+        private static string TrimStack(string stack)
+        {
+            var lines = stack.Split('\n');
+            var sb = new System.Text.StringBuilder();
+            int kept = 0;
+            foreach (var line in lines)
+            {
+                if (line.Contains("System.Environment") || line.Contains("AttachWakeProbe")) continue;
+                sb.Append("    ").AppendLine(line.Trim());
+                if (++kept >= 16) break;
+            }
+            return sb.ToString();
+        }
+
         public void OnEntityAdded(MyEntity entity)
         {
         }
@@ -320,7 +497,10 @@ namespace PhysicsOptimizer.Modules
         public void OnEntityRemoved(MyEntity entity)
         {
             if (entity == null) return;
-            _trackers.TryRemove(entity.EntityId, out _);
+            if (_trackers.TryRemove(entity.EntityId, out var tracker))
+            {
+                DetachWakeProbe(tracker);
+            }
         }
 
         public void WakeGrid(MyCubeGrid grid, string reason = "External event")
@@ -330,6 +510,11 @@ namespace PhysicsOptimizer.Modules
             if (grid?.Physics?.RigidBody == null || grid.MarkedForClose || grid.Closed) return;
 
             bool wasForcedSleep = _trackers.TryGetValue(grid.EntityId, out var tracker) && tracker.IsForcedSleep;
+            if (tracker != null)
+            {
+                // Clear before Activate so the debug wake probe ignores our own wake
+                tracker.IsForcedSleep = false;
+            }
 
             if (!grid.Physics.RigidBody.IsActive)
             {
@@ -349,6 +534,7 @@ namespace PhysicsOptimizer.Modules
             {
                 tracker.IdleSeconds = 0;
                 tracker.IsForcedSleep = false;
+                tracker.SleptAsParkedRover = false;
             }
         }
 
@@ -365,9 +551,11 @@ namespace PhysicsOptimizer.Modules
                 {
                     if (entity is MyCubeGrid grid && !grid.IsStatic && !grid.MarkedForClose && grid.Physics?.RigidBody != null)
                     {
-                        if (!IsGridPiloted(grid) && !GridDefender.HadRecentVoxelContact(grid.EntityId) && grid.Physics.RigidBody.IsActive)
+                        if (!IsGridPiloted(grid) && !GridDefender.HadRecentVoxelContact(grid.EntityId) && grid.Physics.RigidBody.IsActive
+                            && !GridDefender.IsWheelSubgrid(grid, out _)) // wheels follow the chassis island
+
                         {
-                            grid.Physics.RigidBody.Deactivate();
+                            ForceDeactivate(grid);
                             sleptCount++;
                             _plugin.Telemetry?.IncrementForcedSleepEvents();
                         }
@@ -443,6 +631,62 @@ namespace PhysicsOptimizer.Modules
             catch (Exception ex)
             {
                 Log.Error(ex, LogSource, "Failed to register MyDamageSystem wake hook!");
+            }
+
+            try
+            {
+                var setMassST = typeof(MyGridShape).GetMethod("SetMassPropertiesST", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(MyPhysicsBody)], null);
+                if (setMassST != null && _gridShapeMassProps != null)
+                {
+                    var prefixMethod = typeof(RigidBodySleep).GetMethod(nameof(SetMassPropertiesSTPrefix), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    ctx.GetPattern(setMassST).Prefixes.Add(prefixMethod);
+                    PatchConflictAudit.RegisterTarget(setMassST);
+                    Log.Info(LogSource, "Registered MyGridShape.SetMassPropertiesST no-op mass refresh guard.");
+                }
+                else
+                {
+                    Log.Warn(LogSource, "Could not find MyGridShape.SetMassPropertiesST / m_massProperties; no-op mass refresh guard disabled.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, LogSource, "Failed to register MyGridShape mass refresh guard!");
+            }
+        }
+
+        /// <summary>
+        /// Prefix on MyGridShape.SetMassPropertiesST. Vanilla re-applies grid mass and force-activates the body on
+        /// inventory change events even when nothing meaningful changed: the deferred (async) path resets the
+        /// "adjusted mass" baseline to 0, so the 5% change threshold always passes. Skips it for grids we force-slept
+        /// when mass and centre of mass are effectively unchanged; real cargo changes still apply and wake the grid.
+        /// </summary>
+        /// <returns>False to skip the no-op mass refresh; true to run vanilla.</returns>
+        public static bool SetMassPropertiesSTPrefix(MyGridShape __instance, MyPhysicsBody rb)
+        {
+            try
+            {
+                var sleep = PhysicsOptimizerPlugin.Instance?.RigidBodySleep;
+                if (sleep == null || !sleep.IsEnabled) return true;
+                if (rb?.RigidBody == null || rb.IsWelded || rb.WeldedRigidBody != null) return true; // welded bodies: let vanilla handle
+                if (rb.Entity is not MyCubeGrid grid || !sleep.IsGridSleeping(grid.EntityId)) return true;
+
+                var rigidBody = rb.RigidBody;
+                float currentMass = rigidBody.Mass;
+                if (rigidBody.IsActive || currentMass <= 0f) return true;
+
+                var props = (HkMassProperties)_gridShapeMassProps.GetValue(__instance);
+                if (Math.Abs(props.Mass - currentMass) / currentMass > NegligibleMassRatio) return true;
+                if (Vector3.DistanceSquared(props.CenterOfMass, rigidBody.CenterOfMassLocal) > NegligibleComShiftSq) return true;
+
+                if (PhysicsOptimizerPlugin.Instance.Config?.EnableDebugLogging == true)
+                {
+                    Log.Info(LogSource, $"Skipped no-op mass refresh on forced-sleep grid '{grid.DisplayName}' (kept asleep).");
+                }
+                return false;
+            }
+            catch
+            {
+                return true;
             }
         }
 

@@ -222,6 +222,65 @@
                                                                                            Foreground="#CCCCCC"
                                                                                            VerticalAlignment="Center"/>
                                                                         </WrapPanel>
+                                                                        <WrapPanel Margin="32,2,0,2"
+                                                                                   VerticalAlignment="Center"
+                                                                                   IsEnabled="{Binding Config.SleepParkedRovers}">
+                                                                                <TextBlock Text="Sleep below"
+                                                                                           Foreground="#CCCCCC"
+                                                                                           VerticalAlignment="Center"/>
+                                                                                <TextBox Text="{Binding Config.RoverSleepLinearThreshold, StringFormat={}{0:F2}}"
+                                                                                         Width="55"
+                                                                                         HorizontalContentAlignment="Center"
+                                                                                         Margin="5,0"
+                                                                                         VerticalAlignment="Center"
+                                                                                         ToolTip="Parked rover must stay below this linear speed for the sleep delay. Raise if suspension jitter keeps rovers awake. Default: 0.30 m/s."/>
+                                                                                <TextBlock Text="m/s and"
+                                                                                           Foreground="#CCCCCC"
+                                                                                           VerticalAlignment="Center"/>
+                                                                                <TextBox Text="{Binding Config.RoverSleepAngularThreshold, StringFormat={}{0:F3}}"
+                                                                                         Width="55"
+                                                                                         HorizontalContentAlignment="Center"
+                                                                                         Margin="5,0"
+                                                                                         VerticalAlignment="Center"
+                                                                                         ToolTip="Parked rover must stay below this angular speed for the sleep delay. Default: 0.050 rad/s."/>
+                                                                                <TextBlock Text="rad/s."
+                                                                                           Foreground="#CCCCCC"
+                                                                                           VerticalAlignment="Center"/>
+                                                                        </WrapPanel>
+                                                                        <WrapPanel Margin="32,2,0,2"
+                                                                                   VerticalAlignment="Center"
+                                                                                   IsEnabled="{Binding Config.SleepParkedRovers}">
+                                                                                <TextBlock Text="Wake above"
+                                                                                           Foreground="#CCCCCC"
+                                                                                           VerticalAlignment="Center"/>
+                                                                                <TextBox Text="{Binding Config.RoverWakeLinearThreshold, StringFormat={}{0:F2}}"
+                                                                                         Width="55"
+                                                                                         HorizontalContentAlignment="Center"
+                                                                                         Margin="5,0"
+                                                                                         VerticalAlignment="Center"
+                                                                                         ToolTip="Sleeping rover wakes when linear speed exceeds this. Clamped to never go below the sleep threshold. Default: 1.00 m/s."/>
+                                                                                <TextBlock Text="m/s or"
+                                                                                           Foreground="#CCCCCC"
+                                                                                           VerticalAlignment="Center"/>
+                                                                                <TextBox Text="{Binding Config.RoverWakeAngularThreshold, StringFormat={}{0:F3}}"
+                                                                                         Width="55"
+                                                                                         HorizontalContentAlignment="Center"
+                                                                                         Margin="5,0"
+                                                                                         VerticalAlignment="Center"
+                                                                                         ToolTip="Sleeping rover wakes when angular speed exceeds this. Clamped to never go below the sleep threshold. Default: 0.150 rad/s."/>
+                                                                                <TextBlock Text="rad/s for"
+                                                                                           Foreground="#CCCCCC"
+                                                                                           VerticalAlignment="Center"/>
+                                                                                <TextBox Text="{Binding Config.RoverWakeConsecutiveSamples}"
+                                                                                         Width="40"
+                                                                                         HorizontalContentAlignment="Center"
+                                                                                         Margin="5,0"
+                                                                                         VerticalAlignment="Center"
+                                                                                         ToolTip="Consecutive 0.5s samples above the wake threshold required to wake. Filters single-tick jitter spikes. Default: 2."/>
+                                                                                <TextBlock Text="samples (0.5s each)."
+                                                                                           Foreground="#CCCCCC"
+                                                                                           VerticalAlignment="Center"/>
+                                                                        </WrapPanel>
                                                                 </StackPanel>
                                                         </StackPanel>
                                                 </GroupBox>

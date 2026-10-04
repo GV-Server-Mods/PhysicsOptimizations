@@ -38,6 +38,11 @@ namespace PhysicsOptimizer.Config
         private bool _enableWheelCollisionFilter = true;
         private bool _sleepParkedRovers = true;
         private float _roverSleepDelaySeconds = 2.0f;
+        private float _roverSleepLinearThreshold = 0.3f; // m/s
+        private float _roverSleepAngularThreshold = 0.05f; // rad/s
+        private float _roverWakeLinearThreshold = 1.0f; // m/s
+        private float _roverWakeAngularThreshold = 0.15f; // rad/s
+        private int _roverWakeConsecutiveSamples = 2; // 0.5s samples
 
         // --- Module 2: Rigid Body Sleeping ---
         private bool _enableRigidBodySleep = true;
@@ -182,6 +187,11 @@ namespace PhysicsOptimizer.Config
         public bool EnableWheelCollisionFilter { get => _enableWheelCollisionFilter; set => SetValue(ref _enableWheelCollisionFilter, value); }
         public bool SleepParkedRovers { get => _sleepParkedRovers; set => SetValue(ref _sleepParkedRovers, value); }
         public float RoverSleepDelaySeconds { get => _roverSleepDelaySeconds; set => SetValue(ref _roverSleepDelaySeconds, value); }
+        public float RoverSleepLinearThreshold { get => _roverSleepLinearThreshold; set => SetValue(ref _roverSleepLinearThreshold, value); }
+        public float RoverSleepAngularThreshold { get => _roverSleepAngularThreshold; set => SetValue(ref _roverSleepAngularThreshold, value); }
+        public float RoverWakeLinearThreshold { get => _roverWakeLinearThreshold; set => SetValue(ref _roverWakeLinearThreshold, value); }
+        public float RoverWakeAngularThreshold { get => _roverWakeAngularThreshold; set => SetValue(ref _roverWakeAngularThreshold, value); }
+        public int RoverWakeConsecutiveSamples { get => _roverWakeConsecutiveSamples; set => SetValue(ref _roverWakeConsecutiveSamples, value); }
 
         public bool EnableRigidBodySleep { get => _enableRigidBodySleep; set => SetValue(ref _enableRigidBodySleep, value); }
         public float SleepLinearVelocityThreshold { get => _sleepLinearVelocityThreshold; set => SetValue(ref _sleepLinearVelocityThreshold, value); }

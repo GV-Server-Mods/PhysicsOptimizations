@@ -173,6 +173,7 @@ namespace PhysicsOptimizer
                     TreePhysicsOptimizer.RegisterPatches(ctx);
                     VanillaTrim.RegisterPatches(ctx);
                     PhysicsOptimizerPatches.RegisterPatches(ctx);
+                    SleepWakeTracer.Init(patchManager);
 
                     patchManager.Commit();
                     Log.Info(LogSource, "All patches successfully registered with Torch PatchManager.");
