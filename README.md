@@ -127,14 +127,14 @@ Every game method this plugin patches, in registration order. All targets are re
 
 * **Symmetrical Broadphase Collision Masking**: Vanilla SE sets asymmetrical collision masks (`1, 1` on wheels vs `0, 0` on chassis), forcing Havok to run expensive compound shape tree queries against nearby armor blocks (fenders, wheel skirts) every tick. The optimizer applies `HkGroupFilter.CalcFilterInfo(layer, systemId, 1, 3)` (sub-system bits 0 and 1 ignored) to the wheel body via the `CreateConstraint` and `CubeGrid_OnPhysicsChanged` suffixes, then calls `MyPhysics.RefreshCollisionFilter` on both grids - eliminating redundant checks while preserving wheel-to-ground contact.
 * **Cold-Start Rover Discovery**: Scans world entities on module init (`DiscoverExistingRovers`) and via `MyEntities.OnEntityAdd` to immediately index and mask pre-existing and newly spawned rovers (any grid whose `GridSystems.WheelSystem` reports wheels).
-* **Parked Rover Suspension Sleep**: Evaluated every 30 frames. When a rover's handbrake is engaged and it remains nearly stationary (< 0.1 m/s linear, < 0.02 rad/s angular) for `RoverSleepDelaySeconds` (default 2.0s), the `MyMotorSuspension.Update` prefix returns `false`, skipping the expensive per-frame suspension math, 60Hz ground raycasts, air-shock checks, and artificial braking impulses. Uses a static `volatile bool HasAnySleepingRovers` flag so active rovers skip dictionary lookups in ~1ns.
+* **Parked Rover Suspension Sleep**: Evaluated every 30 frames. When a rover's handbrake is engaged and it remains below `RoverSleepLinearThreshold` / `RoverSleepAngularThreshold` (default 0.3 m/s, 0.05 rad/s) for `RoverSleepDelaySeconds` (default 2.0s), the `MyMotorSuspension.Update` prefix returns `false`, skipping the expensive per-frame suspension math, 60Hz ground raycasts, air-shock checks, and artificial braking impulses. Uses a static `volatile bool HasAnySleepingRovers` flag so active rovers skip dictionary lookups in ~1ns. Wake uses hysteresis: a sleeping rover only wakes after `RoverWakeConsecutiveSamples` consecutive samples above the higher `RoverWakeLinearThreshold` / `RoverWakeAngularThreshold`, so parked suspension jitter cannot flap sleep/wake.
 * **Instant Wakeup**: Handbrake release, velocity drift (sliding down a Pertam dune while parked), pilot movement input (System 2), or external damage (System 2) all wake the suspension instantly.
 
 ### 💤 System 2: Rigid Body Sleep Manager & Universal Wake Paths
 *File: `Modules/RigidBodySleep.cs` (targets 4-5)*
 
 * **Stepped Scan**: Every 60 frames, sweeps all entities for dynamic grids (static grids skipped) without hot-path allocations.
-* **Sleep Conditions**: An unpiloted dynamic grid sustaining linear velocity < 0.05 m/s and angular velocity < 0.01 rad/s for `IdleSecondsBeforeSleep` (default 3s) is deactivated with `grid.Physics.RigidBody.Deactivate()`. Grids with a voxel contact in the last 30 sim frames are never force-slept - sleeping bodies emit no contact callbacks, so terrain-grinding grids must stay awake for push-apart to rescue them.
+* **Sleep Conditions**: An unpiloted dynamic grid sustaining linear velocity < 0.05 m/s and angular velocity < 0.01 rad/s for `IdleSecondsBeforeSleep` (default 3s) is deactivated with `grid.Physics.RigidBody.Deactivate()`. Grids with a voxel contact in the last 30 sim frames are never force-slept - sleeping bodies emit no contact callbacks, so terrain-grinding grids must stay awake for push-apart to rescue them. Wheel subgrids are never targeted (they share a Havok constraint island with the chassis and sleep/wake with it). Handbraked rovers instead use `RoverSleepLinearThreshold` / `RoverSleepAngularThreshold` and only the chassis's own voxel contact (wheel-terrain contact is ignored); releasing the handbrake wakes them. If Havok re-activates a deactivated grid 3 times in a row, the forced-sleep flag is cleared and attempts pause for 60s (`⏸` ticker entry), so telemetry reflects real Havok state.
 * **Gravity Support Guard** (`IsGridSafelySupportedOrNotInGravity`):
   * Grids outside significant gravity sleep freely.
   * Grids in gravity must be supported: wheels with handbrake engaged, landing gear / magnetic feet locked (`LandingSystem.IsParked` or gear lock All/Mixed), or be an unpowered wreck at rest on terrain.
@@ -358,6 +358,11 @@ Configuration persists to `Instance\PhysicsOptimizer.cfg` under the Torch server
 | `EnableWheelCollisionFilter` | `bool` | `true` | Enforces symmetrical broadphase masking for wheel wells (`subSystemDontCollideWith = 3`). |
 | `SleepParkedRovers` | `bool` | `true` | Pauses 60Hz raycasts and suspension math when rovers are parked. |
 | `RoverSleepDelaySeconds` | `float` | `2.0` | Motionless seconds (with handbrake) before parked rover suspensions sleep. |
+| `RoverSleepLinearThreshold` | `float` | `0.3` | Linear speed (m/s) a parked rover must stay below to sleep. |
+| `RoverSleepAngularThreshold` | `float` | `0.05` | Angular speed (rad/s) a parked rover must stay below to sleep. |
+| `RoverWakeLinearThreshold` | `float` | `1.0` | Linear speed (m/s) that wakes a sleeping rover (clamped >= sleep threshold). |
+| `RoverWakeAngularThreshold` | `float` | `0.15` | Angular speed (rad/s) that wakes a sleeping rover (clamped >= sleep threshold). |
+| `RoverWakeConsecutiveSamples` | `int` | `2` | Consecutive 0.5s samples above wake thresholds required to wake (filters jitter). |
 
 ### Module 2: Rigid Body Sleep
 | Setting | Type | Default | Description |

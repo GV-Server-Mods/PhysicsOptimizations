@@ -219,6 +219,8 @@ namespace PhysicsOptimizer.Modules
         private static readonly ConcurrentDictionary<long, ulong> _lastVoxelArbitratorLogFrames = new();
 
         private static readonly ConcurrentDictionary<long, ulong> _lastVoxelContactFrames = new();
+        // Own-body voxel contact only (excludes wheel contact forwarded to the base grid); gates parked-rover sleep.
+        private static readonly ConcurrentDictionary<long, ulong> _lastOwnVoxelContactFrames = new();
         private readonly ConcurrentDictionary<long, int> _consecutiveVoxelContactFrames = new();
         private readonly ConcurrentDictionary<long, ulong> _lastVoxelContactFrameTracker = new();
         private readonly ConcurrentDictionary<long, Vector3D> _voxelContactStartPositions = new();
@@ -452,6 +454,7 @@ namespace PhysicsOptimizer.Modules
             _lastEscapes.Clear();
             _contactStartPositions.Clear();
             _lastVoxelContactFrames.Clear();
+            _lastOwnVoxelContactFrames.Clear();
             _consecutiveVoxelContactFrames.Clear();
             _lastVoxelContactFrameTracker.Clear();
             _voxelContactStartPositions.Clear();
@@ -1291,6 +1294,7 @@ namespace PhysicsOptimizer.Modules
             _lastExtremeSpeedLogFrames.TryRemove(id, out _);
             _lastVoxelArbitratorLogFrames.TryRemove(id, out _);
             _lastVoxelContactFrames.TryRemove(id, out _);
+            _lastOwnVoxelContactFrames.TryRemove(id, out _);
             _lastVoxelContactNormals.TryRemove(id, out _);
             _lastVoxelPenetrations.TryRemove(id, out _);
             _macroTerrainCache.TryRemove(id, out _);
@@ -1332,7 +1336,7 @@ namespace PhysicsOptimizer.Modules
         /// Cached wheel subgrid test. Wheels are single-block subgrids, so the scan is trivial.
         /// Returns true with baseGridId set when the grid hosts a MyWheel attached to a suspension stator.
         /// </summary>
-        private static bool IsWheelSubgrid(MyCubeGrid grid, out long baseGridId)
+        internal static bool IsWheelSubgrid(MyCubeGrid grid, out long baseGridId)
         {
             baseGridId = -1L;
             if (grid == null || grid.MarkedForClose || grid.Closed) return false;
@@ -1590,6 +1594,13 @@ namespace PhysicsOptimizer.Modules
 
         /// <summary>True if the grid recorded a voxel contact within the last 30 sim frames.</summary>
         public static bool HadRecentVoxelContact(long gridId) => HadVoxelContactWithin(gridId, 30);
+
+        /// <summary>True if the grid's own body (not its wheels) touched voxels within the last 30 sim frames.</summary>
+        public static bool HadRecentOwnVoxelContact(long gridId)
+        {
+            ulong frame = MySandboxGame.Static?.SimulationFrameCounter ?? 0;
+            return frame > 0 && _lastOwnVoxelContactFrames.TryGetValue(gridId, out ulong last) && frame >= last && (frame - last) <= 30;
+        }
 
         /// <summary>True if the grid recorded a voxel contact within the given number of sim frames.</summary>
         private static bool HadVoxelContactWithin(long gridId, ulong frames)
@@ -2764,6 +2775,7 @@ namespace PhysicsOptimizer.Modules
                 TrimDictionary(_lastVoxelContactFrameTracker, currentFrame, 600, _consecutiveVoxelContactFrames);
                 TrimDictionary(_lastDeformationFrames, currentFrame, 600);
                 TrimDictionary(_lastVoxelContactFrames, currentFrame, 1800);
+                TrimDictionary(_lastOwnVoxelContactFrames, currentFrame, 1800);
                 TrimDictionary(_lastPushApartGiveUpLogFrames, currentFrame, 1200);
                 TrimDictionary(_lastPushApartGateLogFrames, currentFrame, 1200);
 
@@ -3001,6 +3013,10 @@ namespace PhysicsOptimizer.Modules
                         if (IsWheelSubgrid(grid, out long baseGridId) && baseGridId > 0L)
                         {
                             _lastVoxelContactFrames[baseGridId] = currentFrame;
+                        }
+                        else
+                        {
+                            _lastOwnVoxelContactFrames[grid.EntityId] = currentFrame;
                         }
                     }
 
