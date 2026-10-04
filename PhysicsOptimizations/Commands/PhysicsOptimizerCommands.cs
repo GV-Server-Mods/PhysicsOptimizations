@@ -33,6 +33,7 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine("* Wheel Optimizer:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Symmetrical Masking: {1}", cfg.EnableWheelOptimizer, cfg.EnableWheelCollisionFilter));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Parked Rover Sleep: {0} (Delay: {1:F1}s)", cfg.SleepParkedRovers, cfg.RoverSleepDelaySeconds));
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Sleep < {0:F2} m/s, {1:F3} rad/s | Wake > {2:F2} m/s, {3:F3} rad/s x{4} samples", cfg.RoverSleepLinearThreshold, cfg.RoverSleepAngularThreshold, cfg.RoverWakeLinearThreshold, cfg.RoverWakeAngularThreshold, cfg.RoverWakeConsecutiveSamples));
             sb.AppendLine();
             sb.AppendLine("* Rigid Body Sleep:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0}", cfg.EnableRigidBodySleep));

@@ -35,6 +35,7 @@ namespace PhysicsOptimizer.Modules
             public bool IsParked;
             public int StationaryTicks;
             public bool IsSuspensionAsleep;
+            public int WakeSamples;
             public int WheelCount;
         }
 
@@ -132,7 +133,18 @@ namespace PhysicsOptimizer.Modules
             int parkedRoversSleeping = 0;
             int sleepingWheels = 0;
             int totalWheels = 0;
-            int requiredStationaryTicks = (int)(_plugin.Config.RoverSleepDelaySeconds * 60f);
+            var cfg = _plugin.Config;
+            int requiredStationaryTicks = (int)(cfg.RoverSleepDelaySeconds * 60f);
+            float sleepLin = Math.Max(0f, cfg.RoverSleepLinearThreshold);
+            float sleepAng = Math.Max(0f, cfg.RoverSleepAngularThreshold);
+            // Wake thresholds are clamped to never sit below sleep thresholds (would reintroduce flapping)
+            float wakeLin = Math.Max(sleepLin, cfg.RoverWakeLinearThreshold);
+            float wakeAng = Math.Max(sleepAng, cfg.RoverWakeAngularThreshold);
+            float sleepLinSq = sleepLin * sleepLin;
+            float sleepAngSq = sleepAng * sleepAng;
+            float wakeLinSq = wakeLin * wakeLin;
+            float wakeAngSq = wakeAng * wakeAng;
+            int wakeSamplesRequired = Math.Max(1, cfg.RoverWakeConsecutiveSamples);
 
             _removalBuffer.Clear();
 
@@ -162,33 +174,42 @@ namespace PhysicsOptimizer.Modules
                     float linSpeedSq = (float)grid.Physics.LinearVelocity.LengthSquared();
                     float angSpeedSq = (float)grid.Physics.AngularVelocity.LengthSquared();
 
-                    // Handbrake engaged and nearly stationary (< 0.1 m/s, < 0.02 rad/s)
-                    if (linSpeedSq < 0.01f && angSpeedSq < 0.0004f)
+                    if (state.IsSuspensionAsleep)
+                    {
+                        // Hysteresis: wake only on sustained motion above the (higher) wake thresholds,
+                        // so parked suspension jitter does not flap sleep/wake every sample.
+                        if (linSpeedSq > wakeLinSq || angSpeedSq > wakeAngSq)
+                        {
+                            if (++state.WakeSamples >= wakeSamplesRequired)
+                            {
+                                WakeRover(state, grid, "Velocity threshold exceeded");
+                            }
+                        }
+                        else
+                        {
+                            state.WakeSamples = 0;
+                        }
+                    }
+                    else if (linSpeedSq < sleepLinSq && angSpeedSq < sleepAngSq)
                     {
                         state.StationaryTicks += 30;
                         if (state.StationaryTicks >= requiredStationaryTicks)
                         {
-                            if (!state.IsSuspensionAsleep)
-                            {
-                                state.IsSuspensionAsleep = true;
-                                _sleepingGridIds[grid.EntityId] = 1;
-                                HasAnySleepingRovers = true;
-                                GridDefender.RecordIncident("💤", $"Rover '{grid.DisplayName}' parked: {wheelSystem.WheelCount} suspensions put to sleep.");
+                            state.IsSuspensionAsleep = true;
+                            state.WakeSamples = 0;
+                            _sleepingGridIds[grid.EntityId] = 1;
+                            HasAnySleepingRovers = true;
+                            GridDefender.RecordIncident("💤", $"Rover '{grid.DisplayName}' parked: {wheelSystem.WheelCount} suspensions put to sleep.");
 
-                                if (_plugin.Config.EnableDebugLogging)
-                                {
-                                    Log.Info(LogSource, $"Put suspension updates to SLEEP on parked rover '{grid.DisplayName}' ({wheelSystem.WheelCount} wheels).");
-                                }
+                            if (_plugin.Config.EnableDebugLogging)
+                            {
+                                Log.Info(LogSource, $"Put suspension updates to SLEEP on parked rover '{grid.DisplayName}' ({wheelSystem.WheelCount} wheels).");
                             }
                         }
                     }
                     else
                     {
-                        // Moving despite handbrake (sliding down steep Pertam dune or impacted)
-                        if (state.IsSuspensionAsleep)
-                        {
-                            WakeRover(state, grid, "Velocity threshold exceeded");
-                        }
+                        // Awake and moving despite handbrake (sliding down a dune or impacted)
                         state.StationaryTicks = 0;
                     }
                 }
@@ -254,6 +275,7 @@ namespace PhysicsOptimizer.Modules
             {
                 state.IsSuspensionAsleep = false;
                 state.StationaryTicks = 0;
+                state.WakeSamples = 0;
                 _sleepingGridIds.TryRemove(grid.EntityId, out _);
                 HasAnySleepingRovers = !_sleepingGridIds.IsEmpty;
                 GridDefender.RecordIncident("🛞", $"Rover '{grid.DisplayName}' suspension awakened ({reason}).");
@@ -333,12 +355,21 @@ namespace PhysicsOptimizer.Modules
                 // Havok's bitmask filter: subSystemDontCollideWith = 3 (bits 0 and 1) tells Havok to ignore BOTH sub-system 0 (chassis) and 1 (wheel).
                 // This eliminates the redundant AABB compound shape queries against wheel well armor blocks!
                 uint wheelFilter = HkGroupFilter.CalcFilterInfo(wheelBody.Layer, systemId, 1, 3);
-                wheelBody.SetCollisionFilterInfo(wheelFilter);
-
-                MyPhysics.RefreshCollisionFilter(topGrid.Physics);
-                MyPhysics.RefreshCollisionFilter(cubeGrid.Physics);
 
                 RegisterRover(cubeGrid);
+
+                // Already masked: skip the Havok filter refresh (it re-checks collision pairs and can undo a
+                // forced sleep on parked rovers).
+                if (wheelBody.GetCollisionFilterInfo() == wheelFilter)
+                {
+                    return;
+                }
+
+                wheelBody.SetCollisionFilterInfo(wheelFilter);
+
+                // Refreshing the wheel re-evaluates every pair it is in, including wheel-vs-chassis, so the
+                // chassis needs no refresh. Pending refreshes are a HashSet, so this merges with vanilla's own.
+                MyPhysics.RefreshCollisionFilter(topGrid.Physics);
 
                 if (_plugin.Config.EnableDebugLogging)
                 {
