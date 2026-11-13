@@ -8,6 +8,7 @@ using Sandbox.Engine.Utils;
 using Sandbox.Engine.Physics;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.World;
 using Torch.Managers.PatchManager;
 using VRage.Game.ModAPI;
 using VRage.Game;
@@ -21,7 +22,8 @@ namespace PhysicsOptimizer.Modules
     /// <summary>
     /// Thruster Clearance: replaces Keen's volumetric thruster flame damage shape-casts with tiered
     /// 1/5/9-ray nozzle raycasts. Own-construct obstructions vaporize (Optimized mode) or take
-    /// vanilla-rate thermal damage (VanillaLike); external grids are immune in Optimized mode.
+    /// vanilla-rate thermal damage (VanillaLike); external grids are immune in Optimized mode, except
+    /// foreign grids held only by landing gear, which take vanilla-rate damage.
     /// </summary>
     public static class ThrusterClearance
     {
@@ -204,9 +206,8 @@ namespace PhysicsOptimizer.Modules
 
                 if (hitEntity is MyCubeGrid hitGrid)
                 {
-                    bool isOwnConstruct = hitGrid == thruster.CubeGrid ||
-                        (thruster.CubeGrid.GridSystems != null && hitGrid.GridSystems != null &&
-                         MyCubeGridGroups.Static.Physical.GetGroup(hitGrid) == MyCubeGridGroups.Static.Physical.GetGroup(thruster.CubeGrid));
+                    var link = GetConstructLink(hitGrid, thruster);
+                    bool isOwnConstruct = link == ConstructLink.Own;
 
                     Vector3I blockPos = hitGrid.WorldToGridInteger(hit.Position + dir * 0.1f);
                     var block = hitGrid.GetCubeBlock(blockPos);
@@ -240,8 +241,9 @@ namespace PhysicsOptimizer.Modules
                     }
                     else
                     {
-                        // External Grid (Carrier Deck, Landing Pad, Enemy Hull)
-                        if (config.ThrusterDamageMode == ThrusterDamageMode.VanillaLike)
+                        // External Grid (Carrier Deck, Landing Pad, Enemy Hull). A foreign grid held only by
+                        // landing gear or a magnetic plate takes vanilla-rate damage in both modes.
+                        if (config.ThrusterDamageMode == ThrusterDamageMode.VanillaLike || link == ConstructLink.GearLockedForeign)
                         {
                             // Vanilla-like mode: Gradual thermal damage to carrier deck / external grid
                             float dmg = thruster.BlockDefinition.FlameDamage * thruster.CurrentStrength;
@@ -258,6 +260,40 @@ namespace PhysicsOptimizer.Modules
             }
 
             _thrusterHitList.Clear();
+        }
+
+        private enum ConstructLink { External, GearLockedForeign, Own }
+
+        // Own = same grid, or joined by rotor/piston/hinge (Mechanical) or connector (Logical), or held by
+        // landing gear (Physical only) and owned by the thruster's owner or faction.
+        private static ConstructLink GetConstructLink(MyCubeGrid hitGrid, MyThrust thruster)
+        {
+            var thrusterGrid = thruster.CubeGrid;
+            if (hitGrid == thrusterGrid) return ConstructLink.Own;
+
+            var groups = MyCubeGridGroups.Static;
+            if (groups.Physical.GetGroup(hitGrid) != groups.Physical.GetGroup(thrusterGrid)) return ConstructLink.External;
+            if (groups.Mechanical.GetGroup(hitGrid) == groups.Mechanical.GetGroup(thrusterGrid)) return ConstructLink.Own;
+            if (groups.Logical.GetGroup(hitGrid) == groups.Logical.GetGroup(thrusterGrid)) return ConstructLink.Own;
+
+            return SharesOwner(hitGrid, thruster.OwnerId) ? ConstructLink.Own : ConstructLink.GearLockedForeign;
+        }
+
+        private static bool SharesOwner(MyCubeGrid grid, long ownerId)
+        {
+            if (ownerId == 0) return false;
+            var owners = grid.BigOwners;
+            if (owners == null || owners.Count == 0) return false;
+
+            var factions = MySession.Static?.Factions;
+            var faction = factions?.TryGetPlayerFaction(ownerId);
+            for (int i = 0; i < owners.Count; i++)
+            {
+                long other = owners[i];
+                if (other == ownerId) return true;
+                if (faction != null && other != 0 && factions.TryGetPlayerFaction(other) == faction) return true;
+            }
+            return false;
         }
 
 

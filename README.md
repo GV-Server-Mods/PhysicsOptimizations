@@ -241,8 +241,9 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
   * Blocks with no recognized flame dummies, and any internal error, fall back to vanilla behavior (never silently breaks thrust damage).
 * **Damage Routing**:
   * **Characters**: 50 Environment burn damage - player safety fully preserved.
-  * **Own construct** (same physical grid group): In `Optimized` mode the obstructing block is instantly vaporized on first contact (`DoDamage(1e9f)` - large but finite; `float.MaxValue` overflows Keen's damage pipeline into `Infinity`/`NaN`), terminating the compound shape invalidation loop at the root. In `VanillaLike` mode, gradual `FlameDamage * CurrentStrength` thermal damage applies. The thruster's own slim block is never damaged (hard `ReferenceEquals` guard).
+  * **Own construct** (the same grid, its rotor, piston and hinge parts, connector-docked grids, and grids held by landing gear or a magnetic plate that the thruster's owner or faction owns): In `Optimized` mode the obstructing block is instantly vaporized on first contact (`DoDamage(1e9f)` - large but finite; `float.MaxValue` overflows Keen's damage pipeline into `Infinity`/`NaN`), terminating the compound shape invalidation loop at the root. In `VanillaLike` mode, gradual `FlameDamage * CurrentStrength` thermal damage applies. The thruster's own slim block is never damaged (hard `ReferenceEquals` guard).
   * **External grids** (landing pads, carrier decks, enemy hulls): In `Optimized` mode, 100% immune. In `VanillaLike` mode, gradual thermal damage at vanilla rates.
+  * **Foreign grids held by landing gear** (another player's or faction's grid locked by gear or a magnetic plate): gradual thermal damage at vanilla rates in both modes, never vaporized.
 * **Inactive Thrusters**: Deal no damage unless `MyFakes.INACTIVE_THRUSTER_DMG` is enabled.
 * **Mode Switching**: `ThrusterDamageMode` is `Optimized` (default) or `VanillaLike`.
 
