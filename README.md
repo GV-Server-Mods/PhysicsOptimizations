@@ -213,7 +213,7 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
 ### 🚀 System 9: PMW Kinetic Manager & Piloted Exemption
 *File: `Modules/GridDefender.cs`*
 
-* **PMW Classification** (`IsMissile`): An unpiloted dynamic grid is a Player-Made Missile when its speed meets `MissileMinVelocity` (default 20 m/s) and its block count falls within the size band for its grid size - small grids 4-150 blocks, large grids 3-50 blocks.
+* **PMW Classification** (`IsMissile`): An unpiloted dynamic grid is a Player-Made Missile when its own speed meets `MissileMinVelocity` (default 20 m/s) and its block count falls within the size band for its grid size - small grids 4-150 blocks, large grids 3-50 blocks. In a collision each grid is judged by its own speed, not the closing speed, so a parked unpiloted grid that gets rammed is never the missile.
 * **Piloted Exemption** (`ExemptPilotedFromMissileStatus`): A grid with an active pilot (`GridSystems.ControlSystem.IsControlled`) is *never* classified as a PMW. When such a vehicle would otherwise qualify, the save is counted (`PilotedBuggySaves`) - light rover combat and ramming tactics remain completely organic.
 * **Missile Engagement Window**: When a qualifying missile strikes a target, an engagement is registered with a 60-frame (~1s) penetration window so follow-up contacts during the same penetration keep dealing damage instead of being re-classified. Both grids are tracked through `OnClose` and `OnGridSplit` (splits inherit the engagement).
 * **Split Friendly-Fire Shield**: Multiple contacts between two halves of the *same* missile engagement (after it snaps in half on impact) are suppressed, so the missile doesn't damage itself.

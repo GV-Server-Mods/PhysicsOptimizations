@@ -1121,8 +1121,10 @@ namespace PhysicsOptimizer.Modules
                     return BlockDeformation(grid, currentFrame, stats);
                 }
 
-                bool gridQualifies = gridInMissile || (config.AllowMissileDamage && IsMissile(grid, impactSpeed));
-                bool otherQualifies = otherInMissile || (config.AllowMissileDamage && IsMissile(targetGrid, impactSpeed));
+                // Each grid is classified by its own speed, not the impact speed, so a parked
+                // unpiloted grid that is rammed never counts as the missile (GVK-Settings#799).
+                bool gridQualifies = gridInMissile || (config.AllowMissileDamage && IsMissile(grid, (float)Math.Sqrt(gridSpeedSq)));
+                bool otherQualifies = otherInMissile || (config.AllowMissileDamage && IsMissile(targetGrid, (float)Math.Sqrt(otherSpeedSq)));
 
                 if (gridQualifies || otherQualifies)
                 {
