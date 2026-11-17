@@ -142,6 +142,9 @@ namespace PhysicsOptimizer.Config
         private float _playerRescueMaxStaticObbDepthMeters = 4.0f;
         private bool _enableTerminalConvertToShipAutoRescue = true;
 
+        // --- Server Grid Conversion ---
+        private bool _enableServerConversionRights = true;
+
         // --- Vanilla Trim ---
         private bool _enableVanillaTrim = true;
         private bool _trimPlanetaryEncounters = true;
@@ -420,6 +423,9 @@ namespace PhysicsOptimizer.Config
             set => SetValue(ref _playerRescueMaxStaticObbDepthMeters, Math.Max(0.5f, Math.Min(20.0f, value)));
         }
         public bool EnableTerminalConvertToShipAutoRescue { get => _enableTerminalConvertToShipAutoRescue; set => SetValue(ref _enableTerminalConvertToShipAutoRescue, value); }
+
+        // --- Server Grid Conversion ---
+        public bool EnableServerConversionRights { get => _enableServerConversionRights; set => SetValue(ref _enableServerConversionRights, value); }
 
         // --- Vanilla Trim ---
         public bool EnableVanillaTrim { get => _enableVanillaTrim; set => SetValue(ref _enableVanillaTrim, value); }

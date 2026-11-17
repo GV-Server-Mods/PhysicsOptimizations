@@ -90,7 +90,7 @@ All modules are driven off the plugin's shared frame counter, run server-authori
 
 ---
 
-## 4. The 19 Torch PatchManager Patch Targets
+## 4. The 23 Torch PatchManager Patch Targets
 
 Every game method this plugin patches, in registration order. All targets are registered into `PatchConflictAudit` at registration time.
 
@@ -115,6 +115,10 @@ Every game method this plugin patches, in registration order. All targets are re
 | 17 | `MyProceduralWorldGenerator.LoadData` | Prefix | `VanillaTrim.cs` | System 14 (Force Encounter Density 0) |
 | 18 | `MyLargeTurretTargetingSystem.CheckAndSelectNearTargetsParallel` | Prefix | `VanillaTrimBlocks.cs` | System 14 (WC Vanilla Turret Logic Trim) |
 | 19 | `MyLargeConveyorTurretBase.UpdateBeforeSimulation100` (block override) | Prefix | `VanillaTrimBlocks.cs` | System 14 (WC Vanilla Turret Logic Trim) |
+| 20 | `MyCubeGrid.OnConvertToDynamic` | Suffix | `PhysicsOptimizerPatches.cs` | Systems 2, 6, 7 (wake and state reset after a station becomes a ship) |
+| 21 | `MyCubeGrid.OnConvertedToShipRequest` (private) | Prefix | `PhysicsOptimizerPatches.cs` | Terminal "Convert to Ship" auto-rescue (`EnableTerminalConvertToShipAutoRescue`) |
+| 22 | `MyCubeGrid.HasConversionRights(ulong)` (private) | Prefix | `PhysicsOptimizerPatches.cs` | System 15 (Server Grid Conversion) |
+| 23 | `MyGridShape.SetMassPropertiesST(MyPhysicsBody)` (private) | Prefix | `RigidBodySleep.cs` | System 2 (no-op mass refresh guard for force-slept grids) |
 
 **Hard rules**: never add another target without running the compatibility audit (see Design Notes); never patch `MyEntityComponentUpdater.*` / the per-entity update dispatch family (Concealment's home turf); never strip `GC.Collect` call sites transpiled by `se-performance-improvements`.
 
@@ -131,7 +135,7 @@ Every game method this plugin patches, in registration order. All targets are re
 * **Instant Wakeup**: Handbrake release, velocity drift (sliding down a Pertam dune while parked), pilot movement input (System 2), or external damage (System 2) all wake the suspension instantly.
 
 ### 💤 System 2: Rigid Body Sleep Manager & Universal Wake Paths
-*File: `Modules/RigidBodySleep.cs` (targets 4-5)*
+*File: `Modules/RigidBodySleep.cs` (targets 4-5, 23)*
 
 * **Stepped Scan**: Every 60 frames, sweeps all entities for dynamic grids (static grids skipped) without hot-path allocations.
 * **Sleep Conditions**: An unpiloted dynamic grid sustaining linear velocity < 0.05 m/s and angular velocity < 0.01 rad/s for `IdleSecondsBeforeSleep` (default 3s) is deactivated with `grid.Physics.RigidBody.Deactivate()`. Grids with a voxel contact in the last 30 sim frames are never force-slept - sleeping bodies emit no contact callbacks, so terrain-grinding grids must stay awake for push-apart to rescue them. Wheel subgrids are never targeted (they share a Havok constraint island with the chassis and sleep/wake with it). Handbraked rovers instead use `RoverSleepLinearThreshold` / `RoverSleepAngularThreshold` and only the chassis's own voxel contact (wheel-terrain contact is ignored); releasing the handbrake wakes them. If Havok re-activates a deactivated grid 3 times in a row, the forced-sleep flag is cleared and attempts pause for 60s (`⏸` ticker entry), so telemetry reflects real Havok state.
@@ -282,6 +286,14 @@ The `PerformDeformation` prefix routes every grid collision deformation through 
   * ToolCore tools are conveyor sorters fired through a piloted seat, so no block trim touches them.
 * **Rejected: slowing projector buildability re-checks.** On GVK every welding projection is run by the Multigrid Projector plugin, which prefixes `MyProjectorBase.UpdateAfterSimulation` and replaces the vanilla body (and its 2000 ms cadence) with its own. Under MGP, `MyShipWelder.FindProjectedBlocks` and M&M read MGP's cached block states, so slowing that cadence would delay combat repairs. Patching the vanilla constant would only reach projections MGP does not handle.
 
+### 🔁 System 15: Server Grid Conversion
+*File: `Modules/PhysicsOptimizerPatches.cs`*
+
+* **The SE 1.211 change**: `MyCubeGrid.HasConversionRights` (private) now gates both "Convert to Ship" and "Convert to Station" requests, and passes only one of the grid's main owners or a Space Master with creative tools on. A request the server raises itself (`RequestConversionToStation`/`ToShip` invoked locally) carries the server's own id, which ranks as Owner but never has creative tools; a handler called directly carries 0. Both now fail with no error, which breaks AutoStation's parked-ship conversion, CrunchUtils `!convert`, Offline Safe Zones `/convert`, and server-side mods that set `IMyCubeGrid.IsStatic` at runtime (the setter calls `RequestConversionTo*`).
+* **Prefix on `MyCubeGrid.HasConversionRights(ulong)`**: when the sender is `Sync.ServerId`, `Sync.MyId` or 0, returns `true` and skips the vanilla check. Every other sender (a player's Terminal button) runs vanilla unchanged, so players still need ownership. Remote senders cannot be 0 or the server's id. Gated by `EnableServerConversionRights` (live) only: it is a compatibility fix, so the master switch does not turn it off. The other conversion gates (safe zones, voxel contact, `ShouldBeStatic`) are untouched.
+* **Not covered**: chat arrives as a replication event, so a plugin that calls a conversion handler directly while handling a player's chat command can carry that player's id and get the vanilla check. Requests sent through `RequestConversionTo*` are re-invoked locally with the server's id and pass.
+* `!phys status` shows the switch and how many requests it let through since plugin load; with `EnableDebugLogging` on, each one is logged with the grid name and id.
+
 ---
 
 ## 6. In-Game & Console Admin Commands (`!phys`)
@@ -330,6 +342,7 @@ All commands require `Admin` permission level (`MyPromoteLevel.Admin`) and work 
 | `wheelanticlang` | Exclude suspension wheel subgrids from Anti-Clang damping. |
 | `wheelpushapart` | Exclude suspension wheel subgrids from Active Push-Apart. |
 | `wheelstabilizer` | Exclude suspension wheel subgrids from Subgrid Stabilizer. |
+| `serverconvert` (`serverconversion`) | Server-raised ship/station conversions pass the ownership check (`EnableServerConversionRights`). |
 
 ---
 
@@ -457,6 +470,11 @@ Configuration persists to `Instance\PhysicsOptimizer.cfg` under the Torch server
 | `DisableProceduralEncounters` | `bool` | `true` | Force `EncounterDensity` to 0 at procedural generator load (Keen drops a saved 0 and reloads 0.35), and stop entity tracking while economy is off and asteroid density is 0 too. Restart required. |
 | `TrimWcVanillaTurretLogic` | `bool` | `true` | Skip vanilla target search and conveyor ammo pull on vanilla turret types, and target search on AI-off Custom Turret Controllers. WeaponCore-only servers. Live. |
 
+### Server Grid Conversion
+| Setting | Type | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `EnableServerConversionRights` | `bool` | `true` | Ship/station conversion requests raised by the server itself (sender = server id or 0) pass the SE 1.211 ownership check; player requests still need ownership. Live. |
+
 ---
 
 ## 8. Torch WPF Server Interface (4-Tab Dashboard)
@@ -467,7 +485,7 @@ The Torch server window hosts the plugin's management UI across 4 tabs:
 Every optimizer module shares this consolidated tab: Wheel Optimizer (symmetrical wheel well collision filtering, parked rover suspension sleeping), Rigid Body Sleep (linear/angular velocity thresholds, idle countdown), Ore Merge (proximity radius, interval tick rate, floating object density), Subgrid Stabilizer (joint angular velocity threshold, motionless frame window, small utility subgrid collision masking), Adaptive Collision (discrete demotion / continuous promotion speed thresholds, grid-size overrides, terrain altitude floor, dynamic grid proximity bubbles), and Thruster Clearance.
 
 ### Tab 2: Grid Defender
-Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), voxel normal force arbitrator, PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, and voxel cutout suppression.
+Comprehensive defense controls: collision speed floor/ceiling, structural protection checkboxes (ramming, voxels, stations, subgrids, debris), voxel normal force arbitrator, PMW missile sizing and velocity gating, layered armor occlusion, anti-clang vibration arrest, push-apart separation, vehicle self-rescue, server grid conversion, and voxel cutout suppression.
 
 ### Tab 3: Vanilla Trim
 Master toggle, a live status line (components skipped at the last world load, encounter density forcing, entities not tracked, turret searches and ammo pulls skipped), per-component session trims, the procedural generator trims, and the live WC turret logic trim.

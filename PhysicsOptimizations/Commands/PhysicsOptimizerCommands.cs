@@ -77,6 +77,9 @@ namespace PhysicsOptimizer.Commands
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Enabled: {0} | Cooldown: {1}s | Combat Cooldown: {2}s | Warmup: {3}s", cfg.EnablePlayerRescue, cfg.PlayerRescueCooldownSeconds, cfg.PlayerRescueCombatCooldownSeconds, cfg.PlayerRescueWarmupSeconds));
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Max Speed: {0:F1} m/s | Enemy Proximity: {1:F0}m | Push Dist: {2:F1}m | On-Foot Max: {3:F0}m | Upright: {4}", cfg.PlayerRescueMaxSpeed, cfg.PlayerRescueEnemyProximityMeters, cfg.PlayerRescuePushDistance, cfg.PlayerRescueOnFootMaxDistanceMeters, cfg.PlayerRescueUprightFlipped));
             sb.AppendLine();
+            sb.AppendLine("* Server Grid Conversion:");
+            sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Server-Raised Requests Pass Ownership Check: {0} (allowed since plugin load: {1})", cfg.EnableServerConversionRights, Modules.PhysicsOptimizerPatches.ServerConversionsAllowed));
+            sb.AppendLine();
             sb.AppendLine("* Voxel & Terrain Protection:");
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  - Suppress Voxel Cutouts: {0}", cfg.SuppressAllVoxelExplosionDamage));
             sb.AppendLine();
@@ -169,7 +172,7 @@ namespace PhysicsOptimizer.Commands
             Context.Respond(string.Format(CultureInfo.InvariantCulture, "[PhysicsOptimizer] Proximity merge complete: eliminated {0} redundant floating entities.", eliminated));
         }
 
-        [Command("toggle", "Toggles an individual optimization or feature. Usage: !phys toggle <all|wheels|mask|parkedsleep|sleep|ore|subgrids|utilitymask|toi|discretelarge|discretesmall|pmw|armor|pushapart|pushstation|normal|voxelarbdebug|thruster|thrustermode|cutout|debug|telemetry|wheelpushapart|wheelstabilizer>")]
+        [Command("toggle", "Toggles an individual optimization or feature. Usage: !phys toggle <all|wheels|mask|parkedsleep|sleep|ore|subgrids|utilitymask|toi|discretelarge|discretesmall|pmw|armor|pushapart|pushstation|normal|voxelarbdebug|thruster|thrustermode|cutout|debug|telemetry|wheelpushapart|wheelstabilizer|serverconvert>")]
         [Permission(MyPromoteLevel.Admin)]
         public void Toggle(string featureName)
         {
@@ -320,9 +323,14 @@ namespace PhysicsOptimizer.Commands
                     cfg.EnablePlayerRescue = !cfg.EnablePlayerRescue;
                     stateMsg = string.Format(CultureInfo.InvariantCulture, "Vehicle Self-Rescue (!unstuckit) is now {0}.", cfg.EnablePlayerRescue ? "ENABLED" : "DISABLED");
                     break;
+                case "serverconvert":
+                case "serverconversion":
+                    cfg.EnableServerConversionRights = !cfg.EnableServerConversionRights;
+                    stateMsg = string.Format(CultureInfo.InvariantCulture, "Server-raised grid conversion rights are now {0}.", cfg.EnableServerConversionRights ? "ENABLED" : "DISABLED");
+                    break;
                 default:
                     Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, pushapart, pushstation, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry, wheelpushapart, wheelstabilizer.", featureName));
-                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, pushapart, pushstation, rescue, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry, wheelpushapart, wheelstabilizer.", featureName));
+                    Context.Respond(string.Format(CultureInfo.InvariantCulture, "Unknown setting '{0}'. Valid options: all, wheels, mask, parkedsleep, sleep, ore, subgridstabilizer, subgrids, utilitymask, toi, defender, speedthresholds, discretelarge, discretesmall, pmw, armor, pushapart, pushstation, rescue, normal, voxelarbdebug, thruster, thrustermode, cutout, debug, telemetry, wheelpushapart, wheelstabilizer, serverconvert.", featureName));
                     return;
             }
 

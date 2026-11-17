@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Threading;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Engine.Physics;
@@ -17,10 +18,16 @@ namespace PhysicsOptimizer.Modules
     /// Torch PatchManager patches for Space Engineers grid lifecycle management.
     /// 1. OnConvertToDynamic Postfix: Universal physics awakening and module state synchronization.
     /// 2. OnConvertedToShipRequest Prefix: Seamless auto-rescue when players convert mobile vehicles in the Terminal near voxels.
+    /// 3. HasConversionRights Prefix: Server-raised ship/station conversion requests pass the SE 1.211 ownership check.
     /// </summary>
     public static class PhysicsOptimizerPatches
     {
         private const string LogSource = "Patches";
+
+        private static long _serverConversionsAllowed;
+
+        /// <summary>Server-raised conversion requests let through by the HasConversionRights prefix since plugin load.</summary>
+        public static long ServerConversionsAllowed => Interlocked.Read(ref _serverConversionsAllowed);
 
         private static readonly MethodInfo _shouldBeStaticMethod =
             typeof(MyCubeGrid).GetMethod("ShouldBeStatic", BindingFlags.Static | BindingFlags.NonPublic);
@@ -70,6 +77,49 @@ namespace PhysicsOptimizer.Modules
             {
                 Log.Error(ex, LogSource, "Failed to patch MyCubeGrid.OnConvertedToShipRequest!");
             }
+
+            // 3. Hook MyCubeGrid.HasConversionRights (Prefix) so server-raised conversions pass the SE 1.211 ownership check
+            try
+            {
+                MethodInfo rightsMethod = typeof(MyCubeGrid).GetMethod("HasConversionRights", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(ulong) }, null);
+                if (rightsMethod != null)
+                {
+                    MethodInfo prefix = typeof(PhysicsOptimizerPatches).GetMethod(nameof(Prefix_HasConversionRights), BindingFlags.Static | BindingFlags.Public);
+                    ctx.GetPattern(rightsMethod).Prefixes.Add(prefix);
+                    PatchConflictAudit.RegisterTarget(rightsMethod);
+                    Log.Info(LogSource, "Registered MyCubeGrid.HasConversionRights Prefix hook.");
+                }
+                else
+                {
+                    Log.Error(LogSource, "Could not find private MyCubeGrid.HasConversionRights(ulong) to patch! Ship/station conversions raised by the server (AutoStation, !convert, /convert) will fail on SE 1.211+.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, LogSource, "Failed to patch MyCubeGrid.HasConversionRights!");
+            }
+        }
+
+        /// <summary>
+        /// Prefix on private MyCubeGrid.HasConversionRights (SE 1.211+). Server-raised requests (sender = server id,
+        /// or 0 when a handler is called directly) skip the big-owner / creative-tools check; player senders run vanilla.
+        /// </summary>
+        public static bool Prefix_HasConversionRights(MyCubeGrid __instance, ulong steamId, ref bool __result)
+        {
+            if (steamId != 0UL && steamId != Sync.ServerId && steamId != Sync.MyId) return true;
+            if (!Sync.IsServer) return true;
+
+            var cfg = PhysicsOptimizerPlugin.Instance?.Config;
+            // Compatibility fix, so it ignores the master switch (Enabled).
+            if (cfg == null || !cfg.EnableServerConversionRights) return true;
+
+            __result = true;
+            Interlocked.Increment(ref _serverConversionsAllowed);
+            if (cfg.EnableDebugLogging)
+            {
+                Log.Info(LogSource, $"Allowed server-raised conversion request (sender {steamId}) on grid '{__instance?.DisplayName}' ({__instance?.EntityId}).");
+            }
+            return false;
         }
 
         /// <summary>

@@ -1310,6 +1310,22 @@
                                                                 </StackPanel>
                                                         </GroupBox>
 
+                                                        <!-- Server Grid Conversion -->
+                                                        <GroupBox Header="🔁 Server Grid Conversion">
+                                                                <StackPanel>
+                                                                        <CheckBox Content="Let Server-Raised Ship/Station Conversions Pass the Ownership Check"
+                                                                                  IsChecked="{Binding Config.EnableServerConversionRights}"
+                                                                                  FontWeight="SemiBold"
+                                                                                  Margin="0,0,0,6"
+                                                                                  ToolTip="SE 1.211 lets only a grid's main owner, or a Space Master with creative tools on, convert it. Conversion requests the server raises itself (AutoStation, CrunchUtils !convert, Offline Safe Zones /convert) pass; player Terminal requests still need ownership. Default: Checked."/>
+                                                                        <TextBlock Text="Without this, conversions raised by other plugins or server-side mods fail silently on SE 1.211+. Player requests are unchanged."
+                                                                                   Foreground="#9CA3AF"
+                                                                                   FontSize="11"
+                                                                                   Margin="16,0,0,8"
+                                                                                   TextWrapping="Wrap"/>
+                                                                </StackPanel>
+                                                        </GroupBox>
+
                                                         <!-- Voxel & Terrain Protection -->
                                                         <GroupBox Header="🌍 Voxel &amp; Terrain Protection">
                                                                 <StackPanel>
